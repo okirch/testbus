@@ -1,0 +1,33 @@
+
+<service name="fileset" interface="org.opensuse.Testbus.Fileset">
+  <method name="createFile">
+    <arguments>
+      <name type="string" />
+    </arguments>
+    <result>
+      <object-path type="string" />
+    </result>
+  </method>
+</service>
+
+<service name="tmpfile" interface="org.opensuse.Testbus.Tmpfile" object-class="tmpfile">
+  <define name="properties" class="dict">
+    <name type="string" />
+  </define>
+
+  <method name="append">
+    <arguments>
+      <data class="array" element-type="byte" />
+    </arguments>
+  </method>
+
+  <method name="retrieve">
+    <arguments>
+      <offset type="uint64" />
+      <count type="uint32" />
+    </arguments>
+    <result>
+      <data class="array" element-type="byte" />
+    </result>
+  </method>
+</service>

@@ -1,0 +1,36 @@
+
+<service name="host" interface="org.opensuse.Testbus.Host" object-class="host">
+  <define name="properties" class="dict">
+    <name type="string" />
+    <uuid type="uuid-type" />
+    <owner type="string" />
+  </define>
+
+</service>
+
+<service name="hostlist" interface="org.opensuse.Testbus.Hostlist" object-class="hostlist">
+  <method name="createHost">
+    <arguments>
+      <name type="string" />
+    </arguments>
+    <result>
+      <retval type="string" />
+    </result>
+  </method>
+
+  <method name="removeHost">
+    <arguments>
+      <name type="string" />
+    </arguments>
+    <result>
+      <retval type="boolean" />
+    </result>
+  </method>
+
+  <method name="reconnect">
+    <arguments>
+      <name type="string" />
+      <uuid type="uuid-type" />
+    </arguments>
+  </method>
+</service>

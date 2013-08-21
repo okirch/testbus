@@ -1,0 +1,26 @@
+
+<service name="testset" interface="org.opensuse.Testbus.Testset">
+  <method name="createTest">
+    <arguments>
+      <name type="string" />
+    </arguments>
+    <result>
+      <object-path type="string" />
+    </result>
+  </method>
+</service>
+
+<service name="testcase" interface="org.opensuse.Testbus.Testcase" object-class="testcase">
+  <define name="properties" class="dict">
+    <name type="string" />
+  </define>
+
+  <method name="addHost">
+    <arguments>
+      <role type="string"/>
+      <host type="object-path"/>
+    </arguments>
+  </method>
+  <method name="start">
+  </method>
+</service>
