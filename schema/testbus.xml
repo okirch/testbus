@@ -1,0 +1,31 @@
+<!--
+ Main schema definition for wicked network services
+
+ Copyright (C) 2012, Olaf Kirch <okir@suse.de>
+-->
+
+<include name="types.xml"/>
+
+<object-class name="hostlist" />
+
+<object-class name="context" />
+<object-class name="host"     base-class="context"/>
+<object-class name="command-queue" base-class="context" />
+<object-class name="command"  base-class="context" />
+<object-class name="environ"  base-class="context" />
+<object-class name="fileset"  base-class="context" />
+<object-class name="testset"  base-class="context" />
+<object-class name="testcase" base-class="context" />
+<object-class name="tmpfile" />
+
+<object-class name="agent" />
+<object-class name="filesystem" />
+
+<service name="root" interface="org.opensuse.Testbus" />
+
+<include name="host.xml"/>
+<include name="command.xml"/>
+<include name="environ.xml"/>
+<include name="agent.xml"/>
+<include name="fileset.xml"/>
+<include name="testcase.xml"/>

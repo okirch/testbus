@@ -1,0 +1,11 @@
+
+<service name="command-queue" interface="org.opensuse.Testbus.CommandQueue">
+  <method name="createCommand">
+    <arguments>
+      <argv class="array" element-type="string" />
+    </arguments>
+  </method>
+</service>
+
+<service name="command" interface="org.opensuse.Testbus.Command" object-class="command">
+</service>

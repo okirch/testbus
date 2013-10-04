@@ -1,0 +1,27 @@
+
+<service name="agent" interface="org.opensuse.Testbus.Agent" object-class="agent">
+</service>
+
+<service name="agent-fs" interface="org.opensuse.Testbus.Agent.Filesystem" object-class="filesystem">
+  <method name="getInfo">
+    <arguments>
+      <path type="string" />
+    </arguments>
+    <result>
+      <info class="dict">
+        <size type="uint64" />
+      </info>
+    </result>
+  </method>
+
+  <method name="retrieve">
+    <arguments>
+      <path type="string"/>
+      <offset type="uint64" />
+      <count type="uint32" />
+    </arguments>
+    <result>
+      <data class="array" element-type="byte" />
+    </result>
+  </method>
+</service>

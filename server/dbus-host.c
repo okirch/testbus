@@ -1,0 +1,256 @@
+
+#include <dborb/dbus-errors.h>
+#include <dborb/dbus-service.h>
+#include <dborb/logging.h>
+
+#include "model.h"
+#include "host.h"
+#include "command.h"
+
+void
+ni_testbus_create_static_objects_host(ni_dbus_server_t *server)
+{
+	ni_objectmodel_create_object(server, NI_TESTBUS_HOSTLIST_PATH, ni_testbus_hostlist_class(), NULL);
+}
+
+const char *
+ni_testbus_host_full_path(const ni_testbus_host_t *host)
+{
+	static char pathbuf[256];
+
+	snprintf(pathbuf, sizeof(pathbuf), "%s/%u", NI_TESTBUS_HOST_BASE_PATH, host->id);
+	return pathbuf;
+}
+
+ni_dbus_object_t *
+ni_testbus_host_wrap(ni_dbus_server_t *server, ni_testbus_host_t *host)
+{
+	ni_dbus_object_t *object;
+
+	object = ni_objectmodel_create_object(server,
+			ni_testbus_host_full_path(host),
+			ni_testbus_host_class(),
+			&host->context);
+
+	ni_testbus_bind_container_interfaces(object, &host->context);
+	return object;
+}
+
+ni_testbus_host_t *
+ni_testbus_host_unwrap(const ni_dbus_object_t *object, DBusError *error)
+{
+	ni_testbus_container_t *context;
+	ni_testbus_host_t *host;
+
+	if (!ni_dbus_object_get_handle_typecheck(object, ni_testbus_host_class(), error))
+		return NULL;
+
+	if (!(context = ni_testbus_container_unwrap(object, error)))
+		return NULL;
+
+	host = ni_container_of(context, ni_testbus_host_t, context);
+	ni_assert(context = &host->context);
+
+	return host;
+}
+
+void *
+ni_objectmodel_get_testbus_host(const ni_dbus_object_t *object, ni_bool_t write_access, DBusError *error)
+{
+	return ni_testbus_host_unwrap(object, error);
+}
+
+/*
+ * Record the DBus owner of a host
+ */
+static void
+__ni_testbus_host_set_agent(ni_testbus_host_t *host, const char *owner)
+{
+	owner = ni_testbus_lookup_wellknown_bus_name(owner);
+
+	ni_debug_wicked("host %s owned by %s", host->name, owner);
+	ni_string_dup(&host->agent_bus_name, owner);
+}
+
+/*
+ * Hostlist.createHost(name)
+ *
+ */
+static dbus_bool_t
+__ni_Testbus_Hostlist_createHost(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_container_t *context = ni_testbus_global_context();
+	ni_dbus_object_t *host_object;
+	ni_testbus_host_t *host;
+	const char *name;
+	int rc;
+
+	if (argc != 1 || !ni_dbus_variant_get_string(&argv[0], &name))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	if ((host = ni_testbus_host_new(context, name, &rc)) == NULL) {
+		ni_dbus_set_error_from_code(error, rc, "unable to create new host \"%s\"", name);
+		return FALSE;
+	}
+
+	/* Remember the DBus name of the service owning this object, so that we can
+	 * send it messages. */
+	__ni_testbus_host_set_agent(host, dbus_message_get_destination(reply));
+
+	/* Register this object */
+	host_object = ni_testbus_host_wrap(ni_dbus_object_get_server(object), host);
+	ni_dbus_message_append_string(reply, host_object->path);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Hostlist, createHost);
+
+/*
+ * Hostlist.removeHost(name)
+ *
+ */
+static dbus_bool_t
+__ni_Testbus_Hostlist_removeHost(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_container_t *context = ni_testbus_global_context();
+	ni_testbus_host_t *host;
+	const char *name;
+
+	if (argc != 1 || !ni_dbus_variant_get_string(&argv[0], &name))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	if (!(host = ni_testbus_container_get_host_by_name(context, name))) {
+		dbus_set_error(error, NI_DBUS_ERROR_NAME_UNKNOWN, "unknown host \"%s\"", name);
+		return FALSE;
+	}
+	ni_testbus_container_remove_host(context, host);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Hostlist, removeHost);
+
+/*
+ * Hostlist.reconnect(name, uuid)
+ *
+ * If a host with the given name exists, and its uuid matches the one presented
+ * by the client, return its object path.
+ *
+ * Otherwise, return an empty string.
+ */
+static dbus_bool_t
+__ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_container_t *context = ni_testbus_global_context();
+	const char *name, *object_path = "";
+	ni_testbus_host_t *host;
+	ni_uuid_t uuid;
+
+	if (argc != 2
+	 || !ni_dbus_variant_get_string(&argv[0], &name)
+	 || !ni_dbus_variant_get_uuid(&argv[1], &uuid))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	host = ni_testbus_container_get_host_by_name(context, name);
+	if (host == NULL) {
+		int rc;
+
+		if ((host = ni_testbus_host_new(context, name, &rc)) == NULL) {
+			ni_dbus_set_error_from_code(error, rc, "unable to create new host \"%s\"", name);
+			return FALSE;
+		}
+		host->uuid = uuid;
+
+		(void) ni_testbus_host_wrap(ni_dbus_object_get_server(object), host);
+	} else if (!ni_uuid_equal(&host->uuid, &uuid)) {
+		ni_debug_wicked("Hostlist.reconnect: cannot reconnect host \"%s\", uuid mismatch", name);
+		dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "host name \"%s\" already taken (uuid mismatch)", name);
+		return FALSE;
+	} else
+	if (host->agent_bus_name != NULL) {
+		ni_debug_wicked("Hostlist.reconnect: cannot reconnect host \"%s\", already claimed by other service", name);
+		dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "host name \"%s\" already taken (duplicate registration)", name);
+		return FALSE;
+	}
+	
+	object_path = ni_testbus_host_full_path(host);
+
+	/* Remember the DBus name of the service owning this object, so that we can
+	 * send it messages. */
+	__ni_testbus_host_set_agent(host, dbus_message_get_destination(reply));
+
+	ni_debug_wicked("reconnecting host \"%s\" - object path %s", name, object_path);
+	ni_dbus_message_append_string(reply, object_path);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Hostlist, reconnect);
+
+static ni_dbus_property_t       __ni_Testbus_Host_properties[] = {
+	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, name, name, RO),
+	NI_DBUS_GENERIC_UUID_PROPERTY(testbus_host, uuid, uuid, RO),
+	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, agent, agent_bus_name, RO),
+	{ NULL }
+};
+NI_TESTBUS_PROPERTIES_BINDING(Host);
+
+
+/*
+ * Host.run(object-path)
+ *
+ * object-path is supposed to refer to a command object
+ */
+static dbus_bool_t
+__ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_host_t *host;
+	ni_dbus_object_t *root_object, *command_object = NULL, *process_object;
+	const char *command_path = "";
+	ni_testbus_command_t *cmd;
+	ni_testbus_process_t *proc;
+
+	if (!(host = ni_testbus_host_unwrap(object, error)))
+		return FALSE;
+
+	if (argc != 1 || !ni_dbus_variant_get_string(&argv[0], &command_path))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	root_object = ni_dbus_server_get_root_object(ni_dbus_object_get_server(object));
+	if (root_object)
+		command_object = ni_dbus_object_lookup(root_object, command_path);
+	if (command_object == NULL) {
+		dbus_set_error(error, NI_DBUS_ERROR_NAME_UNKNOWN,
+				"unable to look up dbus object %s",
+				command_path);
+		return FALSE;
+	}
+
+	if (!(cmd = ni_testbus_command_unwrap(command_object, error)))
+		return FALSE;
+
+	proc = ni_testbus_process_new(&host->context, cmd);
+	ni_testbus_process_apply_context(proc, &cmd->context);
+	ni_testbus_process_apply_context(proc, &host->context);
+
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Host, run);
+
+
+void
+ni_testbus_bind_builtin_host(void)
+{
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostlist_createHost_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostlist_removeHost_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostlist_reconnect_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Host_run_binding);
+	ni_dbus_objectmodel_bind_properties(&__ni_Testbus_Host_Properties_binding);
+}

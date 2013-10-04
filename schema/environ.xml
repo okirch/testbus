@@ -1,0 +1,16 @@
+
+<service name="environ" interface="org.opensuse.Testbus.Environment">
+  <method name="setenv">
+    <arguments>
+      <name type="string" />
+      <value type="string" />
+    </arguments>
+  </method>
+
+  <method name="unsetenv">
+    <arguments>
+      <name type="string" />
+    </arguments>
+  </method>
+
+</service>

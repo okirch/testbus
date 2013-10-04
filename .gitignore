@@ -1,0 +1,10 @@
+lib*.a
+testbus-master
+testbus-client
+testbus-agent
+dbus-proxy
+.depend
+*.swp
+core
+vgcore.*
+obj
