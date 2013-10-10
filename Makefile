@@ -1,14 +1,16 @@
 
+
 CC	= gcc
 CPPFLAGS= -D_GNU_SOURCE \
 	  -DTESTBUS_CONFIGDIR=\"/etc/testbus\" \
 	  -Iinclude -Ilib \
 	  -I/usr/include/dbus-1.0 -I/usr/lib64/dbus-1.0/include
-CFLAGS	= -Wall -g $(CPPFLAGS)
+CFLAGS	= $(CWARNFLAGS) -g $(CPPFLAGS)
 LINK	= -L. -ltestbus -ldborb \
 	  -L/lib64 -ldbus-1 \
 	  -lgcrypt \
 	  -ldl
+CWARNFLAGS= -Wall -Werror -Wno-unused
 
 LIBSRCS	= \
 	dborb/appconfig.c \
