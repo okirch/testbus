@@ -3,7 +3,9 @@
   <define name="properties" class="dict">
     <name type="string" />
     <uuid type="uuid-type" />
-    <owner type="string" />
+    <agent type="string" />
+    <role type="string" />
+    <capabilities class="array" element-type="string" />
   </define>
 
   <method name="run">
@@ -13,8 +15,27 @@
     </arguments>
   </method>
 
+  <method name="addCapability">
+    <arguments>
+      <role type="string" />
+    </arguments>
+  </method>
+
 </service>
 
+<service name="hostset" interface="org.opensuse.Testbus.Hostset">
+  <method name="addHost">
+    <arguments>
+      <role type="string" />
+      <host-path type="string" />
+    </arguments>
+  </method>
+</service>
+
+
+<!--
+  -- This is the global host registry
+  -->
 <service name="hostlist" interface="org.opensuse.Testbus.Hostlist" object-class="hostlist">
   <method name="createHost">
     <arguments>

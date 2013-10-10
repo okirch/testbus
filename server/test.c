@@ -17,6 +17,7 @@ ni_testbus_testcase_new(const char *name, ni_testbus_container_t *parent)
 	ni_testbus_container_init(&test->context,
 				NI_TESTBUS_CONTAINER_HAS_ENV |
 				NI_TESTBUS_CONTAINER_HAS_CMDS |
+				NI_TESTBUS_CONTAINER_HAS_HOSTS |
 				NI_TESTBUS_CONTAINER_HAS_FILES,
 				parent);
 	ni_testbus_testset_append(&parent->tests, test);

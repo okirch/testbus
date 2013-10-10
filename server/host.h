@@ -10,6 +10,7 @@ struct ni_testbus_host {
 	char *			name;
 	unsigned		id;
 	ni_uuid_t		uuid;
+	ni_string_array_t	capabilities;
 
 	char *			agent_bus_name;
 
@@ -28,6 +29,7 @@ extern ni_testbus_host_t *	ni_testbus_host_new(ni_testbus_container_t *parent, c
 extern ni_testbus_host_t *	ni_testbus_host_get(ni_testbus_host_t *);
 extern void			ni_testbus_host_put(ni_testbus_host_t *);
 extern ni_bool_t		ni_testbus_host_set_role(ni_testbus_host_t *, const char *, ni_testbus_container_t *);
+extern void			ni_testbus_host_add_capability(ni_testbus_host_t *, const char *);
 extern void			ni_testbus_host_free(ni_testbus_host_t *);
 
 extern void			ni_testbus_host_array_init(ni_testbus_host_array_t *);

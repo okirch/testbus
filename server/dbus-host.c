@@ -195,6 +195,8 @@ static ni_dbus_property_t       __ni_Testbus_Host_properties[] = {
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, name, name, RO),
 	NI_DBUS_GENERIC_UUID_PROPERTY(testbus_host, uuid, uuid, RO),
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, agent, agent_bus_name, RO),
+	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, role, role, RO),
+	NI_DBUS_GENERIC_STRING_ARRAY_PROPERTY(testbus_host, capabilities, capabilities, RO),
 	{ NULL }
 };
 NI_TESTBUS_PROPERTIES_BINDING(Host);
@@ -244,6 +246,99 @@ __ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 
 NI_TESTBUS_METHOD_BINDING(Host, run);
 
+/*
+ * Host.addCapability(string)
+ */
+static dbus_bool_t
+__ni_Testbus_Host_addCapability(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_host_t *host;
+	ni_dbus_object_t *root_object, *command_object = NULL, *process_object;
+	const char *capability = "";
+	ni_testbus_command_t *cmd;
+	ni_testbus_process_t *proc;
+
+	if (!(host = ni_testbus_host_unwrap(object, error)))
+		return FALSE;
+
+	if (argc != 1 || !ni_dbus_variant_get_string(&argv[0], &capability))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	ni_testbus_host_add_capability(host, capability);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Host, addCapability);
+
+/*
+ * Hostset.addHost(name, host-object-path)
+ */
+static dbus_bool_t
+__ni_Testbus_Hostset_addHost(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_container_t *context;
+	ni_dbus_object_t *root_object, *host_object = NULL;
+	const char *name, *host_object_path;
+	ni_testbus_host_t *host;
+
+	if ((context = ni_testbus_container_unwrap(object, error)) == NULL)
+		return FALSE;
+
+	if (argc != 2
+	 || !ni_dbus_variant_get_string(&argv[0], &name)
+	 || !ni_dbus_variant_get_string(&argv[1], &host_object_path))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	if (!ni_testbus_identifier_valid(name, error))
+		return FALSE;
+
+	if (ni_testbus_container_get_host_by_role(context, name) != NULL) {
+		dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS,
+				"you already have a host by this role");
+		return FALSE;
+	}
+
+	{
+		ni_dbus_server_t *server = ni_dbus_object_get_server(object);
+
+		root_object = NULL;
+		if (server)
+			root_object = ni_dbus_server_get_root_object(server);
+		if (root_object)
+			host_object = ni_dbus_object_lookup(root_object, host_object_path);
+	}
+
+	if (host_object == NULL) {
+		dbus_set_error(error, NI_DBUS_ERROR_NAME_UNKNOWN,
+				"unknown host object path %s", host_object_path);
+		return FALSE;
+	}
+
+	if (!ni_dbus_object_isa(host_object, ni_testbus_host_class())) {
+		dbus_set_error(error, NI_DBUS_ERROR_NOT_COMPATIBLE,
+				"object %s is not a host object", host_object_path);
+		return FALSE;
+	}
+
+	if (!(host = ni_testbus_host_unwrap(host_object, error)))
+		return FALSE;
+
+	if (!ni_testbus_host_set_role(host, name, context)) {
+		dbus_set_error(error, NI_DBUS_ERROR_IN_USE, "host already in use");
+		return FALSE;
+	}
+
+	ni_testbus_container_add_host(context, host);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Hostset, addHost);
+
+
 
 void
 ni_testbus_bind_builtin_host(void)
@@ -251,6 +346,10 @@ ni_testbus_bind_builtin_host(void)
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostlist_createHost_binding);
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostlist_removeHost_binding);
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostlist_reconnect_binding);
+
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Host_run_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Host_addCapability_binding);
 	ni_dbus_objectmodel_bind_properties(&__ni_Testbus_Host_Properties_binding);
+
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostset_addHost_binding);
 }

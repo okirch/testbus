@@ -246,6 +246,31 @@ failed:
 	return result;
 }
 
+static ni_bool_t
+__ni_testbus_container_add_host(ni_dbus_object_t *container, const char *host_path, const char *role)
+{
+	ni_dbus_variant_t args[2];
+	DBusError error = DBUS_ERROR_INIT;
+	ni_bool_t result = FALSE;
+
+	ni_assert(container);
+	ni_debug_wicked("%s.addHost(%s, %s)", container->path, role, host_path);
+
+	ni_dbus_variant_vector_init(args, 2);
+	ni_dbus_variant_set_string(&args[0], role);
+	ni_dbus_variant_set_string(&args[1], host_path);
+	if (!ni_dbus_object_call_variant(container, NULL, "addHost", 2, args, 0, NULL, &error)) {
+		ni_dbus_print_error(&error, "%s.addHost(%s, %s): failed", container->path, role, host_path);
+		dbus_error_free(&error);
+	} else {
+		result = TRUE;
+	}
+
+failed:
+	ni_dbus_variant_vector_destroy(args, 2);
+	return result;
+}
+
 
 ni_dbus_object_t *
 ni_testbus_call_create_host(const char *name)
@@ -333,6 +358,187 @@ ni_testbus_call_create_test(const char *name, ni_dbus_object_t *parent)
 	return __ni_testbus_container_create_child(parent, "createTest", name);
 }
 
+static const ni_dbus_service_t *
+__ni_testbus_host_service(void)
+{
+	static const ni_dbus_service_t *service;
+
+	if (!service) {
+		service = ni_objectmodel_service_by_name(NI_TESTBUS_HOST_INTERFACE);
+		ni_assert(service);
+	}
+	return service;
+}
+
+static const ni_dbus_variant_t *
+__ni_testbus_host_get_cached_property(const ni_dbus_object_t *host_object, const char *name)
+{
+	const ni_dbus_variant_t *var = NULL;
+
+	var = ni_dbus_object_get_cached_property(host_object, name, __ni_testbus_host_service());
+	if (var == NULL) {
+		ni_error("host %s has no property named %s", host_object->path, name);
+		return NULL;
+	}
+
+	return var;
+}
+
+static ni_bool_t
+__ni_testbus_host_get_cached_string_property(const ni_dbus_object_t *host_object, const char *name, const char **value_p)
+{
+	const ni_dbus_variant_t *var = NULL;
+
+	if (!(var = __ni_testbus_host_get_cached_property(host_object, name)))
+		return FALSE;
+
+	if (!ni_dbus_variant_get_string(var, value_p)) {
+		ni_error("host property %s is not of type string", name);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static ni_bool_t
+__ni_testbus_host_is_active(const ni_dbus_object_t *host_object)
+{
+	const char *owner = NULL;
+
+	if (!__ni_testbus_host_get_cached_string_property(host_object, "agent", &owner))
+		return FALSE;
+
+	return owner != NULL && *owner != '\0';
+}
+
+static ni_bool_t
+__ni_testbus_host_is_inuse(const ni_dbus_object_t *host_object, const ni_dbus_object_t *container_object)
+{
+	const char *host_role;
+
+	if (!__ni_testbus_host_get_cached_string_property(host_object, "role", &host_role))
+		return FALSE;
+
+	if (host_role) {
+		/* FIXME: we may want to verify whether its owner is the container_object
+		 * we want to assign it to.
+		 */
+		ni_error("host %s already in use (role=%s)", host_object->path, host_role);
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+
+static ni_dbus_object_t *
+__ni_testbus_host_byname(const char *hostname)
+{
+	ni_dbus_object_t *host_base_object, *host;
+	const ni_dbus_service_t *service;
+
+	host_base_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
+	if (!host_base_object)
+		return NULL;
+
+	for (host = host_base_object->children; host; host = host->next) {
+		const char *this_name;
+
+		if (!__ni_testbus_host_get_cached_string_property(host, "name", &this_name))
+			continue;
+
+		if (ni_string_eq(hostname, this_name)) {
+			if (!__ni_testbus_host_is_active(host)) {
+				ni_error("host %s: no agent running", hostname);
+				return NULL;
+			}
+			return host;
+		}
+	}
+
+	ni_error("host %s: no host by that name", hostname);
+	return NULL;
+}
+
+static ni_bool_t
+__ni_testbus_host_has_capability(ni_dbus_object_t *host_object, const char *name)
+{
+	const ni_dbus_variant_t *var;
+	unsigned int i;
+
+	if (!(var = __ni_testbus_host_get_cached_property(host_object, "capabilities")))
+		return FALSE;
+
+	if (!ni_dbus_variant_is_string_array(var)) {
+		ni_error("host property capabilities is not a string array");
+		return FALSE;
+	}
+
+	if (name == NULL || ni_string_eq(name, "any"))
+		return TRUE;
+
+	for (i = 0; i < var->array.len; ++i) {
+		const char *this_cap = var->string_array_value[i];
+
+		if (ni_string_eq(name, this_cap))
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+ni_dbus_object_t *
+ni_testbus_call_claim_host_by_name(const char *hostname, ni_dbus_object_t *container_object, const char *role)
+{
+	ni_dbus_object_t *host_object;
+
+	host_object = __ni_testbus_host_byname(hostname);
+	if (!host_object)
+		return NULL;
+
+	if (__ni_testbus_host_is_inuse(host_object, container_object))
+		return NULL;
+
+	if (!__ni_testbus_container_add_host(container_object, host_object->path, role)) {
+		ni_error("failed to claim host %s (%s) in role %s", hostname, host_object->path, role);
+		return NULL;
+	}
+
+	return host_object;
+}
+
+ni_dbus_object_t *
+ni_testbus_call_claim_host_by_capability(const char *capability, ni_dbus_object_t *container_object, const char *role)
+{
+	ni_dbus_object_t *host_base_object, *host_object;
+	unsigned int match_count = 0;
+
+	host_base_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
+	if (!host_base_object)
+		return NULL;
+
+	for (host_object = host_base_object->children; host_object; host_object = host_object->next) {
+		if (__ni_testbus_host_has_capability(host_object, capability)) {
+			match_count++;
+
+			if (!__ni_testbus_host_is_inuse(host_object, container_object)) {
+				if (__ni_testbus_container_add_host(container_object, host_object->path, role))
+					return host_object;
+
+				ni_error("failed to claim host %s in role %s", host_object->path, role);
+				/* plod on... */
+			}
+		}
+	}
+
+	if (match_count == 0) {
+		ni_error("no hosts matching capability \"%s\"", capability? capability : "any");
+	} else {
+		ni_error("all hosts matching capability \"%s\" are in use (%u total)", capability, match_count);
+	}
+	return NULL;
+}
+
 ni_dbus_object_t *
 ni_testbus_agent_create(const char *bus_name)
 {
@@ -375,7 +581,7 @@ ni_testbus_call_get_agent(const char *hostname)
 
 		if (ni_string_eq(hostname, value)) {
 			ni_debug_wicked("host %s object path %s", hostname, host->path);
-			var = ni_dbus_object_get_cached_property(host, "owner", service);
+			var = ni_dbus_object_get_cached_property(host, "agent", service);
 			if (var == NULL || !ni_dbus_variant_get_string(var, &value)) {
 				ni_error("host has no owner property");
 				return FALSE;
@@ -390,6 +596,36 @@ ni_testbus_call_get_agent(const char *hostname)
 
 	ni_error("host %s: no host by that name", hostname);
 	return NULL;
+}
+
+ni_bool_t
+ni_testbus_agent_add_capability(ni_dbus_object_t *host_object, const char *cap)
+{
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	DBusError error = DBUS_ERROR_INIT;
+
+	ni_dbus_variant_set_string(&arg, cap);
+	if (!ni_dbus_object_call_variant(host_object, NULL, "addCapability", 1, &arg, 0, NULL, &error)) {
+		ni_dbus_print_error(&error, "%s.addCapability(%s): failed",
+				host_object->path, cap);
+		dbus_error_free(&error);
+	}
+
+	ni_dbus_variant_destroy(&arg);
+	return TRUE;
+}
+
+ni_bool_t
+ni_testbus_agent_add_capabilities(ni_dbus_object_t *host_object, const ni_string_array_t *array)
+{
+	unsigned int i;
+
+	for (i = 0; i < array->count; ++i) {
+		if (!ni_testbus_agent_add_capability(host_object, array->data[i]))
+			return FALSE;
+	}
+
+	return TRUE;
 }
 
 ni_buffer_t *

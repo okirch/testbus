@@ -23,7 +23,7 @@
  * Interfaces:
  *	HostList
  */
-#define NI_TESTBUS_HOSTLIST_PATH	NI_TESTBUS_OBJECT_ROOT "/Hosts"
+#define NI_TESTBUS_HOSTLIST_PATH	NI_TESTBUS_OBJECT_ROOT "/Host"
 
 /*
  * Object:
@@ -34,7 +34,7 @@
  *	CommandQueue
  *	Fileset
  */
-#define NI_TESTBUS_HOST_BASE_PATH	NI_TESTBUS_OBJECT_ROOT "/Host"
+#define NI_TESTBUS_HOST_BASE_PATH	NI_TESTBUS_HOSTLIST_PATH
 
 /*
  * Object:
@@ -83,6 +83,16 @@
  *	hostlist
  */
 #define NI_TESTBUS_HOSTLIST_INTERFACE	NI_TESTBUS_NAMESPACE ".HostList"
+
+/*
+ * Interface:
+ *	Hostset
+ * Methods:
+ *	addHost(role, path)
+ * Compatible with class:
+ *	hostset -> container
+ */
+#define NI_TESTBUS_HOSTSET_INTERFACE	NI_TESTBUS_NAMESPACE ".Hostset"
 
 /*
  * Interface:
@@ -188,6 +198,7 @@
 #define NI_TESTBUS_FILESET_CLASS	"fileset"
 #define NI_TESTBUS_TMPFILE_CLASS	"tmpfile"
 #define NI_TESTBUS_TESTSET_CLASS	"testset"
+#define NI_TESTBUS_HOSTSET_CLASS	"hostset"
 #define NI_TESTBUS_TESTCASE_CLASS	"testcase"
 
 #endif /* __NI_TESTBUS_PROTOCOL_H__ */

@@ -65,6 +65,7 @@ static int		do_remove_host(int, char **);
 static int		do_create_test(int, char **);
 static int		do_retrieve_file(int, char **);
 static int		do_upload_file(int, char **);
+static int		do_claim_host(int, char **);
 
 static ni_buffer_t *	ni_testbus_read_local_file(const char *);
 
@@ -192,6 +193,8 @@ main(int argc, char **argv)
 		return do_retrieve_file(argc - optind, argv + optind);
 	if (!strcmp(cmd, "upload-file"))
 		return do_upload_file(argc - optind, argv + optind);
+	if (!strcmp(cmd, "claim-host"))
+		return do_claim_host(argc - optind, argv + optind);
 
 	fprintf(stderr, "Unsupported command %s\n", cmd);
 	goto usage;
@@ -737,6 +740,97 @@ do_upload_file(int argc, char **argv)
 		ni_buffer_free(data);
 	}
 
+	return 0;
+}
+
+int
+do_claim_host(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_HOSTNAME, OPT_CAPABILITY, OPT_ROLE };
+	static struct option local_options[] = {
+		{ "hostname", required_argument, NULL, OPT_HOSTNAME },
+		{ "capability", required_argument, NULL, OPT_CAPABILITY },
+		{ "set-role", required_argument, NULL, OPT_ROLE },
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ NULL }
+	};
+	ni_dbus_object_t *container_object, *host_object;
+	const char *opt_hostname = NULL;
+	const char *opt_capability = NULL;
+	const char *opt_role = NULL;
+	int c;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] claim-host --hostname <name> [--set-role <role>] <container-path>\n"
+				"testbus [options] claim-host --capability <name> [--set-role <role>] <container-path>\n"
+				"\nSupported options:\n"
+				"  --hostname <name>\n"
+				"      Argument is a hostname, as registered by the agent.\n"
+				"  --capability <name>\n"
+				"      Argument is a capability string; this will only claim hosts having registered\n"
+				"      this capability.\n"
+				"      The capability \"any\" will match any host. This is the default if neither this\n"
+				"      option nor --hostname is given.\n"
+				"  --set-role <role>\n"
+				"      This will add the host using the specified role. If no role is given,\n"
+				"      it will default to \"testhost\".\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+
+		case OPT_HOSTNAME:
+			opt_hostname = optarg;
+			break;
+
+		case OPT_CAPABILITY:
+			opt_capability = optarg;
+			break;
+
+		case OPT_ROLE:
+			opt_role = optarg;
+			break;
+		}
+	}
+
+	if (!opt_role)
+		opt_role = "testhost";
+
+	if (opt_hostname && opt_capability) {
+		ni_error("you cannot use --hostname and --capability at the same time");
+		return 1;
+	}
+
+	if (optind > argc - 1) {
+		goto usage;
+	} else {
+		const char *container_path = argv[optind++];
+
+		container_object = ni_testbus_call_get_and_refresh_object(container_path);
+		if (container_object == NULL) {
+			ni_error("unknown container object %s", container_path);
+			return 1;
+		}
+	}
+
+	if (opt_hostname) {
+		host_object = ni_testbus_call_claim_host_by_name(opt_hostname, container_object, opt_role);
+	} else {
+		if (opt_capability == NULL)
+			opt_capability = "any";
+		host_object = ni_testbus_call_claim_host_by_capability(opt_capability, container_object, opt_role);
+	}
+
+	if (host_object == NULL)
+		return 1;
+
+	printf("%s\n", host_object->path);
 	return 0;
 }
 

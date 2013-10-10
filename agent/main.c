@@ -62,8 +62,9 @@ static struct option	options[] = {
 };
 
 typedef struct ni_testbus_agent_state {
-	char *		hostname;
-	ni_uuid_t	uuid;
+	char *			hostname;
+	ni_uuid_t		uuid;
+	ni_string_array_t	capabilities;
 } ni_testbus_agent_state_t;
 
 static const char *	program_name;
@@ -225,6 +226,9 @@ ni_testbus_agent_read_state(const char *state_file, ni_testbus_agent_state_t *st
 			if (ni_string_eq(c->name, "uuid"))
 				ni_uuid_parse(&state->uuid, c->cdata);
 			else
+			if (ni_string_eq(c->name, "capability"))
+				ni_string_array_append(&state->capabilities, c->cdata);
+			else
 				ni_warn("%s: ignoring unknown XML element <%s>",
 						xml_node_location(c), c->name);
 		}
@@ -320,6 +324,9 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 			ni_testbus_agent_write_state(opt_state_file, state);
 		}
 	}
+
+	if (!ni_testbus_agent_add_capabilities(host_object, &state->capabilities))
+		ni_fatal("failed to register agent capabilities");
 
 #if 0
 	if (!opt_foreground) {

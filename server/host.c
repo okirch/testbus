@@ -88,6 +88,14 @@ ni_testbus_host_set_role(ni_testbus_host_t *host, const char *role, ni_testbus_c
 }
 
 void
+ni_testbus_host_add_capability(ni_testbus_host_t *host, const char *capability)
+{
+	if (capability &&
+	    ni_string_array_index(&host->capabilities, capability) < 0)
+		ni_string_array_append(&host->capabilities, capability);
+}
+
+void
 ni_testbus_host_array_init(ni_testbus_host_array_t *array)
 {
 	memset(array, 0, sizeof(*array));
@@ -155,7 +163,7 @@ ni_testbus_host_array_find_by_name(ni_testbus_host_array_t *array, const char *n
 	for (i = 0; i < array->count; ++i) {
 		ni_testbus_host_t *host = array->data[i];
 
-		if (strcmp(host->name, name) == 0)
+		if (ni_string_eq(host->name, name))
 			return host;
 	}
 	return NULL;
@@ -169,7 +177,7 @@ ni_testbus_host_array_find_by_role(ni_testbus_host_array_t *array, const char *r
 	for (i = 0; i < array->count; ++i) {
 		ni_testbus_host_t *host = array->data[i];
 
-		if (strcmp(host->role, role) == 0)
+		if (ni_string_eq(host->role, role))
 			return host;
 	}
 	return NULL;

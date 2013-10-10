@@ -15,12 +15,6 @@
     <name type="string" />
   </define>
 
-  <method name="addHost">
-    <arguments>
-      <role type="string"/>
-      <host type="object-path"/>
-    </arguments>
-  </method>
   <method name="start">
   </method>
 </service>
