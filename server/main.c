@@ -25,6 +25,7 @@
 #include <dborb/dbus-model.h>
 #include <testbus/model.h>
 #include "model.h"
+#include "container.h"
 
 extern ni_dbus_objectmodel_t	ni_testbus_objectmodel;
 
@@ -335,5 +336,5 @@ handle_other_event(ni_event_t event)
 {
 	//ni_debug_events("%s(%s)", __func__, ni_event_type_to_name(event));
 	if (dbus_server)
-		ni_objectmodel_other_event(dbus_server, event, NULL);
+		ni_objectmodel_event_send_signal(dbus_server, event, NULL);
 }

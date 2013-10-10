@@ -667,7 +667,7 @@ ni_objectmodel_event_to_signal(ni_event_t event)
  * Send out an event (not associated with a network device or other object)
  */
 dbus_bool_t
-ni_objectmodel_other_event(ni_dbus_server_t *server, ni_event_t event, const ni_uuid_t *uuid)
+ni_objectmodel_event_send_signal(ni_dbus_server_t *server, ni_event_t event, const ni_uuid_t *uuid)
 {
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
 	const char *signal_name = NULL;
