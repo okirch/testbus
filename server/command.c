@@ -153,11 +153,6 @@ ni_testbus_process_apply_context(ni_testbus_process_t *proc, ni_testbus_containe
 /*
  * Functionality for async execution of subprocesses
  */
-static void
-__ni_testbus_process_notify(ni_process_t *proc)
-{
-}
-
 ni_bool_t
 ni_testbus_process_run(ni_testbus_process_t *proc, void (*callback)(ni_process_t *), void *user_data)
 {

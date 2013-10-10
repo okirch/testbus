@@ -22,6 +22,7 @@
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-service.h>
 #include <dborb/dbus-model.h>
+#include <dborb/socket.h>
 
 /*
  * Error context - this is an opaque type.
@@ -49,6 +50,7 @@ static void	ni_call_error_context_destroy(ni_call_error_context_t *);
 /*
  * Local statics
  */
+static ni_dbus_client_t *	ni_call_client;
 static ni_dbus_object_t *	ni_call_root_object;
 
 /*
@@ -58,12 +60,14 @@ void
 ni_call_init_client(ni_dbus_client_t *client)
 {
 	ni_assert(ni_call_root_object == NULL);
+	ni_assert(ni_call_client == NULL);
 
 	if (client == NULL) {
 		client = ni_objectmodel_create_client();
 		if (!client)
 			ni_fatal("Unable to connect to dbus service");
 	}
+	ni_call_client = client;
 	ni_call_root_object = ni_dbus_client_get_root_object(client);
 }
 
@@ -211,6 +215,23 @@ ni_testbus_call_get_container(const char *path)
 }
 
 static ni_dbus_object_t *
+__ni_testbus_handle_path_result(const ni_dbus_variant_t *res, const char *method_name)
+{
+	const char *value;
+
+	if (!ni_dbus_variant_get_string(res, &value)) {
+		ni_error("failed to decode %s() response", method_name);
+		return NULL;
+	}
+
+	if (!value || !*value) {
+		ni_error("%s() returns empty string", method_name);
+		return NULL;
+	}
+	return ni_testbus_call_get_and_refresh_object(value);
+}
+
+static ni_dbus_object_t *
 __ni_testbus_container_create_child(ni_dbus_object_t *container, const char *method_name, const char *name)
 {
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
@@ -226,18 +247,7 @@ __ni_testbus_container_create_child(ni_dbus_object_t *container, const char *met
 		dbus_error_free(&error);
 		goto failed;
 	} else {
-		const char *value;
-
-		if (!ni_dbus_variant_get_string(&res, &value)) {
-			ni_error("failed to decode %s() response", method_name);
-			goto failed;
-		}
-
-		if (!value || !*value) {
-			ni_error("%s() returns empty string", method_name);
-			goto failed;
-		}
-		result = ni_testbus_call_get_and_refresh_object(value);
+		result = __ni_testbus_handle_path_result(&res, method_name);
 	}
 
 failed:
@@ -307,18 +317,9 @@ ni_testbus_call_reconnect_host(const char *name, const ni_uuid_t *uuid)
 		dbus_error_free(&error);
 		goto failed;
 	} else {
-		const char *value;
-
-		if (!ni_dbus_variant_get_string(&res, &value)) {
-			ni_error("failed to decode createHost() response");
-			goto failed;
-		}
-
-		if (!value || !*value) {
+		host_object = __ni_testbus_handle_path_result(&res, "reconnect");
+		if (!host_object)
 			ni_error("reconnect failed");
-			goto failed;
-		}
-		host_object = ni_testbus_call_get_and_refresh_object(value);
 	}
 
 failed:
@@ -808,16 +809,7 @@ ni_testbus_call_create_command(ni_dbus_object_t *container_object, const ni_stri
 		ni_dbus_print_error(&error, "%s.run(): failed", container_object->path);
 		dbus_error_free(&error);
 	} else {
-		const char *value;
-
-		if (!ni_dbus_variant_get_string(&res, &value)) {
-			ni_error("failed to decode createCommand() response");
-		} else
-		if (!value || !*value) {
-			ni_error("createCommand() returns empty string");
-		} else {
-			result = ni_testbus_call_get_and_refresh_object(value);
-		}
+		result = __ni_testbus_handle_path_result(&res, "createCommand");
 	}
 
 	ni_dbus_variant_destroy(&arg);
@@ -826,22 +818,220 @@ ni_testbus_call_create_command(ni_dbus_object_t *container_object, const ni_stri
 }
 
 /*
+ * Handle process completion signals
+ */
+
+struct __ni_testbus_process_waitq {
+	struct __ni_testbus_process_waitq **prev;
+	struct __ni_testbus_process_waitq *next;
+
+	char *			object_path;
+	ni_bool_t		done;
+
+	ni_testbus_process_exit_status_t *exit_info;
+};
+
+static struct __ni_testbus_process_waitq *__ni_testbus_process_waitq;
+
+static inline void
+__ni_testbus_process_waitq_insert(struct __ni_testbus_process_waitq **pos, struct __ni_testbus_process_waitq *wq)
+{
+	wq->prev = pos;
+	wq->next = *pos;
+	if (wq->next)
+		wq->next->prev = &wq->next;
+	*pos = wq;
+}
+
+static inline void
+__ni_testbus_process_waitq_unlink(struct __ni_testbus_process_waitq *wq)
+{
+	if (wq->prev) {
+		*(wq->prev) = wq->next;
+		if (wq->next)
+			wq->next->prev = wq->prev;
+
+		wq->next = NULL;
+		wq->prev = NULL;
+	}
+}
+
+static struct __ni_testbus_process_waitq *
+__ni_testbus_process_waitq_find(const char *object_path)
+{
+	struct __ni_testbus_process_waitq *wq;
+
+	for (wq = __ni_testbus_process_waitq; wq; wq = wq->next) {
+		if (ni_string_eq(wq->object_path, object_path))
+			return wq;
+	}
+
+	return wq;
+}
+
+static void
+__ni_testbus_process_fill_exit_info(ni_testbus_process_exit_status_t *exit_info, const ni_dbus_variant_t *dict)
+{
+	uint32_t u32;
+	dbus_bool_t b;
+
+	memset(exit_info, 0, sizeof(*exit_info));
+
+	if (ni_dbus_dict_get_uint32(dict, "exit-code", &u32)) {
+		exit_info->how = NI_TESTBUS_PROCESS_EXITED;
+		exit_info->exit.code = u32;
+	} else
+	if (ni_dbus_dict_get_uint32(dict, "exit-signal", &u32)) {
+		exit_info->how = NI_TESTBUS_PROCESS_CRASHED;
+		exit_info->crash.signal = u32;
+		if (ni_dbus_dict_get_bool(dict, "core-dumped", &b))
+			exit_info->crash.core_dumped = b;
+	} else {
+		exit_info->how = NI_TESTBUS_PROCESS_TRANSCENDED;
+	}
+
+	/* TBD: stderr/stdout signaling */
+}
+
+static void
+__ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+{
+	const char *signal_name = dbus_message_get_member(msg);
+	const char *object_path = dbus_message_get_path(msg);
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	int argc;
+
+	if (!signal_name)
+		return;
+
+	argc = ni_dbus_message_get_args_variants(msg, &arg, 1);
+	if (argc < 0) {
+		ni_error("%s: cannot extract parameters of signal %s", __func__, signal_name);
+		goto out;
+	}
+
+	if (ni_string_eq(signal_name, "processExited")) {
+		struct __ni_testbus_process_waitq *wq;
+
+		if (argc < 1 || !ni_dbus_variant_is_dict(&arg)) {
+			ni_error("%s: bad argument for signal %s()", __func__, signal_name);
+			goto out;
+		}
+
+		ni_trace("received signal %s from %s", signal_name, object_path);
+		if ((wq = __ni_testbus_process_waitq_find(object_path)) != NULL) {
+			if (wq->exit_info)
+				__ni_testbus_process_fill_exit_info(wq->exit_info, &arg);
+			wq->done = TRUE;
+		} else {
+			ni_trace("spurious signal %s.%s()", object_path, signal_name);
+		}
+	}
+
+out:
+	ni_dbus_variant_destroy(&arg);
+}
+
+static struct __ni_testbus_process_waitq *
+__ni_testbus_process_wait(const char *object_path)
+{
+	struct __ni_testbus_process_waitq *wq;
+
+	if (object_path == NULL)
+		return NULL;
+
+	if ((wq = __ni_testbus_process_waitq_find(object_path)) == NULL) {
+		wq = ni_calloc(1, sizeof(*wq));
+		ni_string_dup(&wq->object_path, object_path);
+
+		__ni_testbus_process_waitq_insert(&__ni_testbus_process_waitq, wq);
+		ni_assert(__ni_testbus_process_waitq_find(object_path));
+	}
+
+	return wq;
+}
+
+static void
+__ni_testbus_setup_process_handling(void)
+{
+	static ni_bool_t initialized = FALSE;
+
+	if (initialized)
+		return;
+
+	ni_dbus_client_add_signal_handler(ni_call_client,
+			NI_TESTBUS_DBUS_BUS_NAME,	/* sender */
+			NULL,				/* path */
+			NI_TESTBUS_PROCESS_INTERFACE,	/* interface */
+			__ni_testbus_process_signal,
+			NULL);
+
+	initialized = TRUE;
+}
+
+/*
  * Run a command on a remote host
  */
-ni_bool_t
+ni_dbus_object_t *
 ni_testbus_call_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *cmd_object)
 {
 	DBusError error = DBUS_ERROR_INIT;
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
-	ni_bool_t rv;
+	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
+	ni_dbus_object_t *result;
+
+	__ni_testbus_setup_process_handling();
 
 	ni_dbus_variant_set_string(&arg, cmd_object->path);
-	if (!ni_dbus_object_call_variant(host_object, NULL, "run", 1, &arg, 0, NULL, &error)) {
+
+	if (!ni_dbus_object_call_variant(host_object, NULL, "run", 1, &arg, 1, &res, &error)) {
 		ni_dbus_print_error(&error, "%s.run(): failed", host_object->path);
 		dbus_error_free(&error);
+	} else {
+		const char *object_path;
+
+		/* We cannot use __ni_testbus_handle_path_result() here, because
+		 * we must not call the DBus event loop before installing the signal
+		 * handler for this process.
+		 */
+		if (!ni_dbus_variant_get_string(&res, &object_path)) {
+			ni_error("failed to decode run() response");
+			goto failed;
+		}
+
+		if (!object_path || !*object_path) {
+			ni_error("run() returns empty string");
+			goto failed;
+		}
+		__ni_testbus_process_wait(object_path);
+
+		result = ni_testbus_call_get_and_refresh_object(object_path);
+	}
+
+failed:
+	ni_dbus_variant_destroy(&arg);
+	ni_dbus_variant_destroy(&res);
+	return result;
+}
+
+ni_bool_t
+ni_testbus_wait_for_process(const ni_dbus_object_t *proc_object, long timeout_ms, ni_testbus_process_exit_status_t *exit_info)
+{
+	struct __ni_testbus_process_waitq *wq;
+
+	if ((wq = __ni_testbus_process_waitq_find(proc_object->path)) == NULL) {
+		ni_error("cannot wait for process %s - not recorded", proc_object->path);
 		return FALSE;
 	}
 
-	ni_dbus_variant_destroy(&arg);
-	return TRUE;
+	wq->exit_info = exit_info;
+
+	while (!wq->done) {
+		if (ni_socket_wait(timeout_ms) < 0)
+			ni_fatal("ni_socket_wait failed");
+	}
+
+	ni_debug_wicked("process %s is done", proc_object->path);
+	wq->exit_info = NULL;
+	return wq->done;
 }

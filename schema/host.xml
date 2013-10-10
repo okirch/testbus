@@ -13,6 +13,10 @@
       <!-- This is really an object-path of a Testbus.Command object: -->
       <command type="string" />
     </arguments>
+    <result>
+      <!-- This is really an object-path of a Testbus.Process object: -->
+      <process type="string" />
+    </result>
   </method>
 
   <method name="addCapability">

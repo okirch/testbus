@@ -933,8 +933,9 @@ do_run_command(int argc, char **argv)
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
-	ni_dbus_object_t *host_object, *cmd_object;
+	ni_dbus_object_t *host_object, *cmd_object, *proc_object;
 	const char *opt_hostpath = NULL;
+	ni_testbus_process_exit_status_t exit_info;
 	int c;
 
 	optind = 1;
@@ -977,8 +978,37 @@ do_run_command(int argc, char **argv)
 	if (!cmd_object)
 		return 1;
 
-	if (!ni_testbus_call_host_run(host_object, cmd_object))
+	proc_object = ni_testbus_call_host_run(host_object, cmd_object);
+	if (!proc_object)
 		return 1;
+
+	/* The above should return an object handle for the process, and
+	 * register a waitq entry that will catch the processExit signals
+	 * emitted by the master.
+	 *
+	 * Wait for the command to complete, and process its exit information
+	 */
+	if (!ni_testbus_wait_for_process(proc_object, -1, &exit_info)) {
+		ni_error("failed to wait for process to complete");
+		return 1;
+	}
+
+	/* TBD: reap the process and delete the command */
+
+	switch (exit_info.how) {
+	case NI_TESTBUS_PROCESS_CRASHED:
+		ni_error("process crashed with signal %u%s",
+				exit_info.crash.signal,
+				exit_info.crash.core_dumped? " (core dumped)" : "");
+		return 1;
+
+	case NI_TESTBUS_PROCESS_EXITED:
+		return exit_info.exit.code;
+
+	default:
+		ni_error("process disappeared into Nirvana");
+		return 1;
+	}
 
 	return 0;
 }

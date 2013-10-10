@@ -13,7 +13,14 @@ set -e
 set -x
 
 th=`$CLIENT create-test $MYNAME`
+trap "$CLIENT delete-test $th" 0 1 2
+
 hh=`$CLIENT claim-host $th`
 
 # ch=`$CLIENT create-command /bin/true`
 $CLIENT run-command --host $hh /bin/true
+
+if $CLIENT run-command --host $hh /bin/false; then
+	echo "client does not propagate remote command's exit status"
+	exit 1
+fi
