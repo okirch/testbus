@@ -54,6 +54,7 @@ static struct option	options[] = {
 };
 
 static const char *	program_name;
+static const char *	opt_log_level;
 static const char *	opt_log_target;
 int			opt_global_dryrun;
 char *			opt_global_rootdir;
@@ -123,6 +124,8 @@ main(int argc, char **argv)
 				fprintf(stderr, "Bad debug facility \"%s\"\n", optarg);
 				return 1;
 			}
+			if (!opt_log_level)
+				ni_log_level_set("debug");
 			break;
 
 		case OPT_LOG_TARGET:
@@ -130,6 +133,7 @@ main(int argc, char **argv)
 			break;
 
 		case OPT_LOG_LEVEL:
+			opt_log_level = optarg;
 			if (!ni_log_level_set(optarg)) {
 				fprintf(stderr, "Bad log level \%s\"\n", optarg);
 				return 1;
