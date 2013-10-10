@@ -6,6 +6,13 @@
     <owner type="string" />
   </define>
 
+  <method name="run">
+    <arguments>
+      <!-- This is really an object-path of a Testbus.Command object: -->
+      <command type="string" />
+    </arguments>
+  </method>
+
 </service>
 
 <service name="hostlist" interface="org.opensuse.Testbus.Hostlist" object-class="hostlist">
