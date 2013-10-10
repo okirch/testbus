@@ -32,10 +32,12 @@ enum {
 	OPT_DEBUG,
 	OPT_LOG_LEVEL,
 	OPT_LOG_TARGET,
-	OPT_RECONNECT,
+
+	OPT_FOREGROUND,
 
 	OPT_DRYRUN,
 	OPT_ROOTDIR,
+	OPT_RECONNECT,
 };
 
 static struct option	options[] = {
@@ -46,6 +48,9 @@ static struct option	options[] = {
 	{ "debug",		required_argument,	NULL,	OPT_DEBUG },
 	{ "log-level",		required_argument,	NULL,	OPT_LOG_LEVEL },
 	{ "log-target",		required_argument,	NULL,	OPT_LOG_TARGET },
+
+	/* daemon */
+	{ "foreground",		no_argument,		NULL,	OPT_FOREGROUND },
 
 	/* specific */
 	{ "dryrun",		no_argument,		NULL,	OPT_DRYRUN },
@@ -64,6 +69,7 @@ typedef struct ni_testbus_agent_state {
 static const char *	program_name;
 static const char *	opt_log_level;
 static const char *	opt_log_target;
+static int		opt_foreground;
 static const char *	opt_state_file;
 int			opt_global_dryrun;
 char *			opt_global_rootdir;
@@ -145,6 +151,10 @@ main(int argc, char **argv)
 				fprintf(stderr, "Bad log level \%s\"\n", optarg);
 				return 1;
 			}
+			break;
+
+		case OPT_FOREGROUND:
+			opt_foreground = 1;
 			break;
 
 		case OPT_DRYRUN:
