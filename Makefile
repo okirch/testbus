@@ -55,6 +55,7 @@ SRVSRCS = \
 	server/dbus-fileset.c \
 	server/dbus-host.c \
 	server/dbus-test.c \
+	server/dbus-process.c \
 	server/command.c \
 	server/container.c \
 	server/environ.c \

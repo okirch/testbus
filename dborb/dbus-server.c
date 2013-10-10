@@ -222,6 +222,9 @@ ni_dbus_server_send_signal(ni_dbus_server_t *server, ni_dbus_object_t *object,
 	if (nargs && !ni_dbus_message_serialize_variants(msg, nargs, args, &error))
 		goto out;
 
+	ni_debug_dbus("sending signal %s.%s() for object %s",
+			interface, signal_name, object->path);
+
 	if (ni_dbus_connection_send_message(server->connection, msg) < 0)
 		goto out;
 
@@ -675,8 +678,8 @@ __ni_dbus_object_message(DBusConnection *conn, DBusMessage *call, void *user_dat
 				svc->name,
 				method_name);
 	} else {
+		ni_dbus_method_call_ctx_t call_ctx;
 		ni_dbus_variant_t argv[16];
-		uid_t caller_uid = -1;
 		int argc = 0;
 
 		memset(argv, 0, sizeof(argv));
@@ -707,16 +710,6 @@ __ni_dbus_object_message(DBusConnection *conn, DBusMessage *call, void *user_dat
 			goto error_reply;
 		}
 
-		if (method->handler_ex) {
-			int err;
-
-			err = ni_dbus_object_get_caller_uid(object, call, &caller_uid);
-			if (err < 0) {
-				ni_dbus_set_error_from_code(&error, err, "unable to get caller's uid");
-				goto error_reply;
-			}
-		}
-
 		if (method->handler || method->handler_ex) {
 			/* Deserialize dbus message */
 			argc = ni_dbus_message_get_args_variants(call, argv, 16);
@@ -730,12 +723,29 @@ __ni_dbus_object_message(DBusConnection *conn, DBusMessage *call, void *user_dat
 				goto error_reply;
 			}
 
+			if (method->handler_ex) {
+				int err;
+
+				memset(&call_ctx, 0, sizeof(call_ctx));
+				call_ctx.connection = server->connection;
+				call_ctx.method = method;
+				call_ctx.argc = argc;
+				call_ctx.argv = argv;
+				call_ctx.caller_uid = -1;
+
+				err = ni_dbus_object_get_caller_uid(object, call, &call_ctx.caller_uid);
+				if (err < 0) {
+					ni_dbus_set_error_from_code(&error, err, "unable to get caller's uid");
+					goto error_reply;
+				}
+			}
+
 			/* Allocate a reply message */
 			reply = dbus_message_new_method_return(call);
 
 			/* Now do the call. */
 			if (method->handler_ex) {
-				rv = method->handler_ex(object, method, argc, argv, caller_uid, reply, &error);
+				rv = method->handler_ex(object, &call_ctx, reply, &error);
 			} else {
 				rv = method->handler(object, method, argc, argv, reply, &error);
 			}

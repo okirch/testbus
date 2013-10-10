@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+# Very simple test to verify that the basic functionality works
+#
+# For this to work, you need to run both master and agent on your local
+# host.
+#
+
+MYNAME=`basename $0| tr - _`
+CLIENT="./testbus-client --config etc/common.xml"
+
+set -e
+set -x
+
+th=`$CLIENT create-test $MYNAME`
+hh=`$CLIENT claim-host $th`
+
+# ch=`$CLIENT create-command /bin/true`
+$CLIENT run-command --host $hh /bin/true

@@ -14,9 +14,9 @@
 
 #include <dborb/netinfo.h>
 #include <dborb/xpath.h>
+#include <dborb/process.h>
 #include "netinfo_priv.h"
 #include "appconfig.h"
-#include "process.h"
 
 static void		__ni_script_action_free(ni_script_action_t *);
 

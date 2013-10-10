@@ -23,13 +23,13 @@
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-model.h>
 #include <dborb/dbus-service.h>
+#include <dborb/process.h>
 #include "util_priv.h"
 #include "dbus-common.h"
 #include "dbus-connection.h"
 #include "xml-schema.h"
 #include "appconfig.h"
 #include "debug.h"
-#include "process.h"
 
 /*
  * Expand the environment of an extension

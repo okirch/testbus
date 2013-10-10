@@ -65,6 +65,17 @@ struct ni_dbus_variant {
 #define NI_DBUS_VARIANT_MAGIC	0x1234babe
 #define NI_DBUS_VARIANT_INIT	{ .type = DBUS_TYPE_INVALID, .__magic = NI_DBUS_VARIANT_MAGIC }
 
+typedef struct ni_dbus_method_call_ctx {
+	ni_dbus_connection_t *	connection;
+
+	const ni_dbus_method_t *method;
+	unsigned int		argc;
+	const ni_dbus_variant_t *argv;
+
+	uid_t			caller_uid;
+
+} ni_dbus_method_call_ctx_t;
+
 typedef dbus_bool_t		ni_dbus_method_handler_t(ni_dbus_object_t *object,
 					const ni_dbus_method_t *method,
 					unsigned int argc,
@@ -72,10 +83,7 @@ typedef dbus_bool_t		ni_dbus_method_handler_t(ni_dbus_object_t *object,
 					ni_dbus_message_t *reply,
 					DBusError *error);
 typedef dbus_bool_t		ni_dbus_method_handler_ex_t(ni_dbus_object_t *object,
-					const ni_dbus_method_t *method,
-					unsigned int argc,
-					const ni_dbus_variant_t *argv,
-					uid_t caller_uid,
+					const ni_dbus_method_call_ctx_t *,
 					ni_dbus_message_t *reply,
 					DBusError *error);
 typedef dbus_bool_t		ni_dbus_async_method_handler_t(ni_dbus_connection_t *connection,

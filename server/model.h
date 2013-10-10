@@ -39,6 +39,7 @@ extern void		ni_testbus_bind_builtin_file(void);
 extern void		ni_testbus_create_static_objects_file(ni_dbus_server_t *server);
 extern void		ni_testbus_bind_builtin_test(void);
 extern void		ni_testbus_create_static_objects_test(ni_dbus_server_t *server);
+extern void		ni_testbus_bind_builtin_process(void);
 
 extern void		ni_testbus_record_wellknown_bus_name(const char *, const char *);
 extern const char *	ni_testbus_lookup_wellknown_bus_name(const char *);
@@ -49,6 +50,8 @@ ni_dbus_object_t *	ni_testbus_testcase_wrap(ni_dbus_object_t *container_object, 
 ni_testbus_testcase_t *	ni_testbus_testcase_unwrap(const ni_dbus_object_t *object, DBusError *error);
 ni_dbus_object_t *	ni_testbus_command_wrap(ni_dbus_object_t *container_object, ni_testbus_command_t *command);
 ni_testbus_command_t *	ni_testbus_command_unwrap(const ni_dbus_object_t *object, DBusError *error);
+ni_dbus_object_t *	ni_testbus_process_wrap(ni_dbus_object_t *container_object, ni_testbus_process_t *process);
+ni_testbus_process_t *	ni_testbus_process_unwrap(const ni_dbus_object_t *object, DBusError *error);
 ni_dbus_object_t *	ni_testbus_environ_wrap(const ni_dbus_object_t *parent, ni_testbus_env_t *env);
 
 ni_testbus_container_t *ni_testbus_container_unwrap(const ni_dbus_object_t *, DBusError *);

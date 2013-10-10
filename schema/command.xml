@@ -9,3 +9,17 @@
 
 <service name="command" interface="org.opensuse.Testbus.Command" object-class="command">
 </service>
+
+<service name="process" interface="org.opensuse.Testbus.Process" object-class="process">
+  <signal name="processExited">
+    <arguments>
+      <status class="dict">
+        <exit-code type="uint32"/>
+	<exit-signal type="uint32" />
+	<core-dumped type="boolean" />
+	<stdout-pending-bytes type="uint32" />
+	<stderr-pending-bytes type="uint32" />
+      </status>
+    </arguments>
+  </signal>
+</service>

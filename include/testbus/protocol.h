@@ -136,6 +136,16 @@
 
 /*
  * Interface:
+ *	Process
+ * Methods:
+ *	kill()
+ * Compatible with class:
+ *	process -> container
+ */
+#define NI_TESTBUS_PROCESS_INTERFACE	NI_TESTBUS_NAMESPACE ".Process"
+
+/*
+ * Interface:
  *	Fileset
  * Methods:
  *	createFile(name)
@@ -200,5 +210,6 @@
 #define NI_TESTBUS_TESTSET_CLASS	"testset"
 #define NI_TESTBUS_HOSTSET_CLASS	"hostset"
 #define NI_TESTBUS_TESTCASE_CLASS	"testcase"
+#define NI_TESTBUS_PROCESS_CLASS	"process"
 
 #endif /* __NI_TESTBUS_PROTOCOL_H__ */

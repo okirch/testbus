@@ -603,16 +603,19 @@ ni_testbus_agent_add_capability(ni_dbus_object_t *host_object, const char *cap)
 {
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
 	DBusError error = DBUS_ERROR_INIT;
+	ni_bool_t rv;
 
 	ni_dbus_variant_set_string(&arg, cap);
-	if (!ni_dbus_object_call_variant(host_object, NULL, "addCapability", 1, &arg, 0, NULL, &error)) {
+
+	rv = ni_dbus_object_call_variant(host_object, NULL, "addCapability", 1, &arg, 0, NULL, &error);
+	if (!rv) {
 		ni_dbus_print_error(&error, "%s.addCapability(%s): failed",
 				host_object->path, cap);
 		dbus_error_free(&error);
 	}
 
 	ni_dbus_variant_destroy(&arg);
-	return TRUE;
+	return rv;
 }
 
 ni_bool_t
@@ -789,3 +792,56 @@ out_fail:
 	goto out;
 }
 
+/*
+ * Create a command
+ */
+ni_dbus_object_t *
+ni_testbus_call_create_command(ni_dbus_object_t *container_object, const ni_string_array_t *cmd_args)
+{
+	DBusError error = DBUS_ERROR_INIT;
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
+	ni_dbus_object_t *result = NULL;
+
+	ni_dbus_variant_set_string_array(&arg, (const char **) cmd_args->data, cmd_args->count);
+	if (!ni_dbus_object_call_variant(container_object, NULL, "createCommand", 1, &arg, 1, &res, &error)) {
+		ni_dbus_print_error(&error, "%s.run(): failed", container_object->path);
+		dbus_error_free(&error);
+	} else {
+		const char *value;
+
+		if (!ni_dbus_variant_get_string(&res, &value)) {
+			ni_error("failed to decode createCommand() response");
+		} else
+		if (!value || !*value) {
+			ni_error("createCommand() returns empty string");
+		} else {
+			result = ni_testbus_call_get_and_refresh_object(value);
+		}
+	}
+
+	ni_dbus_variant_destroy(&arg);
+	ni_dbus_variant_destroy(&res);
+	return result;
+}
+
+/*
+ * Run a command on a remote host
+ */
+ni_bool_t
+ni_testbus_call_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *cmd_object)
+{
+	DBusError error = DBUS_ERROR_INIT;
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	ni_bool_t rv;
+
+	ni_dbus_variant_set_string(&arg, cmd_object->path);
+	if (!ni_dbus_object_call_variant(host_object, NULL, "run", 1, &arg, 0, NULL, &error)) {
+		ni_dbus_print_error(&error, "%s.run(): failed", host_object->path);
+		dbus_error_free(&error);
+		return FALSE;
+	}
+
+	ni_dbus_variant_destroy(&arg);
+	return TRUE;
+}

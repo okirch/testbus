@@ -16,9 +16,9 @@
 
 #include <dborb/logging.h>
 #include <dborb/socket.h>
+#include <dborb/process.h>
 #include "socket_priv.h"
 #include "util_priv.h"
-#include "process.h"
 
 static int				__ni_process_run(ni_process_t *, int *);
 static ni_socket_t *			__ni_process_get_output(ni_process_t *, int);
@@ -129,20 +129,49 @@ ni_shellcmd_add_arg(ni_shellcmd_t *proc, const char *arg)
 	return TRUE;
 }
 
-ni_process_t *
-ni_process_new(ni_shellcmd_t *proc)
+static ni_process_t *
+__ni_process_new_ext(const ni_string_array_t *argv, const ni_string_array_t *env)
 {
 	ni_process_t *pi;
 
 	pi = xcalloc(1, sizeof(*pi));
 
-	pi->process = ni_shellcmd_hold(proc);
-
 	/* Copy the command array */
-	ni_string_array_copy(&pi->argv, &proc->argv);
+	ni_string_array_copy(&pi->argv, argv);
 
 	/* Copy the environment */
-	ni_string_array_copy(&pi->environ, &proc->environ);
+	if (env)
+		ni_string_array_copy(&pi->environ, env);
+
+	return pi;
+}
+
+ni_process_t *
+ni_process_new_ext(const ni_string_array_t *argv, const ni_var_array_t *env)
+{
+	ni_process_t *pi;
+	unsigned int i;
+
+	pi = __ni_process_new_ext(argv, NULL);
+
+	ni_string_array_copy(&pi->environ, __ni_default_environment());
+
+	for (i = 0; i < env->count; ++i) {
+		const ni_var_t *var = &env->data[i];
+
+		ni_process_setenv(pi, var->name, var->value);
+	}
+
+	return pi;
+}
+
+ni_process_t *
+ni_process_new(ni_shellcmd_t *proc)
+{
+	ni_process_t *pi;
+
+	pi = __ni_process_new_ext(&proc->argv, &proc->environ);
+	pi->process = ni_shellcmd_hold(proc);
 
 	return pi;
 }
@@ -489,18 +518,24 @@ ni_process_reap(ni_process_t *pi)
 		return -1;
 	}
 
-	if (WIFEXITED(pi->status))
-		ni_debug_extension("subprocess %d (%s) exited with status %d",
-				pi->pid, pi->process->command,
-				WEXITSTATUS(pi->status));
-	else if (WIFSIGNALED(pi->status))
-		ni_debug_extension("subprocess %d (%s) died with signal %d%s",
-				pi->pid, pi->process->command,
-				WTERMSIG(pi->status),
-				WCOREDUMP(pi->status)? " (core dumped)" : "");
-	else
-		ni_debug_extension("subprocess %d (%s) transcended into nirvana",
-				pi->pid, pi->process->command);
+	if (ni_debug & NI_TRACE_EXTENSION) {
+		const char *cmd;
+
+		cmd = pi->process? pi->process->command : "<unknown>";
+		if (WIFEXITED(pi->status))
+			ni_debug_extension("subprocess %d (%s) exited with status %d",
+					pi->pid, cmd,
+					WEXITSTATUS(pi->status));
+		else if (WIFSIGNALED(pi->status))
+			ni_debug_extension("subprocess %d (%s) died with signal %d%s",
+					pi->pid, cmd,
+					WTERMSIG(pi->status),
+					WCOREDUMP(pi->status)? " (core dumped)" : "");
+		else
+			ni_debug_extension("subprocess %d (%s) transcended into nirvana",
+					pi->pid, cmd);
+	}
+
 	pi->pid = 0;
 
 	if (pi->notify_callback)

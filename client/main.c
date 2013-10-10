@@ -66,6 +66,8 @@ static int		do_create_test(int, char **);
 static int		do_retrieve_file(int, char **);
 static int		do_upload_file(int, char **);
 static int		do_claim_host(int, char **);
+static int		do_create_command(int, char **);
+static int		do_run_command(int, char **);
 
 static ni_buffer_t *	ni_testbus_read_local_file(const char *);
 
@@ -195,6 +197,10 @@ main(int argc, char **argv)
 		return do_upload_file(argc - optind, argv + optind);
 	if (!strcmp(cmd, "claim-host"))
 		return do_claim_host(argc - optind, argv + optind);
+	if (!strcmp(cmd, "create-command"))
+		return do_create_command(argc - optind, argv + optind);
+	if (!strcmp(cmd, "run-command"))
+		return do_run_command(argc - optind, argv + optind);
 
 	fprintf(stderr, "Unsupported command %s\n", cmd);
 	goto usage;
@@ -807,7 +813,7 @@ do_claim_host(int argc, char **argv)
 		return 1;
 	}
 
-	if (optind > argc - 1) {
+	if (optind != argc - 1) {
 		goto usage;
 	} else {
 		const char *container_path = argv[optind++];
@@ -831,6 +837,149 @@ do_claim_host(int argc, char **argv)
 		return 1;
 
 	printf("%s\n", host_object->path);
+	return 0;
+}
+
+/*
+ * Helper function for creating a command
+ */
+static ni_dbus_object_t *
+__do_create_command(ni_dbus_object_t *container_object, int argc, char **argv)
+{
+	ni_string_array_t command_argv = NI_STRING_ARRAY_INIT;
+	ni_dbus_object_t *cmd_object;
+	int index;
+
+	for (index = 0; index < argc; ++index)
+		ni_string_array_append(&command_argv, argv[index]);
+
+	cmd_object = ni_testbus_call_create_command(container_object, &command_argv);
+	ni_string_array_destroy(&command_argv);
+
+	return cmd_object;
+}
+
+/*
+ * Create a command on a given host.
+ * This can be executed via run-command, or scheduled for async execution.
+ */
+int
+do_create_command(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_CONTEXT, };
+	static struct option local_options[] = {
+		{ "context", required_argument, NULL, OPT_CONTEXT },
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ NULL }
+	};
+	ni_dbus_object_t *container_object, *cmd_object;
+	const char *opt_container = NULL;
+	int c;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] create-command --context <object-path> command args...\n"
+				"\nSupported options:\n"
+				"  --context <object-path>\n"
+				"      Argument is a the object path of a container object, such as a testcase or a test group\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+
+		case OPT_CONTEXT:
+			opt_container = optarg;
+			break;
+
+		}
+	}
+
+	if (opt_container != 0) {
+		container_object = ni_testbus_call_get_and_refresh_object(opt_container);
+		if (container_object == NULL) {
+			ni_error("unknown host object %s", opt_container);
+			return 1;
+		}
+	} else {
+		ni_error("You have to specify a context when creating a command");
+		return 1;
+	}
+
+	if (optind > argc - 1)
+		goto usage;
+
+	cmd_object = __do_create_command(container_object, argc - optind, argv + optind);
+	if (cmd_object == NULL)
+		return 1;
+
+	printf("%s\n", cmd_object->path);
+	return 0;
+}
+
+/*
+ * Run a command on a given host, block and wait for the result
+ */
+int
+do_run_command(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_HOSTPATH, };
+	static struct option local_options[] = {
+		{ "host", required_argument, NULL, OPT_HOSTPATH },
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ NULL }
+	};
+	ni_dbus_object_t *host_object, *cmd_object;
+	const char *opt_hostpath = NULL;
+	int c;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] run-command --host <object-path> command args...\n"
+				"\nSupported options:\n"
+				"  --host <object-path>\n"
+				"      Argument is a host object path, as returned by claim-host.\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+
+		case OPT_HOSTPATH:
+			opt_hostpath = optarg;
+			break;
+
+		}
+	}
+
+	if (opt_hostpath != 0) {
+		host_object = ni_testbus_call_get_and_refresh_object(opt_hostpath);
+		if (host_object == NULL) {
+			ni_error("unknown host object %s", opt_hostpath);
+			return 1;
+		}
+	} else {
+		ni_error("Don't know which host to run this on");
+		return 1;
+	}
+
+	if (optind > argc - 1)
+		goto usage;
+	cmd_object = __do_create_command(host_object, argc - optind, argv + optind);
+	if (!cmd_object)
+		return 1;
+
+	if (!ni_testbus_call_host_run(host_object, cmd_object))
+		return 1;
+
 	return 0;
 }
 

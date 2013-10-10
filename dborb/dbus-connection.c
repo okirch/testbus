@@ -13,11 +13,11 @@
 #include <dborb/util.h>
 #include <dborb/logging.h>
 #include <dborb/dbus-errors.h>
+#include <dborb/process.h>
 #include "socket_priv.h"
 #include "util_priv.h"
 #include "dbus-connection.h"
 #include "dbus-dict.h"
-#include "process.h"
 #include "debug.h"
 
 #undef DEBUG_WATCH_VERBOSE

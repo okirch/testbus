@@ -57,6 +57,8 @@ typedef struct ni_dbus_objectmodel_properties_binding {
 extern ni_dbus_method_t *		ni_dbus_objectmodel_bind_method(const ni_dbus_objectmodel_method_binding_t *);
 extern ni_bool_t			ni_dbus_objectmodel_bind_properties(const ni_dbus_objectmodel_properties_binding_t *);
 
+extern ni_dbus_object_t *		ni_objectmodel_object_by_path(const char *path);
+
 extern void				ni_objectmodel_register_event(ni_event_t, const char *);
 extern dbus_bool_t			ni_objectmodel_event_send_signal(ni_dbus_server_t *, ni_event_t, const ni_uuid_t *);
 

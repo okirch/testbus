@@ -174,6 +174,7 @@ ni_testbus_bind_builtin()
 	ni_testbus_bind_builtin_host();
 	ni_testbus_bind_builtin_file();
 	ni_testbus_bind_builtin_test();
+	ni_testbus_bind_builtin_process();
 }
 
 static void

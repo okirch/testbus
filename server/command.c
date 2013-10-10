@@ -1,6 +1,7 @@
 
 #include <stdlib.h>
 #include <dborb/logging.h>
+#include <dborb/process.h>
 #include "command.h"
 
 static unsigned int		__ni_testbus_command_next_id;
@@ -147,6 +148,35 @@ ni_testbus_process_apply_context(ni_testbus_process_t *proc, ni_testbus_containe
 {
 	ni_testbus_container_merge_environment(container, &proc->context.env);
 	ni_testbus_container_merge_files(container, &proc->context.files);
+}
+
+/*
+ * Functionality for async execution of subprocesses
+ */
+static void
+__ni_testbus_process_notify(ni_process_t *proc)
+{
+}
+
+ni_bool_t
+ni_testbus_process_run(ni_testbus_process_t *proc, void (*callback)(ni_process_t *), void *user_data)
+{
+	ni_process_t *pi;
+	int rv;
+
+	proc->process = pi = ni_process_new_ext(&proc->argv, &proc->context.env.vars);
+	if (proc->process == NULL) {
+		ni_error("unable to create process object");
+		return FALSE;
+	}
+
+	rv = ni_process_run(pi);
+	if (rv < 0)
+		return FALSE;
+
+	pi->notify_callback = callback;
+	pi->user_data = user_data;
+	return TRUE;
 }
 
 void

@@ -2,7 +2,7 @@
  * Execute the requested process (almost) as if it were a
  * setuid process
  *
- * Copyright (C) 2002-2012 Olaf Kirch <okir@suse.de>
+ * Copyright (C) 2002-2013 Olaf Kirch <okir@suse.de>
  */
 
 #ifndef __WICKED_PROCESS_H__
@@ -43,6 +43,7 @@ extern ni_shellcmd_t *		ni_shellcmd_parse(const char *command);
 extern ni_bool_t		ni_shellcmd_add_arg(ni_shellcmd_t *, const char *);
 
 extern ni_process_t *		ni_process_new(ni_shellcmd_t *);
+extern ni_process_t *		ni_process_new_ext(const ni_string_array_t *, const ni_var_array_t *);
 extern int			ni_process_run(ni_process_t *);
 extern int			ni_process_run_and_wait(ni_process_t *);
 extern int			ni_process_run_and_capture_output(ni_process_t *, ni_buffer_t *);

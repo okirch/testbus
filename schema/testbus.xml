@@ -12,6 +12,7 @@
 <object-class name="host"     base-class="context"/>
 <object-class name="command-queue" base-class="context" />
 <object-class name="command"  base-class="context" />
+<object-class name="process"  base-class="context" />
 <object-class name="environ"  base-class="context" />
 <object-class name="fileset"  base-class="context" />
 <object-class name="testset"  base-class="context" />

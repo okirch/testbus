@@ -18,5 +18,7 @@ extern ni_buffer_t *		ni_testbus_agent_retrieve_file(ni_dbus_object_t *, const c
 extern ni_bool_t		ni_testbus_call_upload_file(ni_dbus_object_t *, const ni_buffer_t *);
 extern ni_bool_t		ni_testbus_agent_add_capability(ni_dbus_object_t *, const char *);
 extern ni_bool_t		ni_testbus_agent_add_capabilities(ni_dbus_object_t *, const ni_string_array_t *);
+extern ni_dbus_object_t *	ni_testbus_call_create_command(ni_dbus_object_t *, const ni_string_array_t *);
+extern ni_bool_t		ni_testbus_call_host_run(ni_dbus_object_t *, const ni_dbus_object_t *);
 
 #endif /* __NI_TESTBUS_CLIENT_H__ */

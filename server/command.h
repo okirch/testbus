@@ -20,6 +20,8 @@ struct ni_testbus_process {
 
 	ni_string_array_t		argv;			/* argv, with substitution */
 	ni_testbus_container_t		context;
+
+	ni_process_t *			process;		/* internal process state */
 };
 
 extern void			ni_testbus_command_array_init(ni_testbus_command_array_t *);
@@ -42,5 +44,6 @@ extern ni_testbus_process_t *	ni_testbus_process_get(ni_testbus_process_t *);
 extern void			ni_testbus_process_put(ni_testbus_process_t *);
 extern void			ni_testbus_process_free(ni_testbus_process_t *);
 extern void			ni_testbus_process_apply_context(ni_testbus_process_t *, ni_testbus_container_t *);
+extern ni_bool_t		ni_testbus_process_run(ni_testbus_process_t *, void (*)(ni_process_t *), void *);
 
 #endif /* __SERVER_COMMAND_H__ */

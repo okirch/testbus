@@ -37,7 +37,7 @@ ni_testbus_command_unwrap(const ni_dbus_object_t *object, DBusError *error)
 	ni_testbus_container_t *context;
 	ni_testbus_command_t *command;
 
-	if (!ni_dbus_object_get_handle_typecheck(object, ni_testbus_host_class(), error))
+	if (!ni_dbus_object_get_handle_typecheck(object, ni_testbus_command_class(), error))
 		return NULL;
 
 	if (!(context = ni_testbus_container_unwrap(object, error)))
