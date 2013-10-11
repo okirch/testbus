@@ -4,9 +4,11 @@
 #include <dborb/logging.h>
 #include <dborb/buffer.h>
 
+#include <testbus/file.h>
+
+#include "fileset.h"
 #include "model.h"
 #include "container.h"
-#include "fileset.h"
 
 void
 ni_testbus_create_static_objects_file(ni_dbus_server_t *server)

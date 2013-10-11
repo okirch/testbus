@@ -24,3 +24,5 @@ if $CLIENT run-command --host $hh /bin/false; then
 	echo "client does not propagate remote command's exit status"
 	exit 1
 fi
+
+$CLIENT run-command --host $hh --send-stdin /usr/bin/wc < /etc/hosts

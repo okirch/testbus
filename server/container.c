@@ -1,5 +1,7 @@
 
 #include <dborb/logging.h>
+#include <testbus/file.h>
+
 #include "container.h"
 #include "host.h"
 #include "fileset.h"

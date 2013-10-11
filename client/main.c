@@ -845,7 +845,7 @@ do_claim_host(int argc, char **argv)
  * Helper function for creating a command
  */
 static ni_dbus_object_t *
-__do_create_command(ni_dbus_object_t *container_object, int argc, char **argv)
+__do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, ni_bool_t send_stdin)
 {
 	ni_string_array_t command_argv = NI_STRING_ARRAY_INIT;
 	ni_dbus_object_t *cmd_object;
@@ -856,6 +856,14 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv)
 
 	cmd_object = ni_testbus_call_create_command(container_object, &command_argv);
 	ni_string_array_destroy(&command_argv);
+
+	if (send_stdin) {
+		ni_buffer_t *data;
+
+		data = ni_file_read(stdin);
+		ni_testbus_call_command_set_input(cmd_object, data);
+		ni_buffer_free(data);
+	}
 
 	return cmd_object;
 }
@@ -914,7 +922,7 @@ do_create_command(int argc, char **argv)
 	if (optind > argc - 1)
 		goto usage;
 
-	cmd_object = __do_create_command(container_object, argc - optind, argv + optind);
+	cmd_object = __do_create_command(container_object, argc - optind, argv + optind, FALSE);
 	if (cmd_object == NULL)
 		return 1;
 
@@ -928,14 +936,16 @@ do_create_command(int argc, char **argv)
 int
 do_run_command(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_HOSTPATH, };
+	enum  { OPT_HELP, OPT_HOSTPATH, OPT_SEND_STDIN };
 	static struct option local_options[] = {
 		{ "host", required_argument, NULL, OPT_HOSTPATH },
+		{ "send-stdin", no_argument, NULL, OPT_SEND_STDIN },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
 	ni_dbus_object_t *host_object, *cmd_object, *proc_object;
 	const char *opt_hostpath = NULL;
+	ni_bool_t opt_send_stdin = FALSE;
 	ni_process_exit_info_t exit_info;
 	int c;
 
@@ -946,10 +956,12 @@ do_run_command(int argc, char **argv)
 		case OPT_HELP:
 		usage:
 			fprintf(stderr,
-				"testbus [options] run-command --host <object-path> command args...\n"
+				"testbus [options] run-command --host <object-path> [--send-stdin] command args...\n"
 				"\nSupported options:\n"
 				"  --host <object-path>\n"
 				"      Argument is a host object path, as returned by claim-host.\n"
+				"  --send-stdin\n"
+				"      Send the stdin of this command to the executing host, and pipe it into the command\n"
 				"  --help\n"
 				"      Show this help text.\n"
 				);
@@ -959,6 +971,9 @@ do_run_command(int argc, char **argv)
 			opt_hostpath = optarg;
 			break;
 
+		case OPT_SEND_STDIN:
+			opt_send_stdin = TRUE;
+			break;
 		}
 	}
 
@@ -975,7 +990,7 @@ do_run_command(int argc, char **argv)
 
 	if (optind > argc - 1)
 		goto usage;
-	cmd_object = __do_create_command(host_object, argc - optind, argv + optind);
+	cmd_object = __do_create_command(host_object, argc - optind, argv + optind, opt_send_stdin);
 	if (!cmd_object)
 		return 1;
 

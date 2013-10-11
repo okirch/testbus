@@ -46,6 +46,7 @@ LIBTBSRCS = \
 	testbus/calls.c \
 	testbus/classes.c \
 	testbus/model.c \
+	testbus/file.c \
 	testbus/process.c
 
 SRVSRCS = \

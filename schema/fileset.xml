@@ -13,6 +13,7 @@
 <service name="tmpfile" interface="org.opensuse.Testbus.Tmpfile" object-class="tmpfile">
   <define name="properties" class="dict">
     <name type="string" />
+    <size type="uint64" />
   </define>
 
   <method name="append">
