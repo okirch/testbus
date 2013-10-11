@@ -3,6 +3,7 @@
 #include <dborb/dbus-service.h>
 #include <dborb/logging.h>
 #include <testbus/model.h>
+#include <testbus/process.h>
 
 #include "model.h"
 #include "command.h"
@@ -55,6 +56,50 @@ ni_objectmodel_get_testbus_process(const ni_dbus_object_t *object, ni_bool_t wri
 	return ni_testbus_process_unwrap(object, error);
 }
 
+/*
+ * Process.setExitInfo(dict)
+ */
+static dbus_bool_t
+__ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_process_t *proc;
+	ni_testbus_process_exit_status_t *exit_info;
+
+	if (!(proc = ni_testbus_process_unwrap(object, error)))
+		return FALSE;
+
+	if (argc != 1
+	 || !(exit_info = ni_testbus_process_exit_info_deserialize(&argv[0])))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+#if 0
+	/* FIXME: record exit_info in proc object */
+	proc->exit_info = exit_info;
+#endif
+
+	/* Now just re-broadcast the exit_info to everyone who is interested */
+	ni_dbus_server_send_signal(ni_dbus_object_get_server(object), object,
+			NI_TESTBUS_PROCESS_INTERFACE,
+			"processExited",
+			1, &argv[0]);
+
+	return TRUE;
+}
+
+static dbus_bool_t
+__ni_Testbus_Process_setExitInfo_ex(ni_dbus_object_t *object, const ni_dbus_method_call_ctx_t *ctx,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	return __ni_Testbus_Process_setExitInfo(object,
+			ctx->method, ctx->argc, ctx->argv,
+			reply, error);
+}
+
+NI_TESTBUS_EXT_METHOD_BINDING(Process, setExitInfo);
+
+
 static ni_dbus_property_t       __ni_Testbus_Process_properties[] = {
 	//NI_DBUS_GENERIC_STRING_PROPERTY(testbus_command, name, name, RO),
 	{ NULL }
@@ -65,7 +110,8 @@ NI_TESTBUS_PROPERTIES_BINDING(Process);
 void
 ni_testbus_bind_builtin_process(void)
 {
-//	ni_dbus_objectmodel_bind_method(&__ni_Testbus_ProcessQueue_kill_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Process_setExitInfo_binding);
+//	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Process_kill_binding);
 	ni_dbus_objectmodel_bind_properties(&__ni_Testbus_Process_Properties_binding);
 }
 

@@ -19,6 +19,7 @@
 #include <dborb/buffer.h>
 #include <testbus/model.h>
 #include <testbus/client.h>
+#include <testbus/process.h>
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-service.h>
 #include <dborb/dbus-model.h>
@@ -833,6 +834,16 @@ struct __ni_testbus_process_waitq {
 
 static struct __ni_testbus_process_waitq *__ni_testbus_process_waitq;
 
+static void
+__ni_testbus_process_waitq_free(struct __ni_testbus_process_waitq *wq)
+{
+	ni_assert(!wq->prev && !wq->next);
+	if (wq->exit_info)
+		free(wq->exit_info);
+	ni_string_free(&wq->object_path);
+	free(wq);
+}
+
 static inline void
 __ni_testbus_process_waitq_insert(struct __ni_testbus_process_waitq **pos, struct __ni_testbus_process_waitq *wq)
 {
@@ -870,30 +881,6 @@ __ni_testbus_process_waitq_find(const char *object_path)
 }
 
 static void
-__ni_testbus_process_fill_exit_info(ni_testbus_process_exit_status_t *exit_info, const ni_dbus_variant_t *dict)
-{
-	uint32_t u32;
-	dbus_bool_t b;
-
-	memset(exit_info, 0, sizeof(*exit_info));
-
-	if (ni_dbus_dict_get_uint32(dict, "exit-code", &u32)) {
-		exit_info->how = NI_TESTBUS_PROCESS_EXITED;
-		exit_info->exit.code = u32;
-	} else
-	if (ni_dbus_dict_get_uint32(dict, "exit-signal", &u32)) {
-		exit_info->how = NI_TESTBUS_PROCESS_CRASHED;
-		exit_info->crash.signal = u32;
-		if (ni_dbus_dict_get_bool(dict, "core-dumped", &b))
-			exit_info->crash.core_dumped = b;
-	} else {
-		exit_info->how = NI_TESTBUS_PROCESS_TRANSCENDED;
-	}
-
-	/* TBD: stderr/stdout signaling */
-}
-
-static void
 __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
 {
 	const char *signal_name = dbus_message_get_member(msg);
@@ -920,8 +907,8 @@ __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t 
 
 		ni_trace("received signal %s from %s", signal_name, object_path);
 		if ((wq = __ni_testbus_process_waitq_find(object_path)) != NULL) {
-			if (wq->exit_info)
-				__ni_testbus_process_fill_exit_info(wq->exit_info, &arg);
+			__ni_testbus_process_waitq_unlink(wq);
+			wq->exit_info = ni_testbus_process_exit_info_deserialize(&arg);
 			wq->done = TRUE;
 		} else {
 			ni_trace("spurious signal %s.%s()", object_path, signal_name);
@@ -1026,12 +1013,44 @@ ni_testbus_wait_for_process(const ni_dbus_object_t *proc_object, long timeout_ms
 
 	wq->exit_info = exit_info;
 
-	while (!wq->done) {
+	while (TRUE) {
+		if (wq->done) {
+			ni_debug_wicked("process %s is done", proc_object->path);
+			if (exit_info && wq->exit_info)
+				*exit_info = *(wq->exit_info);
+			__ni_testbus_process_waitq_free(wq);
+			return TRUE;
+		}
 		if (ni_socket_wait(timeout_ms) < 0)
 			ni_fatal("ni_socket_wait failed");
 	}
 
-	ni_debug_wicked("process %s is done", proc_object->path);
-	wq->exit_info = NULL;
-	return wq->done;
+	return FALSE;
+}
+
+/*
+ * Callback from agent to master: process has exited
+ */
+ni_bool_t
+ni_testbus_call_process_exit(ni_dbus_object_t *proc_object, const ni_testbus_process_exit_status_t *exit_info)
+{
+	DBusError error = DBUS_ERROR_INIT;
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	ni_bool_t rv = FALSE;
+
+	ni_dbus_variant_init_dict(&arg);
+	if (!ni_testbus_process_exit_info_serialize(exit_info, &arg)) {
+		ni_error("failed to serialize exit info");
+		goto failed;
+	}
+
+	rv = ni_dbus_object_call_variant(proc_object, NULL, "setExitInfo", 1, &arg, 0, NULL, &error);
+	if (!rv) {
+		ni_dbus_print_error(&error, "%s.setExitInfo(): failed", proc_object->path);
+		dbus_error_free(&error);
+	}
+
+failed:
+	ni_dbus_variant_destroy(&arg);
+	return rv;
 }

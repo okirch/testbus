@@ -25,6 +25,14 @@
     </arguments>
   </method>
 
+  <signal name="processScheduled">
+    <arguments>
+      <process-info class="dict">
+        <!-- TBD -->
+      </process-info>
+    </arguments>
+  </signal>
+
 </service>
 
 <service name="hostset" interface="org.opensuse.Testbus.Hostset">

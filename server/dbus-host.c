@@ -1,10 +1,9 @@
 
-#include <sys/wait.h>
-
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-service.h>
 #include <dborb/logging.h>
 #include <dborb/process.h>
+#include <testbus/process.h>
 
 #include "model.h"
 #include "host.h"
@@ -206,81 +205,41 @@ NI_TESTBUS_PROPERTIES_BINDING(Host);
 
 
 /*
- * Callback function for processes
+ * Send Host.processScheduled() signal, passing the process parameters as a dict argument
  */
-struct __ni_testbus_process_context {
-	ni_dbus_server_t *	server;
-	char *			object_path;
-};
-
-static struct __ni_testbus_process_context *
-__ni_testbus_process_context_new(ni_dbus_object_t *object)
-{
-	struct __ni_testbus_process_context *ctx;
-
-	ctx = ni_calloc(1, sizeof(*ctx));
-	ctx->server = ni_dbus_object_get_server(object);
-	ctx->object_path = ni_strdup(object->path);
-	return ctx;
-}
-
-static void
-__ni_testbus_process_context_free(struct __ni_testbus_process_context *ctx)
-{
-	ni_string_free(&ctx->object_path);
-	free(ctx);
-}
-
-static void
-__ni_testbus_process_notify(ni_process_t *pi)
-{
-	struct __ni_testbus_process_context *ctx = pi->user_data;
-	ni_dbus_object_t *object;
-
-	ni_trace("process %s exited", ctx->object_path);
-	object = ni_objectmodel_object_by_path(ctx->object_path);
-	if (object == NULL) {
-		ni_error("process exit - object %s no longer exists", ctx->object_path);
-	} else {
-		ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
-
-		ni_dbus_variant_init_dict(&arg);
-
-		if (WIFEXITED(pi->status))
-			ni_dbus_dict_add_uint32(&arg, "exit-code", WEXITSTATUS(pi->status));
-		else
-		if (WIFSIGNALED(pi->status)) {
-			ni_dbus_dict_add_uint32(&arg, "exit-signal", WTERMSIG(pi->status));
-			ni_dbus_dict_add_bool(&arg, "core-dumped", WCOREDUMP(pi->status));
-		} else {
-			/* Nothing */
-		}
-
-		/* For now, we're not capturing stdout/stderr */
-		ni_dbus_dict_add_uint32(&arg, "stdout-pending-bytes", 0);
-		ni_dbus_dict_add_uint32(&arg, "stderr-pending-bytes", 0);
-
-		ni_dbus_server_send_signal(ni_dbus_object_get_server(object), object,
-				NI_TESTBUS_PROCESS_INTERFACE,
-				"processExited",
-				1, &arg);
-		ni_dbus_variant_destroy(&arg);
-	}
-	__ni_testbus_process_context_free(ctx);
-}
-
 static ni_bool_t
-__ni_testbus_process_run(ni_testbus_process_t *proc, ni_dbus_object_t *object)
+ni_testbus_host_signal_process_scheduled(ni_dbus_object_t *host_object, ni_dbus_object_t *process_object, ni_testbus_process_t *proc)
 {
-	struct __ni_testbus_process_context *ctx;
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	ni_process_t *pi;
+	ni_bool_t rv = FALSE;
 
-	ctx = __ni_testbus_process_context_new(object);
-	if (!ni_testbus_process_run(proc, __ni_testbus_process_notify, ctx)) {
-		__ni_testbus_process_context_free(ctx);
+	/* Create a process object */
+	pi = ni_process_new_ext(&proc->argv, &proc->context.env.vars);
+	if (pi == NULL) {
+		ni_error("unable to create process object");
 		return FALSE;
 	}
 
-	return TRUE;
+	ni_dbus_variant_init_dict(&arg);
+	ni_dbus_dict_add_string(&arg, "object-path", process_object->path);
+
+	if (!ni_testbus_process_serialize(pi, &arg)) {
+		ni_error("unable to serialize process instance");
+		goto out;
+	}
+
+	/* Send the signal */
+	ni_dbus_server_send_signal(ni_dbus_object_get_server(host_object), host_object,
+			NI_TESTBUS_HOST_INTERFACE,
+			"processScheduled",
+			1, &arg);
+	rv = TRUE;
+
+out:
+	ni_process_free(pi);
+	ni_dbus_variant_destroy(&arg);
+	return rv;
 }
 
 /*
@@ -324,10 +283,17 @@ __ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 
 	process_object = ni_testbus_process_wrap(object, proc);
 
-	if (!__ni_testbus_process_run(proc, process_object)) {
-		dbus_set_error(error, DBUS_ERROR_FAILED, "unable to start subprocess");
-		return FALSE;
-	}
+	/* Rather than executing it locally (on the master host) send it
+	 * to the agent and make it execute there.
+	 *
+	 * We do not place any calls to the agents from the master - this
+	 * could block if the agent is currently unreachable.
+	 * Instead, we broadcast a Host.processScheduled() signal, giving
+	 * the object path of the newly created process as an argument.
+	 * The agent is then supposed to retrieve the process and its
+	 * properties, and run it locally.
+	 */
+	ni_testbus_host_signal_process_scheduled(object, process_object, proc);
 
 	ni_debug_wicked("created process object %s (pid=%u)", process_object->path, proc->id);
 	ni_dbus_message_append_string(reply, process_object->path);

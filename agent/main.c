@@ -18,11 +18,13 @@
 #include <dborb/netinfo.h>
 #include <dborb/logging.h>
 #include <dborb/socket.h>
-#include <testbus/model.h>
-#include <testbus/client.h>
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-model.h>
+#include <dborb/process.h>
 #include <dborb/xml.h>
+#include <testbus/model.h>
+#include <testbus/client.h>
+#include <testbus/process.h>
 #include "dbus-filesystem.h"
 
 enum {
@@ -258,6 +260,119 @@ ni_testbus_agent_write_state(const char *state_file, const ni_testbus_agent_stat
 	xml_document_free(doc);
 }
 
+/*
+ * Callback function for processes
+ */
+struct __ni_testbus_process_context {
+	ni_dbus_server_t *	server;
+	char *			object_path;
+};
+
+static struct __ni_testbus_process_context *
+__ni_testbus_process_context_new(const char *master_object_path)
+{
+	struct __ni_testbus_process_context *ctx;
+
+	ctx = ni_calloc(1, sizeof(*ctx));
+//	ctx->server = ni_dbus_object_get_server(object);
+	ctx->object_path = ni_strdup(master_object_path);
+	return ctx;
+}
+
+static void
+__ni_testbus_process_context_free(struct __ni_testbus_process_context *ctx)
+{
+	ni_string_free(&ctx->object_path);
+	free(ctx);
+}
+
+static void
+__ni_testbus_process_notify(ni_process_t *pi)
+{
+	struct __ni_testbus_process_context *ctx = pi->user_data;
+	ni_testbus_process_exit_status_t exit_info;
+	ni_dbus_object_t *proc_object;
+
+	ni_trace("process %s exited", ctx->object_path);
+	ni_testbus_process_get_exit_info(pi, &exit_info);
+
+	proc_object = ni_testbus_call_get_and_refresh_object(ctx->object_path);
+	ni_testbus_call_process_exit(proc_object, &exit_info);
+
+	__ni_testbus_process_context_free(ctx);
+	pi->user_data = NULL;
+}
+
+static ni_bool_t
+__ni_testbus_process_run(ni_process_t *pi, const char *master_object_path)
+{
+	struct __ni_testbus_process_context *ctx;
+
+	if (ni_process_run(pi) < 0)
+		return FALSE;
+
+	ctx = __ni_testbus_process_context_new(master_object_path);
+	pi->notify_callback = __ni_testbus_process_notify;
+	pi->user_data = ctx;
+
+	return TRUE;
+}
+
+
+/*
+ * Process signals from master
+ */
+static void
+__ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+{
+	const char *signal_name = dbus_message_get_member(msg);
+	const char *object_path = dbus_message_get_path(msg);
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	int argc;
+
+	if (!signal_name)
+		return;
+
+	argc = ni_dbus_message_get_args_variants(msg, &arg, 1);
+	if (argc < 0) {
+		ni_error("%s: cannot extract parameters of signal %s", __func__, signal_name);
+		goto out;
+	}
+
+	if (ni_string_eq(signal_name, "processScheduled")) {
+		const char *object_path;
+		ni_process_t *pi;
+
+		if (argc < 1
+		 || !(pi = ni_testbus_process_deserialize(&arg))
+		 || !ni_dbus_dict_get_string(&arg, "object-path", &object_path)) {
+			ni_error("%s: bad argument for signal %s()", __func__, signal_name);
+			goto out;
+		}
+
+		ni_trace("received signal %s from %s", signal_name, object_path);
+
+		if (!__ni_testbus_process_run(pi, object_path)) {
+			/* FIXME: notify master that we failed to fork */
+			ni_process_free(pi);
+		}
+	}
+
+out:
+	ni_dbus_variant_destroy(&arg);
+}
+
+static void
+ni_testbus_agent_setup_signals(ni_dbus_client_t *client)
+{
+	ni_dbus_client_add_signal_handler(client,
+			NI_TESTBUS_DBUS_BUS_NAME,		/* sender */
+			NULL,					/* path */
+			NI_TESTBUS_HOST_INTERFACE,		/* interface */
+			__ni_testbus_agent_process_host_signal,
+			NULL);
+}
+
 static void
 ni_testbus_agent_bind_builtin()
 {
@@ -285,6 +400,7 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 {
 	ni_dbus_server_t *dbus_server;
 	ni_dbus_object_t *host_object;
+	ni_dbus_client_t *dbus_client;
 
 	if (!ni_objectmodel_register(&ni_testbus_agent_objectmodel))
 		ni_fatal("Cannot initialize objectmodel, giving up.");
@@ -293,7 +409,8 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	if (!dbus_server)
 		ni_fatal("Cannot create server, giving up.");
 
-	ni_call_init_client(ni_dbus_server_create_shared_client(dbus_server, NI_TESTBUS_DBUS_BUS_NAME));
+	dbus_client = ni_dbus_server_create_shared_client(dbus_server, NI_TESTBUS_DBUS_BUS_NAME);
+	ni_call_init_client(dbus_client);
 
 	ni_trace("Testbus agent starting");
 	if (state->hostname == NULL || !opt_reconnect) {
@@ -324,6 +441,8 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 			ni_testbus_agent_write_state(opt_state_file, state);
 		}
 	}
+
+	ni_testbus_agent_setup_signals(dbus_client);
 
 	if (!ni_testbus_agent_add_capabilities(host_object, &state->capabilities))
 		ni_fatal("failed to register agent capabilities");

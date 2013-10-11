@@ -21,6 +21,7 @@
 #include <dborb/buffer.h>
 #include <testbus/model.h>
 #include <testbus/client.h>
+#include <testbus/process.h>
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-model.h>
 
@@ -996,6 +997,10 @@ do_run_command(int argc, char **argv)
 	/* TBD: reap the process and delete the command */
 
 	switch (exit_info.how) {
+	case NI_TESTBUS_PROCESS_NONSTARTER:
+		ni_error("failed to start process");
+		return 1;
+
 	case NI_TESTBUS_PROCESS_CRASHED:
 		ni_error("process crashed with signal %u%s",
 				exit_info.crash.signal,

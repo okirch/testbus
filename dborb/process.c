@@ -521,7 +521,7 @@ ni_process_reap(ni_process_t *pi)
 	if (ni_debug & NI_TRACE_EXTENSION) {
 		const char *cmd;
 
-		cmd = pi->process? pi->process->command : "<unknown>";
+		cmd = pi->process? pi->process->command : pi->argv.data[0];
 		if (WIFEXITED(pi->status))
 			ni_debug_extension("subprocess %d (%s) exited with status %d",
 					pi->pid, cmd,
