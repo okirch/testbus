@@ -24,6 +24,7 @@
 
 <service name="root" interface="org.opensuse.Testbus" />
 
+<include name="context.xml"/>
 <include name="host.xml"/>
 <include name="command.xml"/>
 <include name="environ.xml"/>

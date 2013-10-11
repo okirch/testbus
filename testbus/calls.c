@@ -283,6 +283,30 @@ failed:
 	return result;
 }
 
+ni_dbus_object_t *
+ni_testbus_call_container_child_by_name(ni_dbus_object_t *container_object, const ni_dbus_class_t *class, const char *name)
+{
+	ni_dbus_variant_t args[2];
+	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
+	DBusError error = DBUS_ERROR_INIT;
+	ni_dbus_object_t *result = NULL;
+
+	ni_dbus_variant_vector_init(args, 2);
+
+	ni_dbus_variant_set_string(&args[0], class->name);
+	ni_dbus_variant_set_string(&args[1], name);
+	if (!ni_dbus_object_call_variant(container_object, NULL, "getChildByName", 2, args, 1, &res, &error)) {
+		ni_dbus_print_error(&error, "%s.getChildByName(%s, %s): failed",
+				container_object->path, class->name, name);
+		dbus_error_free(&error);
+	} else {
+		result = __ni_testbus_handle_path_result(&res, "getChildByName");
+	}
+
+	ni_dbus_variant_vector_destroy(args, 2);
+	ni_dbus_variant_destroy(&res);
+	return result;
+}
 
 ni_dbus_object_t *
 ni_testbus_call_create_host(const char *name)
@@ -751,8 +775,9 @@ ni_testbus_call_download_file(ni_dbus_object_t *file_object)
 	DBusError error = DBUS_ERROR_INIT;
 	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
 	ni_buffer_t *result = NULL;
-	uint64_t offset;
+	uint64_t offset = 0;
 
+	ni_debug_wicked("ni_testbus_call_download_file(%s)", file_object->path);
 	result = ni_buffer_new(0);
 	while (TRUE) {
 		ni_dbus_variant_t argv[2];
@@ -763,7 +788,8 @@ ni_testbus_call_download_file(ni_dbus_object_t *file_object)
 		ni_dbus_variant_set_uint32(&argv[1], ioblksize);
 
 		ni_dbus_variant_destroy(&res);
-		if (!ni_dbus_object_call_variant(file_object, NULL, "read", 2, argv, 1, &res, &error)) {
+		if (!ni_dbus_object_call_variant(file_object, NULL, "retrieve", 2, argv, 1, &res, &error)) {
+			ni_dbus_print_error(&error, "%s.run(%u @%u): failed", file_object->path, ioblksize, offset);
 			ni_dbus_variant_vector_destroy(argv, 3);
 			goto out_fail;
 		}
@@ -785,6 +811,7 @@ ni_testbus_call_download_file(ni_dbus_object_t *file_object)
 			break;
 	}
 
+	ni_debug_wicked("%s: retrieved %u bytes of data", file_object->path, ni_buffer_count(result));
 out:
 	ni_dbus_variant_destroy(&res);
 	return result;
@@ -1019,7 +1046,7 @@ failed:
 }
 
 ni_bool_t
-ni_testbus_wait_for_process(const ni_dbus_object_t *proc_object, long timeout_ms, ni_process_exit_info_t *exit_info)
+ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_process_exit_info_t *exit_info)
 {
 	struct __ni_testbus_process_waitq *wq;
 
@@ -1036,6 +1063,11 @@ ni_testbus_wait_for_process(const ni_dbus_object_t *proc_object, long timeout_ms
 			if (exit_info && wq->exit_info)
 				*exit_info = *(wq->exit_info);
 			__ni_testbus_process_waitq_free(wq);
+
+			if (!ni_dbus_object_refresh_children(proc_object)) {
+				ni_error("%s: unable to refresh process object after exit", proc_object->path);
+				return FALSE;
+			}
 			return TRUE;
 		}
 		if (ni_socket_wait(timeout_ms) < 0)

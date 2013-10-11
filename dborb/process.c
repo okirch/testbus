@@ -22,6 +22,7 @@
 
 static int				__ni_process_run(ni_process_t *, int *);
 static ni_socket_t *			__ni_process_get_output(ni_process_t *, int);
+static void				__ni_process_flush_buffer(ni_process_t *, struct ni_process_buffer *);
 static const ni_string_array_t *	__ni_default_environment(void);
 
 static inline ni_bool_t
@@ -135,6 +136,9 @@ ni_process_new(ni_bool_t use_default_env)
 	ni_process_t *pi;
 
 	pi = xcalloc(1, sizeof(*pi));
+	pi->stdin = -1;
+	pi->stdout.low_water_mark = 4096;
+	pi->stderr.low_water_mark = 4096;
 
 	if (use_default_env)
 		ni_string_array_copy(&pi->environ, __ni_default_environment());
@@ -193,6 +197,13 @@ ni_process_free(ni_process_t *pi)
 		ni_tempstate_finish(pi->temp_state);
 		pi->temp_state = NULL;
 	}
+
+	if (pi->stdin >= 0)
+		close(pi->stdin);
+	if (pi->stdout.wbuf)
+		ni_buffer_free(pi->stdout.wbuf);
+	if (pi->stderr.wbuf)
+		ni_buffer_free(pi->stderr.wbuf);
 
 	ni_string_array_destroy(&pi->argv);
 	ni_string_array_destroy(&pi->environ);
@@ -367,6 +378,9 @@ ni_process_run_and_wait(ni_process_t *pi)
 		return -1;
 	}
 
+	__ni_process_flush_buffer(pi, &pi->stdout);
+	__ni_process_flush_buffer(pi, &pi->stderr);
+
 	pi->pid = 0;
 	if (pi->notify_callback)
 		pi->notify_callback(pi);
@@ -464,11 +478,14 @@ __ni_process_run(ni_process_t *pi, int *pfd)
 		if (chdir("/") < 0)
 			ni_warn("%s: unable to chdir to /: %m", __func__);
 
+		if ((fd = pi->stdin) < 0) {
+			if ((fd = open("/dev/null", O_RDONLY)) < 0)
+				ni_warn("%s: unable to open /dev/null: %m", __func__);
+		}
+
 		close(0);
-		if ((fd = open("/dev/null", O_RDONLY)) < 0)
-			ni_warn("%s: unable to open /dev/null: %m", __func__);
-		else if (dup2(fd, 0) < 0)
-			ni_warn("%s: cannot dup null descriptor: %m", __func__);
+		if (fd >= 0 && dup2(fd, 0) < 0)
+			ni_warn("%s: cannot dup stdin descriptor: %m", __func__);
 
 		if (pfd) {
 			if (dup2(pfd[1], 1) < 0 || dup2(pfd[1], 2) < 0)
@@ -517,6 +534,9 @@ ni_process_reap(ni_process_t *pi)
 		ni_error("%s: waitpid returns error (%m)", __func__);
 		return -1;
 	}
+
+	__ni_process_flush_buffer(pi, &pi->stdout);
+	__ni_process_flush_buffer(pi, &pi->stderr);
 
 	if (ni_debug & NI_TRACE_EXTENSION) {
 		const char *cmd;
@@ -574,19 +594,46 @@ ni_process_get_exit_info(const ni_process_t *pi, ni_process_exit_info_t *exit_in
  * Connect the subprocess output to our I/O handling loop
  */
 static void
+__ni_process_flush_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
+{
+	if (pb->wbuf) {
+		if (pi->read_callback)
+			pi->read_callback(pi, 1, pb->wbuf);
+		else
+			ni_buffer_free(pb->wbuf);
+		pb->wbuf = NULL;
+	}
+}
+
+static void
 __ni_process_output_recv(ni_socket_t *sock)
 {
 	ni_process_t *pi = sock->user_data;
-	ni_buffer_t *rbuf = &sock->rbuf;
+	ni_buffer_t *wbuf;
 	int cnt;
 
 	ni_assert(pi);
-	if (ni_buffer_tailroom(rbuf) < 256)
-		ni_buffer_ensure_tailroom(rbuf, 4096);
 
-	cnt = recv(sock->__fd, ni_buffer_tail(rbuf), ni_buffer_tailroom(rbuf), MSG_DONTWAIT);
+repeat:
+	if (pi->stdout.wbuf == NULL)
+		pi->stdout.wbuf = ni_buffer_new(4096);
+	wbuf = pi->stdout.wbuf;
+
+	cnt = recv(sock->__fd, ni_buffer_tail(wbuf), ni_buffer_tailroom(wbuf), MSG_DONTWAIT);
 	if (cnt >= 0) {
-		rbuf->tail += cnt;
+		ni_bool_t notify = FALSE, repeat = FALSE;
+
+		ni_buffer_push_tail(wbuf, cnt);
+
+		if (ni_buffer_tailroom(wbuf) == 0)
+			notify = repeat = TRUE;
+		else if (ni_buffer_count(wbuf) >= pi->stdout.low_water_mark)
+			notify = TRUE;
+
+		if (notify)
+			__ni_process_flush_buffer(pi, &pi->stdout);
+		if (repeat)
+			goto repeat;
 	} else if (errno != EWOULDBLOCK) {
 		ni_error("read error on subprocess pipe: %m");
 		ni_socket_deactivate(sock);

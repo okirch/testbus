@@ -156,7 +156,7 @@ extern int		ni_backup_file_to(const char *, const char *);
 extern int		ni_restore_file_from(const char *, const char *);
 extern FILE *		ni_file_open(const char *, const char *, unsigned int);
 extern ni_buffer_t *	ni_file_read(FILE *);
-extern int		ni_file_write(FILE *, const void *, size_t);
+extern int		ni_file_write(FILE *, const ni_buffer_t *);
 extern ni_bool_t	ni_file_remove_recursively(const char *path);
 extern int		ni_mkdir_maybe(const char *pathname, unsigned int mode);
 
@@ -272,7 +272,7 @@ extern ni_tempstate_t *	ni_tempstate_new(const char *);
 extern void		ni_tempstate_finish(ni_tempstate_t *);
 extern void		ni_tempstate_add_file(ni_tempstate_t *, const char *filename);
 extern int		ni_tempstate_mkdir(ni_tempstate_t *);
-extern char *		ni_tempstate_mkfile(ni_tempstate_t *, const char *);
+extern char *		ni_tempstate_mkfile(ni_tempstate_t *, const char *, const ni_buffer_t *);
 
 /*
  * Functions for hashing

@@ -8,6 +8,7 @@
 ni_bool_t
 ni_testbus_process_serialize(const ni_process_t *pi, ni_dbus_variant_t *dict)
 {
+	ni_dbus_variant_init_dict(dict);
 	ni_dbus_dict_add_string_array(dict, "argv", (const char **) pi->argv.data, pi->argv.count);
 	ni_dbus_dict_add_string_array(dict, "env", (const char **) pi->environ.data, pi->environ.count);
 
@@ -45,6 +46,8 @@ failed:
 ni_bool_t
 ni_testbus_process_exit_info_serialize(const ni_process_exit_info_t *exit_info, ni_dbus_variant_t *dict)
 {
+	ni_dbus_variant_init_dict(dict);
+
 	switch (exit_info->how) {
 	case NI_PROCESS_EXITED:
 		ni_dbus_dict_add_uint32(dict, "exit-code", exit_info->exit.code);
@@ -58,8 +61,8 @@ ni_testbus_process_exit_info_serialize(const ni_process_exit_info_t *exit_info, 
 	}
 
 	/* For now, we're not capturing stdout/stderr */
-	ni_dbus_dict_add_uint32(dict, "stdout-total-bytes", 0);
-	ni_dbus_dict_add_uint32(dict, "stderr-total-bytes", 0);
+	ni_dbus_dict_add_uint32(dict, "stdout-total-bytes", exit_info->stdout_bytes);
+	ni_dbus_dict_add_uint32(dict, "stderr-total-bytes", exit_info->stderr_bytes);
 	return TRUE;
 }
 
@@ -85,7 +88,10 @@ ni_testbus_process_exit_info_deserialize(const ni_dbus_variant_t *dict)
 		exit_info->how = NI_PROCESS_TRANSCENDED;
 	}
 
-	/* TBD: stderr/stdout signaling */
+	if (ni_dbus_dict_get_uint32(dict, "stdout-total-bytes", &u32))
+		exit_info->stdout_bytes = u32;
+	if (ni_dbus_dict_get_uint32(dict, "stderr-total-bytes", &u32))
+		exit_info->stderr_bytes = u32;
 
 	return exit_info;
 }

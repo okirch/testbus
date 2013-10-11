@@ -112,7 +112,8 @@ ni_dbus_xml_register_services(ni_xs_scope_t *scope)
 			ni_string_dup(&service->name, xs_service->interface);
 			service->compatible = class;
 
-			ni_debug_dbus("register dbus service description %s", service->name);
+			ni_debug_dbus("register dbus service description %s, class=%s", service->name,
+					class? class->name : "<none>");
 			ni_objectmodel_register_service(service);
 		}
 
@@ -1441,12 +1442,17 @@ __ni_notation_external_file_print(const unsigned char *data_ptr, unsigned int da
 
 	/* If we have a global tempstate, we can store the data in a temporary file
 	 * and track it for later deletion. */
-	if ((fp = ni_mkstemp(&tempname)) == NULL)
+	if ((fp = ni_mkstemp(&tempname)) == NULL) {
 		return NULL;
+	} else {
+		ni_buffer_t wbuf;
 
-	ni_tempstate_add_file(__ni_dbus_xml_global_temp_state, tempname);
-	ni_file_write(fp, data_ptr, data_len);
-	fclose(fp);
+		ni_buffer_init(&wbuf, (char *) data_ptr, data_len);
+
+		ni_tempstate_add_file(__ni_dbus_xml_global_temp_state, tempname);
+		ni_file_write(fp, &wbuf);
+		fclose(fp);
+	}
 
 	snprintf(buffer, size, "%s", tempname);
 	ni_string_free(&tempname);

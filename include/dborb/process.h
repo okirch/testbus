@@ -32,8 +32,16 @@ struct ni_process {
 	ni_string_array_t	argv;
 	ni_string_array_t	environ;
 
+	int			stdin;
+	struct ni_process_buffer {
+		ni_buffer_t *	wbuf;
+		unsigned int	low_water_mark;
+	} stdout, stderr;
+
 	ni_tempstate_t *	temp_state;
 
+	void			(*read_callback)(ni_process_t *, int fd, ni_buffer_t *);
+	/* XXX: rename to exit_notify */
 	void			(*notify_callback)(ni_process_t *);
 	void *			user_data;
 };
@@ -60,6 +68,8 @@ struct ni_process_exit_info {
 	} crash;
 
 	/* TBD: stderr/stdout */
+	unsigned int		stdout_bytes;
+	unsigned int		stderr_bytes;
 };
 
 extern ni_shellcmd_t *		ni_shellcmd_new(const ni_string_array_t *argv);
@@ -76,6 +86,7 @@ extern void			ni_process_setenv(ni_process_t *, const char *, const char *);
 extern const char *		ni_process_getenv(const ni_process_t *, const char *);
 extern ni_tempstate_t *		ni_process_tempstate(ni_process_t *);
 extern void			ni_process_free(ni_process_t *);
+extern void			ni_process_set_exit_info(ni_process_t *, ni_process_exit_info_t *);
 extern void			ni_process_get_exit_info(const ni_process_t *, ni_process_exit_info_t *);
 extern int			ni_process_exit_status_okay(const ni_process_t *);
 extern void			ni_shellcmd_free(ni_shellcmd_t *);

@@ -349,6 +349,7 @@ extern dbus_bool_t		ni_dbus_dict_is_empty(const ni_dbus_variant_t *);
 
 extern void			ni_dbus_dict_array_init(ni_dbus_variant_t *);
 extern ni_dbus_variant_t *	ni_dbus_dict_array_add(ni_dbus_variant_t *);
+extern const ni_dbus_variant_t *ni_dbus_dict_array_at(const ni_dbus_variant_t *, unsigned int);
 
 extern void			ni_dbus_array_array_init(ni_dbus_variant_t *, const char *);
 extern ni_dbus_variant_t *	ni_dbus_array_array_add(ni_dbus_variant_t *);

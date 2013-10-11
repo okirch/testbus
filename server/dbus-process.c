@@ -2,8 +2,10 @@
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-service.h>
 #include <dborb/logging.h>
+#include <dborb/process.h>
 #include <testbus/model.h>
 #include <testbus/process.h>
+#include <testbus/file.h>
 
 #include "model.h"
 #include "command.h"
@@ -66,6 +68,8 @@ __ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_
 {
 	ni_testbus_process_t *proc;
 	ni_process_exit_info_t *exit_info;
+	ni_testbus_file_t *file;
+	ni_dbus_variant_t dict = NI_DBUS_VARIANT_INIT;
 
 	if (!(proc = ni_testbus_process_unwrap(object, error)))
 		return FALSE;
@@ -74,16 +78,27 @@ __ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_
 	 || !(exit_info = ni_testbus_process_exit_info_deserialize(&argv[0])))
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
-#if 0
-	/* FIXME: record exit_info in proc object */
-	proc->exit_info = exit_info;
+	if ((file = ni_testbus_container_get_file_by_name(&proc->context, "stdout")) != NULL) {
+		ni_trace("stdout has %u bytes of data", file->size);
+		exit_info->stdout_bytes = file->size;
+	}
+	if ((file = ni_testbus_container_get_file_by_name(&proc->context, "stderr")) != NULL) {
+		ni_trace("stderr has %u bytes of data", file->size);
+		exit_info->stderr_bytes = file->size;
+	}
+
+#ifdef notyet
+	ni_process_set_exit_info(proc, exit_info);
 #endif
+
+	ni_testbus_process_exit_info_serialize(exit_info, &dict);
 
 	/* Now just re-broadcast the exit_info to everyone who is interested */
 	ni_dbus_server_send_signal(ni_dbus_object_get_server(object), object,
 			NI_TESTBUS_PROCESS_INTERFACE,
 			"processExited",
-			1, &argv[0]);
+			1, &dict);
+	ni_dbus_variant_destroy(&dict);
 
 	return TRUE;
 }

@@ -1576,14 +1576,27 @@ out:
  * Write data to a file
  */
 int
-ni_file_write(FILE *fp, const void *data, size_t len)
+ni_file_write(FILE *fp, const ni_buffer_t *wbuf)
 {
-	size_t written;
+	ni_buffer_t wbuf_copy = *wbuf;
+	size_t written = 0;
+	unsigned int left;
 
-	written = fwrite(data, 1, len, fp);
-	if (written < len) {
-		ni_error("%s: %m", __func__);
-		return -1;
+	while ((left = ni_buffer_count(&wbuf_copy)) != 0) {
+		int cnt;
+
+		cnt = fwrite(ni_buffer_head(&wbuf_copy), 1, left, fp);
+		if (cnt < 0) {
+			ni_error("%s: %m", __func__);
+			return -1;
+		}
+		if (cnt == 0) {
+			ni_error("%s: zero len write", __func__);
+			return -1;
+		}
+
+		ni_buffer_pull_head(&wbuf_copy, cnt);
+		written += cnt;
 	}
 	return written;
 }
@@ -2128,16 +2141,19 @@ ni_tempstate_mkdir(ni_tempstate_t *ts)
 	if (ts->dirpath == NULL) {
 		char pathbuf[PATH_MAX];
 
-		if (ts->ident == NULL) {
-			ni_error("cannot create temp directory in %s: no identifier for this tempstate",
-					ni_config_statedir());
-			return -1;
-		}
-		snprintf(pathbuf, sizeof(pathbuf), "%s/%s", ni_config_statedir(), ts->ident);
+		if (ts->ident != NULL) {
+			snprintf(pathbuf, sizeof(pathbuf), "%s/%s", ni_config_statedir(), ts->ident);
 
-		if (mkdir(pathbuf, 0700) < 0) {
-			ni_error("unable to create directory %s: %m", pathbuf);
-			return -1;
+			if (mkdir(pathbuf, 0700) < 0) {
+				ni_error("unable to create tempstate directory %s: %m", pathbuf);
+				return -1;
+			}
+		} else {
+			snprintf(pathbuf, sizeof(pathbuf), "%s/tempdirXXXXXX", ni_config_statedir());
+			if (!mkdtemp(pathbuf)) {
+				ni_error("unable to create tempstate directory: %m");
+				return -1;
+			}
 		}
 
 		ni_string_dup(&ts->dirpath, pathbuf);
@@ -2146,7 +2162,7 @@ ni_tempstate_mkdir(ni_tempstate_t *ts)
 }
 
 char *
-ni_tempstate_mkfile(ni_tempstate_t *ts, const char *name)
+ni_tempstate_mkfile(ni_tempstate_t *ts, const char *name, const ni_buffer_t *data)
 {
 	static char pathbuf[PATH_MAX];
 
@@ -2156,6 +2172,22 @@ ni_tempstate_mkfile(ni_tempstate_t *ts, const char *name)
 	}
 
 	snprintf(pathbuf, sizeof(pathbuf), "%s/%s", ts->dirpath, name);
+	if (data) {
+		FILE *fp;
+
+		if (!(fp = fopen(pathbuf, "w"))) {
+			ni_error("unable to open tempfile %s for writing: %m", pathbuf);
+			return NULL;
+		}
+
+		if (ni_file_write(fp, data) < 0) {
+			fclose(fp);
+			return NULL;
+		}
+
+		fclose(fp);
+	}
+
 	return pathbuf;
 }
 

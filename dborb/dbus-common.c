@@ -1583,6 +1583,16 @@ ni_dbus_dict_array_add(ni_dbus_variant_t *var)
 	return dst;
 }
 
+const ni_dbus_variant_t *
+ni_dbus_dict_array_at(const ni_dbus_variant_t *var, unsigned int index)
+{
+	if (!__ni_dbus_is_array(var, NI_DBUS_DICT_SIGNATURE))
+		return NULL;
+	if (index >= var->array.len)
+		return NULL;
+	return &var->variant_array_value[index];
+}
+
 /*
  * DBus struct type
  */

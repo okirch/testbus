@@ -71,6 +71,7 @@ CLNTSRCS = \
 
 AGNTSRCS = \
 	agent/main.c \
+	agent/files.c \
 	agent/dbus-filesystem.c
 
 PROXSRCS = \

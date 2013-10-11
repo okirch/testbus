@@ -865,7 +865,48 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 		ni_buffer_free(data);
 	}
 
+	/* FIXME: when capturing stdout/stderr, we should check whether we our own
+	 * stdout/err descriptors refer to the same file or different ones.
+	 *
+	 * If they refer to the same file, we want the server to merge the output and
+	 * send it to us as one - this preserves the order of the output as written
+	 * out by the command on the server side.
+	 *
+	 * If they refer to different files, we should tell the server to capture
+	 * these separately.
+	 */
+
 	return cmd_object;
+}
+
+/*
+ * Flush an output file of the process to stdout/stderr
+ */
+static void
+flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *ofp)
+{
+	ni_dbus_object_t *file_object;
+	ni_buffer_t *data;
+
+	file_object = ni_testbus_call_container_child_by_name(proc_object,
+					ni_testbus_file_class(),
+					filename);
+	if (file_object == NULL) {
+		ni_trace("%s: no file named %s", proc_object->path, filename);
+		return;
+	}
+
+	ni_trace("%s(%s) -> %s", __func__, filename, file_object->path);
+
+	/* Now download the file */
+	data = ni_testbus_call_download_file(file_object);
+	if (data == NULL) {
+		ni_error("failed to download %s", filename);
+		return;
+	}
+
+	ni_file_write(ofp, data);
+	ni_buffer_free(data);
 }
 
 /*
@@ -1008,6 +1049,11 @@ do_run_command(int argc, char **argv)
 		ni_error("failed to wait for process to complete");
 		return 1;
 	}
+
+	if (exit_info.stdout_bytes)
+		flush_process_file(proc_object, "stdout", stdout);
+	if (exit_info.stderr_bytes)
+		flush_process_file(proc_object, "stderr", stderr);
 
 	/* TBD: reap the process and delete the command */
 

@@ -97,6 +97,11 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 	/* Register this object */
 	file_object = ni_testbus_file_wrap(object, file);
 	ni_dbus_message_append_string(reply, file_object->path);
+
+	/* This is a bit of a layering violation, but we need this piece of information
+	 * in the processScheduled signal */
+	ni_string_dup(&file->object_path, file_object->path);
+
 	return TRUE;
 }
 
@@ -138,6 +143,7 @@ __ni_Testbus_Tmpfile_append(ni_dbus_object_t *object, const ni_dbus_method_t *me
 	memcpy(ni_buffer_tail(file->data), argv[0].byte_array_value, count);
 	ni_buffer_push_tail(file->data, count);
 	file->size = ni_buffer_count(file->data);
+	file->iseq++;
 
 	ni_debug_wicked("file %s: appended %u bytes (now %u bytes total)",
 			file->name, count, ni_buffer_count(file->data));
@@ -145,6 +151,55 @@ __ni_Testbus_Tmpfile_append(ni_dbus_object_t *object, const ni_dbus_method_t *me
 }
 
 static NI_TESTBUS_METHOD_BINDING(Tmpfile, append);
+
+/*
+ * Tmpfile.retrieve(data)
+ */
+static dbus_bool_t
+__ni_Testbus_Tmpfile_retrieve(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
+	ni_testbus_file_t *file;
+	uint64_t offset;
+	uint32_t count;
+	ni_bool_t rv;
+
+	if ((file = ni_testbus_file_unwrap(object, error)) == NULL)
+		return FALSE;
+
+	if (argc != 2
+	 || !ni_dbus_variant_get_uint64(&argv[0], &offset)
+	 || !ni_dbus_variant_get_uint32(&argv[1], &count)
+	 || count > 65536)
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	ni_dbus_variant_init_byte_array(&res);
+	if (file->data == NULL) {
+		ni_debug_wicked("%s: no data", file->name);
+	} else {
+		uint64_t size = ni_buffer_count(file->data);
+		unsigned char *data;
+
+		ni_trace("%s: req %u@%u, size=%u", file->name, count, (int) offset, (int) size);
+		if (offset < size) {
+			data = ni_buffer_head(file->data) + offset;
+			if (size - offset < count)
+				count = size - offset;
+			ni_dbus_variant_set_byte_array(&res, data, count);
+		}
+	}
+
+	rv = ni_dbus_message_serialize_variants(reply, 1, &res, error);
+	ni_dbus_variant_destroy(&res);
+
+	if (rv)
+		ni_debug_wicked("file %s: retrieved %u bytes", file->name, res.array.len);
+	return rv;
+}
+
+static NI_TESTBUS_METHOD_BINDING(Tmpfile, retrieve);
 
 static ni_dbus_property_t       __ni_Testbus_Tmpfile_properties[] = {
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_file, name, name, RO),
@@ -159,6 +214,7 @@ ni_testbus_bind_builtin_file(void)
 {
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Fileset_createFile_binding);
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Tmpfile_append_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Tmpfile_retrieve_binding);
 	ni_dbus_objectmodel_bind_properties(&__ni_Testbus_Tmpfile_Properties_binding);
 }
 

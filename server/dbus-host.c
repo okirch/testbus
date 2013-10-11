@@ -4,6 +4,7 @@
 #include <dborb/logging.h>
 #include <dborb/process.h>
 #include <testbus/process.h>
+#include <testbus/file.h>
 
 #include "model.h"
 #include "host.h"
@@ -210,7 +211,7 @@ NI_TESTBUS_PROPERTIES_BINDING(Host);
 static ni_bool_t
 ni_testbus_host_signal_process_scheduled(ni_dbus_object_t *host_object, ni_dbus_object_t *process_object, ni_testbus_process_t *proc)
 {
-	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	ni_dbus_variant_t argv[2];
 	ni_process_t *pi;
 	ni_bool_t rv = FALSE;
 
@@ -221,11 +222,16 @@ ni_testbus_host_signal_process_scheduled(ni_dbus_object_t *host_object, ni_dbus_
 		return FALSE;
 	}
 
-	ni_dbus_variant_init_dict(&arg);
-	ni_dbus_dict_add_string(&arg, "object-path", process_object->path);
+	ni_dbus_variant_vector_init(argv, 2);
 
-	if (!ni_testbus_process_serialize(pi, &arg)) {
+	if (!ni_testbus_process_serialize(pi, &argv[0])) {
 		ni_error("unable to serialize process instance");
+		goto out;
+	}
+	ni_dbus_dict_add_string(&argv[0], "object-path", process_object->path);
+
+	if (!ni_testbus_file_array_serialize(&proc->context.files, &argv[1])) {
+		ni_error("unable to serialize fileset");
 		goto out;
 	}
 
@@ -233,12 +239,12 @@ ni_testbus_host_signal_process_scheduled(ni_dbus_object_t *host_object, ni_dbus_
 	ni_dbus_server_send_signal(ni_dbus_object_get_server(host_object), host_object,
 			NI_TESTBUS_HOST_INTERFACE,
 			"processScheduled",
-			1, &arg);
+			2, argv);
 	rv = TRUE;
 
 out:
 	ni_process_free(pi);
-	ni_dbus_variant_destroy(&arg);
+	ni_dbus_variant_vector_destroy(argv, 2);
 	return rv;
 }
 

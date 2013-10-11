@@ -1,0 +1,13 @@
+
+<service name="context" interface="org.opensuse.Testbus.Container" object-class="context">
+  <method name="getChildByName">
+    <arguments>
+      <class type="string" />
+      <name type="string" />
+    </arguments>
+    <result>
+      <object-path type="string" />
+    </result>
+  </method>
+</service>
+

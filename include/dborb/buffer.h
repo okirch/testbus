@@ -25,6 +25,11 @@ struct ni_buffer {
 				allocated : 1;
 };
 
+struct ni_buffer_chain {
+	ni_buffer_chain_t *	next;
+	ni_buffer_t *		data;
+};
+
 /* this should really be named init_writer */
 static inline void
 ni_buffer_init(ni_buffer_t *bp, void *base, size_t size)
@@ -231,5 +236,10 @@ ni_buffer_pull_head(ni_buffer_t *bp, size_t count)
 }
 
 extern ni_bool_t	ni_buffer_ensure_tailroom(ni_buffer_t *, unsigned int);
+
+extern void		ni_buffer_chain_discard(ni_buffer_chain_t **head);
+extern void		ni_buffer_chain_append(ni_buffer_chain_t **head, ni_buffer_t *);
+extern unsigned int	ni_buffer_chain_count(const ni_buffer_chain_t *);
+extern ni_buffer_t *	ni_buffer_chain_get_next(ni_buffer_chain_t **head);
 
 #endif /* __WICKED_DHCP_BUFFER_H__ */
