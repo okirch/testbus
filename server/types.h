@@ -10,7 +10,6 @@ typedef struct ni_testbus_container	ni_testbus_container_t;
 typedef struct ni_testbus_cmdqueue	ni_testbus_cmdqueue_t;
 typedef struct ni_testbus_command	ni_testbus_command_t;
 typedef struct ni_testbus_process	ni_testbus_process_t;
-typedef struct ni_testbus_fileset	ni_testbus_fileset_t;
 typedef struct ni_testbus_testset	ni_testbus_testset_t;
 typedef struct ni_testbus_testcase	ni_testbus_testcase_t;
 
@@ -28,10 +27,6 @@ typedef struct ni_testbus_process_array	ni_testbus_process_array_t;
  */
 struct ni_testbus_cmdqueue {
 	ni_testbus_command_t *		head;
-};
-
-struct ni_testbus_fileset {
-	ni_testbus_tmpfile_t *		head;
 };
 
 struct ni_testbus_testset {
