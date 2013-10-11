@@ -65,6 +65,8 @@ ni_shellcmd_hold(ni_shellcmd_t *proc)
 static inline void
 ni_shellcmd_release(ni_shellcmd_t *proc)
 {
+	if (!proc)
+		return;
 	ni_assert(proc->refcount);
 	if (--(proc->refcount) == 0)
 		ni_shellcmd_free(proc);
