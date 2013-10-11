@@ -43,9 +43,9 @@ extern ni_testbus_host_t *ni_testbus_container_get_host_by_role(ni_testbus_conta
 
 extern void		ni_testbus_container_add_command(ni_testbus_container_t *, ni_testbus_command_t *);
 
-extern void		ni_testbus_container_add_file(ni_testbus_container_t *, ni_testbus_tmpfile_t *);
-extern void		ni_testbus_container_remove_file(ni_testbus_container_t *, ni_testbus_tmpfile_t *);
-extern ni_testbus_tmpfile_t *ni_testbus_container_get_file_by_name(ni_testbus_container_t *, const char *);
+extern void		ni_testbus_container_add_file(ni_testbus_container_t *, ni_testbus_file_t *);
+extern void		ni_testbus_container_remove_file(ni_testbus_container_t *, ni_testbus_file_t *);
+extern ni_testbus_file_t *ni_testbus_container_get_file_by_name(ni_testbus_container_t *, const char *);
 
 extern void		ni_testbus_container_add_test(ni_testbus_container_t *, ni_testbus_testcase_t *);
 extern void		ni_testbus_container_remove_test(ni_testbus_container_t *, ni_testbus_testcase_t *);

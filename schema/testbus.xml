@@ -17,7 +17,7 @@
 <object-class name="fileset"  base-class="context" />
 <object-class name="testset"  base-class="context" />
 <object-class name="testcase" base-class="context" />
-<object-class name="tmpfile" />
+<object-class name="file" />
 
 <object-class name="agent" />
 <object-class name="filesystem" />

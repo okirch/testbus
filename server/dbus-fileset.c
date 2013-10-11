@@ -16,7 +16,7 @@ ni_testbus_create_static_objects_file(ni_dbus_server_t *server)
 }
 
 const char *
-ni_testbus_tmpfile_full_path(const ni_dbus_object_t *container_object, const ni_testbus_tmpfile_t *file)
+ni_testbus_file_full_path(const ni_dbus_object_t *container_object, const ni_testbus_file_t *file)
 {
 	static char pathbuf[256];
 
@@ -25,28 +25,28 @@ ni_testbus_tmpfile_full_path(const ni_dbus_object_t *container_object, const ni_
 }
 
 ni_dbus_object_t *
-ni_testbus_tmpfile_wrap(ni_dbus_object_t *container_object, ni_testbus_tmpfile_t *file)
+ni_testbus_file_wrap(ni_dbus_object_t *container_object, ni_testbus_file_t *file)
 {
 	return ni_objectmodel_create_object(
 			ni_dbus_object_get_server(container_object),
-			ni_testbus_tmpfile_full_path(container_object, file),
-			ni_testbus_tmpfile_class(),
+			ni_testbus_file_full_path(container_object, file),
+			ni_testbus_file_class(),
 			file);
 }
 
-ni_testbus_tmpfile_t *
-ni_testbus_tmpfile_unwrap(const ni_dbus_object_t *object, DBusError *error)
+ni_testbus_file_t *
+ni_testbus_file_unwrap(const ni_dbus_object_t *object, DBusError *error)
 {
-	ni_testbus_tmpfile_t *file;
+	ni_testbus_file_t *file;
 
-	file = ni_dbus_object_get_handle_typecheck(object, ni_testbus_tmpfile_class(), error);
+	file = ni_dbus_object_get_handle_typecheck(object, ni_testbus_file_class(), error);
 	return file;
 }
 
 void *
-ni_objectmodel_get_testbus_tmpfile(const ni_dbus_object_t *object, ni_bool_t write_access, DBusError *error)
+ni_objectmodel_get_testbus_file(const ni_dbus_object_t *object, ni_bool_t write_access, DBusError *error)
 {
-	return ni_testbus_tmpfile_unwrap(object, error);
+	return ni_testbus_file_unwrap(object, error);
 }
 
 /*
@@ -61,7 +61,7 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 	const ni_dbus_variant_t *attr_dict = NULL;
 	ni_testbus_container_t *context;
 	ni_dbus_object_t *file_object;
-	ni_testbus_tmpfile_t *file;
+	ni_testbus_file_t *file;
 	const char *name;
 	int rc;
 
@@ -82,7 +82,7 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 		return FALSE;
 	}
 
-	if ((file = ni_testbus_tmpfile_new(name, &context->files)) == NULL) {
+	if ((file = ni_testbus_file_new(name, &context->files)) == NULL) {
 		ni_dbus_set_error_from_code(error, rc, "unable to create new file \"%s\"", name);
 		return FALSE;
 	}
@@ -95,7 +95,7 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 	}
 
 	/* Register this object */
-	file_object = ni_testbus_tmpfile_wrap(object, file);
+	file_object = ni_testbus_file_wrap(object, file);
 	ni_dbus_message_append_string(reply, file_object->path);
 	return TRUE;
 }
@@ -110,10 +110,10 @@ __ni_Testbus_Tmpfile_append(ni_dbus_object_t *object, const ni_dbus_method_t *me
 		unsigned int argc, const ni_dbus_variant_t *argv,
 		ni_dbus_message_t *reply, DBusError *error)
 {
-	ni_testbus_tmpfile_t *file;
+	ni_testbus_file_t *file;
 	unsigned int count;
 
-	if ((file = ni_testbus_tmpfile_unwrap(object, error)) == NULL)
+	if ((file = ni_testbus_file_unwrap(object, error)) == NULL)
 		return FALSE;
 
 	if (argc != 1
@@ -147,8 +147,8 @@ __ni_Testbus_Tmpfile_append(ni_dbus_object_t *object, const ni_dbus_method_t *me
 static NI_TESTBUS_METHOD_BINDING(Tmpfile, append);
 
 static ni_dbus_property_t       __ni_Testbus_Tmpfile_properties[] = {
-	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_tmpfile, name, name, RO),
-	NI_DBUS_GENERIC_UINT32_PROPERTY(testbus_tmpfile, size, size, RO),
+	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_file, name, name, RO),
+	NI_DBUS_GENERIC_UINT32_PROPERTY(testbus_file, size, size, RO),
 	{ NULL }
 };
 NI_TESTBUS_PROPERTIES_BINDING(Tmpfile);

@@ -42,7 +42,7 @@
  * Interfaces:
  *	Tmpfile
  */
-#define NI_TESTBUS_TMPFILE_BASE_PATH	NI_TESTBUS_OBJECT_ROOT "/Tmpfile"
+#define NI_TESTBUS_FILE_BASE_PATH	NI_TESTBUS_OBJECT_ROOT "/Tmpfile"
 
 /*
  * Object:
@@ -206,7 +206,7 @@
 #define NI_TESTBUS_AGENT_CLASS		"agent"
 #define NI_TESTBUS_FILESYSTEM_CLASS	"filesystem"
 #define NI_TESTBUS_FILESET_CLASS	"fileset"
-#define NI_TESTBUS_TMPFILE_CLASS	"tmpfile"
+#define NI_TESTBUS_FILE_CLASS		"file"
 #define NI_TESTBUS_TESTSET_CLASS	"testset"
 #define NI_TESTBUS_HOSTSET_CLASS	"hostset"
 #define NI_TESTBUS_TESTCASE_CLASS	"testcase"

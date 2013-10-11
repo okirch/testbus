@@ -162,7 +162,7 @@ ni_testbus_container_get_host_by_role(ni_testbus_container_t *container, const c
 }
 
 void
-ni_testbus_container_add_file(ni_testbus_container_t *container, ni_testbus_tmpfile_t *file)
+ni_testbus_container_add_file(ni_testbus_container_t *container, ni_testbus_file_t *file)
 {
 	ni_assert(ni_testbus_container_has_files(container));
 	ni_testbus_file_array_append(&container->files, file);
@@ -170,18 +170,18 @@ ni_testbus_container_add_file(ni_testbus_container_t *container, ni_testbus_tmpf
 
 #if 0
 void
-ni_testbus_container_remove_file(ni_testbus_container_t *container, ni_testbus_tmpfile_t *file)
+ni_testbus_container_remove_file(ni_testbus_container_t *container, ni_testbus_file_t *file)
 {
 	ni_assert(ni_testbus_container_has_files(container));
 	ni_testbus_file_array_remove(&container->files, file);
 }
 #endif
 
-ni_testbus_tmpfile_t *
+ni_testbus_file_t *
 ni_testbus_container_get_file_by_name(ni_testbus_container_t *container, const char *name)
 {
 	for (; container; container = container->parent) {
-		ni_testbus_tmpfile_t *file;
+		ni_testbus_file_t *file;
 
 		if (ni_testbus_container_has_files(container)) {
 			file = ni_testbus_file_array_find_by_name(&container->files, name);

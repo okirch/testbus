@@ -63,7 +63,7 @@ extern const ni_dbus_class_t *	ni_testbus_command_queue_class(void);
 extern const ni_dbus_class_t *	ni_testbus_agent_class(void);
 extern const ni_dbus_class_t *	ni_testbus_filesystem_class(void);
 extern const ni_dbus_class_t *	ni_testbus_fileset_class(void);
-extern const ni_dbus_class_t *	ni_testbus_tmpfile_class(void);
+extern const ni_dbus_class_t *	ni_testbus_file_class(void);
 extern const ni_dbus_class_t *	ni_testbus_testset_class(void);
 extern const ni_dbus_class_t *	ni_testbus_testcase_class(void);
 

@@ -10,7 +10,7 @@
   </method>
 </service>
 
-<service name="tmpfile" interface="org.opensuse.Testbus.Tmpfile" object-class="tmpfile">
+<service name="file" interface="org.opensuse.Testbus.Tmpfile" object-class="file">
   <define name="properties" class="dict">
     <name type="string" />
     <size type="uint64" />
