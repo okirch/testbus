@@ -42,7 +42,8 @@ extern ni_shellcmd_t *		ni_shellcmd_new(const ni_string_array_t *argv);
 extern ni_shellcmd_t *		ni_shellcmd_parse(const char *command);
 extern ni_bool_t		ni_shellcmd_add_arg(ni_shellcmd_t *, const char *);
 
-extern ni_process_t *		ni_process_new(ni_shellcmd_t *);
+extern ni_process_t *		ni_process_new(ni_bool_t use_default_env);
+extern ni_process_t *		ni_process_new_shellcmd(ni_shellcmd_t *);
 extern ni_process_t *		ni_process_new_ext(const ni_string_array_t *, const ni_var_array_t *);
 extern int			ni_process_run(ni_process_t *);
 extern int			ni_process_run_and_wait(ni_process_t *);

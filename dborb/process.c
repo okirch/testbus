@@ -129,19 +129,15 @@ ni_shellcmd_add_arg(ni_shellcmd_t *proc, const char *arg)
 	return TRUE;
 }
 
-static ni_process_t *
-__ni_process_new_ext(const ni_string_array_t *argv, const ni_string_array_t *env)
+ni_process_t *
+ni_process_new(ni_bool_t use_default_env)
 {
 	ni_process_t *pi;
 
 	pi = xcalloc(1, sizeof(*pi));
 
-	/* Copy the command array */
-	ni_string_array_copy(&pi->argv, argv);
-
-	/* Copy the environment */
-	if (env)
-		ni_string_array_copy(&pi->environ, env);
+	if (use_default_env)
+		ni_string_array_copy(&pi->environ, __ni_default_environment());
 
 	return pi;
 }
@@ -152,10 +148,12 @@ ni_process_new_ext(const ni_string_array_t *argv, const ni_var_array_t *env)
 	ni_process_t *pi;
 	unsigned int i;
 
-	pi = __ni_process_new_ext(argv, NULL);
+	pi = ni_process_new(FALSE);
 
-	ni_string_array_copy(&pi->environ, __ni_default_environment());
+	/* Copy the command array */
+	ni_string_array_copy(&pi->argv, argv);
 
+	/* Copy the environment */
 	for (i = 0; i < env->count; ++i) {
 		const ni_var_t *var = &env->data[i];
 
@@ -166,11 +164,13 @@ ni_process_new_ext(const ni_string_array_t *argv, const ni_var_array_t *env)
 }
 
 ni_process_t *
-ni_process_new(ni_shellcmd_t *proc)
+ni_process_new_shellcmd(ni_shellcmd_t *proc)
 {
 	ni_process_t *pi;
 
-	pi = __ni_process_new_ext(&proc->argv, &proc->environ);
+	pi = ni_process_new(TRUE);
+	ni_string_array_copy(&pi->argv, &proc->argv);
+	ni_string_array_copy(&pi->environ, &proc->environ);
 	pi->process = ni_shellcmd_hold(proc);
 
 	return pi;

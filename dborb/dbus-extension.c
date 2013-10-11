@@ -162,7 +162,7 @@ ni_dbus_extension_extension_call(ni_dbus_connection_t *connection,
 	ni_debug_extension("preparing to run extension script \"%s\"", command->command);
 
 	/* Create an instance of this command */
-	process = ni_process_new(command);
+	process = ni_process_new_shellcmd(command);
 
 	ni_dbus_extension_expand_environment(object, &extension->environment, process);
 	temp_state = ni_process_tempstate(process);
