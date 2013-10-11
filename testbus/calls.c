@@ -308,6 +308,19 @@ ni_testbus_call_container_child_by_name(ni_dbus_object_t *container_object, cons
 	return result;
 }
 
+ni_bool_t
+ni_testbus_call_delete(ni_dbus_object_t *object)
+{
+	DBusError error = DBUS_ERROR_INIT;
+
+	if (!ni_dbus_object_call_variant(object, NULL, "delete", 0, NULL, 0, NULL, &error)) {
+		ni_dbus_print_error(&error, "%s.delete(): failed", object->path);
+		dbus_error_free(&error);
+		return FALSE;
+	}
+	return TRUE;
+}
+
 ni_dbus_object_t *
 ni_testbus_call_create_host(const char *name)
 {

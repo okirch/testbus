@@ -15,6 +15,7 @@ extern ni_dbus_object_t *	ni_testbus_call_create_test(const char *name, ni_dbus_
 extern ni_dbus_object_t *	ni_testbus_call_create_tempfile(const char *name, ni_dbus_object_t *parent);
 extern ni_dbus_object_t *	ni_testbus_call_reconnect_host(const char *, const ni_uuid_t *);
 extern ni_bool_t		ni_testbus_call_remove_host(const char *name);
+extern ni_bool_t		ni_testbus_call_delete(ni_dbus_object_t *);
 extern ni_dbus_object_t *	ni_testbus_call_claim_host_by_name(const char *, ni_dbus_object_t *, const char *);
 extern ni_dbus_object_t *	ni_testbus_call_claim_host_by_capability(const char *, ni_dbus_object_t *, const char *);
 extern ni_dbus_object_t *	ni_testbus_call_get_agent(const char *);

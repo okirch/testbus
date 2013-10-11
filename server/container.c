@@ -38,6 +38,32 @@ ni_testbus_container_init(ni_testbus_container_t *container, unsigned int featur
 void
 ni_testbus_container_destroy(ni_testbus_container_t *container)
 {
+	if (container->hosts.count) {
+		unsigned int i;
+
+		for (i = 0; i < container->hosts.count; ++i) {
+			ni_testbus_host_t *host = container->hosts.data[i];
+			ni_dbus_object_t *host_object, *child;
+
+			if (host->role_owner != container)
+				continue;
+
+			/* Release this host */
+			ni_testbus_host_set_role(host, NULL, NULL);
+
+#if 0
+			/* This is bad. We need a diferent way of discarding stale processes */
+			host_object = ni_objectmodel_object_by_path(ni_testbus_host_full_path(host));
+			if (host_object) {
+				child = ni_dbus_object_lookup(host_object, "Process");
+				if (child)
+					ni_dbus_server_object_unregister(child);
+				ni_testbus_process_array_destroy(&host->container.processes);
+			}
+#endif
+		}
+	}
+
 	ni_testbus_env_destroy(&container->env);
 	ni_testbus_command_array_destroy(&container->commands);
 	ni_testbus_process_array_destroy(&container->processes);
@@ -161,6 +187,9 @@ ni_testbus_container_get_host_by_role(ni_testbus_container_t *container, const c
 	return NULL;
 }
 
+/*
+ * File registration/lookup
+ */
 void
 ni_testbus_container_add_file(ni_testbus_container_t *container, ni_testbus_file_t *file)
 {
@@ -168,14 +197,12 @@ ni_testbus_container_add_file(ni_testbus_container_t *container, ni_testbus_file
 	ni_testbus_file_array_append(&container->files, file);
 }
 
-#if 0
 void
 ni_testbus_container_remove_file(ni_testbus_container_t *container, ni_testbus_file_t *file)
 {
 	ni_assert(ni_testbus_container_has_files(container));
 	ni_testbus_file_array_remove(&container->files, file);
 }
-#endif
 
 ni_testbus_file_t *
 ni_testbus_container_get_file_by_name(ni_testbus_container_t *container, const char *name)
@@ -191,6 +218,24 @@ ni_testbus_container_get_file_by_name(ni_testbus_container_t *container, const c
 	}
 	return NULL;
 }
+
+/*
+ * Test registration/lookup
+ */
+void
+ni_testbus_container_add_test(ni_testbus_container_t *container, ni_testbus_testcase_t *test)
+{
+	ni_assert(ni_testbus_container_has_tests(container));
+	ni_testbus_testset_append(&container->tests, test);
+}
+
+void
+ni_testbus_container_remove_test(ni_testbus_container_t *container, ni_testbus_testcase_t *test)
+{
+	ni_assert(ni_testbus_container_has_tests(container));
+	ni_testbus_testset_remove(&container->tests, test);
+}
+
 
 ni_testbus_testcase_t *
 ni_testbus_container_get_test_by_name(ni_testbus_container_t *container, const char *name)

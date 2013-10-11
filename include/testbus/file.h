@@ -35,6 +35,7 @@ extern void			ni_testbus_file_array_init(ni_testbus_file_array_t *);
 extern void			ni_testbus_file_array_destroy(ni_testbus_file_array_t *);
 extern void			ni_testbus_file_array_free(ni_testbus_file_array_t *);
 extern void			ni_testbus_file_array_append(ni_testbus_file_array_t *, ni_testbus_file_t *);
+extern ni_bool_t		ni_testbus_file_array_remove(ni_testbus_file_array_t *, const ni_testbus_file_t *);
 extern ni_testbus_file_t *	ni_testbus_file_array_find_by_name(const ni_testbus_file_array_t *, const char *);
 extern ni_testbus_file_t *	ni_testbus_file_array_find_by_inum(const ni_testbus_file_array_t *, unsigned int);
 extern void			ni_testbus_file_array_set(ni_testbus_file_array_t *, unsigned int, ni_testbus_file_t *);

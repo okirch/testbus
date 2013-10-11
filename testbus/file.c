@@ -107,20 +107,33 @@ ni_testbus_file_array_append(ni_testbus_file_array_t *array, ni_testbus_file_t *
 	array->data[array->count++] = ni_testbus_file_get(file);
 }
 
-#if 0
-void
-ni_testbus_file_array_remove(ni_testbus_file_array_t *fset, const ni_testbus_file_t *file)
+int
+ni_testbus_file_array_index(ni_testbus_file_array_t *array, const ni_testbus_file_t *file)
 {
-	ni_testbus_file_t **pos, *f;
+	unsigned int i;
 
-	for (pos = &fset->head; (f = *pos) != NULL; pos = &f->next) {
-		if (f == file) {
-			*pos = f->next;
-			return;
-		}
+	for (i = 0; i < array->count; ++i) {
+		if (array->data[i] == file)
+			return i;
 	}
+	return -1;
 }
-#endif
+
+ni_bool_t
+ni_testbus_file_array_remove(ni_testbus_file_array_t *array, const ni_testbus_file_t *file)
+{
+	int index;
+
+	if ((index = ni_testbus_file_array_index(array, file)) < 0)
+		return FALSE;
+
+	/* Drop the reference to the file */
+	ni_testbus_file_put(array->data[index]);
+
+	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
+	array->count --;
+	return TRUE;
+}
 
 void
 ni_testbus_file_array_set(ni_testbus_file_array_t *file_array, unsigned int index, ni_testbus_file_t *file)

@@ -27,7 +27,7 @@ function testbus_cleanup {
 	fi
 
 	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
-		testbus_call delete-test $TESTBUS_TEST_HANDLE
+		testbus_call delete $TESTBUS_TEST_HANDLE
 	fi
 }
 

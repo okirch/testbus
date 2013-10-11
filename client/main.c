@@ -61,6 +61,7 @@ int			opt_global_dryrun;
 char *			opt_global_rootdir;
 
 static int		do_show_xml(int, char **);
+static int		do_delete_object(int, char **);
 static int		do_create_host(int, char **);
 static int		do_remove_host(int, char **);
 static int		do_create_test(int, char **);
@@ -186,6 +187,8 @@ main(int argc, char **argv)
 
 	if (!strcmp(cmd, "show-xml"))
 		return do_show_xml(argc - optind, argv + optind);
+	if (!strcmp(cmd, "delete"))
+		return do_delete_object(argc - optind, argv + optind);
 	if (!strcmp(cmd, "create-host"))
 		return do_create_host(argc - optind, argv + optind);
 	if (!strcmp(cmd, "remove-host"))
@@ -541,6 +544,74 @@ do_remove_host(int argc, char **argv)
 		return 1;
 
 	return 0;
+}
+
+int
+do_delete_object(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_CONTAINER };
+	static struct option local_options[] = {
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ "container", required_argument, NULL, OPT_CONTAINER },
+		{ NULL }
+	};
+	ni_dbus_object_t *container_object = NULL, *test_object;
+	const char *opt_container = NULL;
+	int c, rv = 1;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"wicked [options] delete <object-handle> ...\n"
+				"wicked [options] delete --container <object-handle> nickname ...\n"
+				"\nSupported options:\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+
+		case OPT_CONTAINER:
+			opt_container = optarg;
+			break;
+		}
+	}
+
+	if (optind >= argc)
+		goto usage;
+
+	if (opt_container) {
+		ni_error("container option not supported right now");
+		// container_object = ni_testbus_call_get_container(opt_container);
+	} else {
+		int failed = 0;
+
+		while (optind < argc) {
+			const char *path = argv[optind++];
+			ni_dbus_object_t *object;
+
+			object = ni_testbus_call_get_and_refresh_object(path);
+			if (object == NULL) {
+				ni_error("no such object %s", path);
+				failed++;
+				continue;
+			}
+
+			if (!ni_testbus_call_delete(object)) {
+				ni_error("could not delete object %s", path);
+				failed++;
+				continue;
+			}
+		}
+
+		rv = failed? 1 : 0;
+	}
+
+out:
+	return rv;
 }
 
 int
@@ -1055,7 +1126,8 @@ do_run_command(int argc, char **argv)
 	if (exit_info.stderr_bytes)
 		flush_process_file(proc_object, "stderr", stderr);
 
-	/* TBD: reap the process and delete the command */
+	ni_testbus_call_delete(proc_object);
+	ni_testbus_call_delete(cmd_object);
 
 	switch (exit_info.how) {
 	case NI_PROCESS_NONSTARTER:

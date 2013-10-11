@@ -9,6 +9,7 @@
 #include "model.h"
 #include "container.h"
 #include "host.h"
+#include "testcase.h"
 
 static struct ni_testbus_container_child_info {
 	unsigned int		feature;
@@ -141,8 +142,59 @@ __ni_Testbus_Container_getChildByName(ni_dbus_object_t *object, const ni_dbus_me
 
 NI_TESTBUS_METHOD_BINDING(Container, getChildByName);
 
+/*
+ * Container.delete()
+ */
+static dbus_bool_t
+__ni_Testbus_Container_delete(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_container_t *container;
+	ni_dbus_object_t *child_object = NULL;
+
+	if (!(container = ni_testbus_container_unwrap(object, error)))
+		return FALSE;
+
+	if (argc != 0)
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	if (container == ni_testbus_global_context() || container->parent == NULL) {
+		dbus_set_error(error, NI_DBUS_ERROR_PERMISSION_DENIED,
+				"cannot delete global context");
+		return FALSE;
+	}
+
+	/* This is indeed a little awkward, but this is really the right place to do it
+	 * if we want to change the in-memory rep of container objects later */
+	{
+		ni_testbus_testcase_t *test;
+		ni_testbus_host_t *host;
+		ni_testbus_file_t *file;
+
+		if ((host = ni_testbus_host_unwrap(object, NULL)) != NULL) {
+			ni_testbus_container_remove_host(container->parent, host);
+		} else
+		if ((test = ni_testbus_testcase_unwrap(object, NULL)) != NULL) {
+			ni_testbus_container_remove_test(container->parent, test);
+			ni_testbus_testcase_free(test); /* icky */
+		} else
+		if ((file = ni_testbus_file_unwrap(object, NULL)) != NULL) {
+			ni_testbus_container_remove_file(container->parent, file);
+		} else {
+			ni_error("delete() not yet implemented for class %s, sorry", object->class->name);
+		}
+	}
+
+	ni_dbus_server_unregister_object(object);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Container, delete);
+
 void
 ni_testbus_bind_builtin_container(void)
 {
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Container_getChildByName_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Container_delete_binding);
 }
