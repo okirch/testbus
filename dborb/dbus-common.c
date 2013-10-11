@@ -1380,6 +1380,18 @@ ni_dbus_dict_add_byte_array(ni_dbus_variant_t *dict, const char *key,
 	return TRUE;
 }
 
+dbus_bool_t
+ni_dbus_dict_add_string_array(ni_dbus_variant_t *dict, const char *key,
+			const char **string_array, unsigned int len)
+{
+	ni_dbus_variant_t *dst;
+
+	if (!(dst = ni_dbus_dict_add(dict, key)))
+		return FALSE;
+	ni_dbus_variant_set_string_array(dst, string_array, len);
+	return TRUE;
+}
+
 ni_dbus_variant_t *
 ni_dbus_dict_get(const ni_dbus_variant_t *dict, const char *key)
 {
