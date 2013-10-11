@@ -65,7 +65,7 @@ __ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_
 		ni_dbus_message_t *reply, DBusError *error)
 {
 	ni_testbus_process_t *proc;
-	ni_testbus_process_exit_status_t *exit_info;
+	ni_process_exit_info_t *exit_info;
 
 	if (!(proc = ni_testbus_process_unwrap(object, error)))
 		return FALSE;

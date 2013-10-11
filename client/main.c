@@ -17,13 +17,13 @@
 #include <dborb/netinfo.h>
 #include <dborb/logging.h>
 #include <dborb/xml.h>
-#include <dborb/xpath.h>
 #include <dborb/buffer.h>
+#include <dborb/process.h>
+#include <dborb/dbus-errors.h>
+#include <dborb/dbus-model.h>
 #include <testbus/model.h>
 #include <testbus/client.h>
 #include <testbus/process.h>
-#include <dborb/dbus-errors.h>
-#include <dborb/dbus-model.h>
 
 enum {
 	OPT_HELP,
@@ -936,7 +936,7 @@ do_run_command(int argc, char **argv)
 	};
 	ni_dbus_object_t *host_object, *cmd_object, *proc_object;
 	const char *opt_hostpath = NULL;
-	ni_testbus_process_exit_status_t exit_info;
+	ni_process_exit_info_t exit_info;
 	int c;
 
 	optind = 1;
@@ -997,17 +997,17 @@ do_run_command(int argc, char **argv)
 	/* TBD: reap the process and delete the command */
 
 	switch (exit_info.how) {
-	case NI_TESTBUS_PROCESS_NONSTARTER:
+	case NI_PROCESS_NONSTARTER:
 		ni_error("failed to start process");
 		return 1;
 
-	case NI_TESTBUS_PROCESS_CRASHED:
+	case NI_PROCESS_CRASHED:
 		ni_error("process crashed with signal %u%s",
 				exit_info.crash.signal,
 				exit_info.crash.core_dumped? " (core dumped)" : "");
 		return 1;
 
-	case NI_TESTBUS_PROCESS_EXITED:
+	case NI_PROCESS_EXITED:
 		return exit_info.exit.code;
 
 	default:

@@ -38,6 +38,30 @@ struct ni_process {
 	void *			user_data;
 };
 
+/*
+ * Process exit info
+ */
+typedef enum {
+	NI_PROCESS_NONSTARTER,
+	NI_PROCESS_EXITED,
+	NI_PROCESS_CRASHED,
+	NI_PROCESS_TRANSCENDED,	/* anything else */
+} ni_process_exit_mode_t;
+
+struct ni_process_exit_info {
+	ni_process_exit_mode_t	how;
+
+	struct {
+		int		code;
+	} exit;
+	struct {
+		int		signal;
+		ni_bool_t	core_dumped;
+	} crash;
+
+	/* TBD: stderr/stdout */
+};
+
 extern ni_shellcmd_t *		ni_shellcmd_new(const ni_string_array_t *argv);
 extern ni_shellcmd_t *		ni_shellcmd_parse(const char *command);
 extern ni_bool_t		ni_shellcmd_add_arg(ni_shellcmd_t *, const char *);
@@ -52,6 +76,7 @@ extern void			ni_process_setenv(ni_process_t *, const char *, const char *);
 extern const char *		ni_process_getenv(const ni_process_t *, const char *);
 extern ni_tempstate_t *		ni_process_tempstate(ni_process_t *);
 extern void			ni_process_free(ni_process_t *);
+extern void			ni_process_get_exit_info(const ni_process_t *, ni_process_exit_info_t *);
 extern int			ni_process_exit_status_okay(const ni_process_t *);
 extern void			ni_shellcmd_free(ni_shellcmd_t *);
 

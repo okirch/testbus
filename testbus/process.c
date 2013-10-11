@@ -5,23 +5,6 @@
 #include <dborb/process.h>
 #include <testbus/process.h>
 
-void
-ni_testbus_process_get_exit_info(const ni_process_t *pi, ni_testbus_process_exit_status_t *exit_info)
-{
-	memset(exit_info, 0, sizeof(*exit_info));
-	if (WIFEXITED(pi->status)) {
-		exit_info->how = NI_TESTBUS_PROCESS_EXITED;
-		exit_info->exit.code = WEXITSTATUS(pi->status);
-	} else
-	if (WIFSIGNALED(pi->status)) {
-		exit_info->how = NI_TESTBUS_PROCESS_CRASHED;
-		exit_info->crash.signal = WTERMSIG(pi->status);
-		exit_info->crash.core_dumped = !!WCOREDUMP(pi->status);
-	} else {
-		exit_info->how = NI_TESTBUS_PROCESS_TRANSCENDED;
-	}
-}
-
 ni_bool_t
 ni_testbus_process_serialize(const ni_process_t *pi, ni_dbus_variant_t *dict)
 {
@@ -60,13 +43,13 @@ failed:
 }
 
 ni_bool_t
-ni_testbus_process_exit_info_serialize(const ni_testbus_process_exit_status_t *exit_info, ni_dbus_variant_t *dict)
+ni_testbus_process_exit_info_serialize(const ni_process_exit_info_t *exit_info, ni_dbus_variant_t *dict)
 {
 	switch (exit_info->how) {
-	case NI_TESTBUS_PROCESS_EXITED:
+	case NI_PROCESS_EXITED:
 		ni_dbus_dict_add_uint32(dict, "exit-code", exit_info->exit.code);
 		break;
-	case NI_TESTBUS_PROCESS_CRASHED:
+	case NI_PROCESS_CRASHED:
 		ni_dbus_dict_add_uint32(dict, "exit-signal", exit_info->crash.signal);
 		ni_dbus_dict_add_bool(dict, "core-dumped", exit_info->crash.core_dumped);
 		break;
@@ -80,26 +63,26 @@ ni_testbus_process_exit_info_serialize(const ni_testbus_process_exit_status_t *e
 	return TRUE;
 }
 
-ni_testbus_process_exit_status_t *
+ni_process_exit_info_t *
 ni_testbus_process_exit_info_deserialize(const ni_dbus_variant_t *dict)
 {
-	ni_testbus_process_exit_status_t *exit_info;
+	ni_process_exit_info_t *exit_info;
 	uint32_t u32;
 	dbus_bool_t b;
 
 	exit_info = ni_calloc(1, sizeof(*exit_info));
 
 	if (ni_dbus_dict_get_uint32(dict, "exit-code", &u32)) {
-		exit_info->how = NI_TESTBUS_PROCESS_EXITED;
+		exit_info->how = NI_PROCESS_EXITED;
 		exit_info->exit.code = u32;
 	} else
 	if (ni_dbus_dict_get_uint32(dict, "exit-signal", &u32)) {
-		exit_info->how = NI_TESTBUS_PROCESS_CRASHED;
+		exit_info->how = NI_PROCESS_CRASHED;
 		exit_info->crash.signal = u32;
 		if (ni_dbus_dict_get_bool(dict, "core-dumped", &b))
 			exit_info->crash.core_dumped = b;
 	} else {
-		exit_info->how = NI_TESTBUS_PROCESS_TRANSCENDED;
+		exit_info->how = NI_PROCESS_TRANSCENDED;
 	}
 
 	/* TBD: stderr/stdout signaling */

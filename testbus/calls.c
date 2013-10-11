@@ -24,6 +24,7 @@
 #include <dborb/dbus-service.h>
 #include <dborb/dbus-model.h>
 #include <dborb/socket.h>
+#include <dborb/process.h>
 
 /*
  * Error context - this is an opaque type.
@@ -829,7 +830,7 @@ struct __ni_testbus_process_waitq {
 	char *			object_path;
 	ni_bool_t		done;
 
-	ni_testbus_process_exit_status_t *exit_info;
+	ni_process_exit_info_t *exit_info;
 };
 
 static struct __ni_testbus_process_waitq *__ni_testbus_process_waitq;
@@ -1002,7 +1003,7 @@ failed:
 }
 
 ni_bool_t
-ni_testbus_wait_for_process(const ni_dbus_object_t *proc_object, long timeout_ms, ni_testbus_process_exit_status_t *exit_info)
+ni_testbus_wait_for_process(const ni_dbus_object_t *proc_object, long timeout_ms, ni_process_exit_info_t *exit_info)
 {
 	struct __ni_testbus_process_waitq *wq;
 
@@ -1032,7 +1033,7 @@ ni_testbus_wait_for_process(const ni_dbus_object_t *proc_object, long timeout_ms
  * Callback from agent to master: process has exited
  */
 ni_bool_t
-ni_testbus_call_process_exit(ni_dbus_object_t *proc_object, const ni_testbus_process_exit_status_t *exit_info)
+ni_testbus_call_process_exit(ni_dbus_object_t *proc_object, const ni_process_exit_info_t *exit_info)
 {
 	DBusError error = DBUS_ERROR_INIT;
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;

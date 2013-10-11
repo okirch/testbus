@@ -290,11 +290,11 @@ static void
 __ni_testbus_process_notify(ni_process_t *pi)
 {
 	struct __ni_testbus_process_context *ctx = pi->user_data;
-	ni_testbus_process_exit_status_t exit_info;
+	ni_process_exit_info_t exit_info;
 	ni_dbus_object_t *proc_object;
 
 	ni_trace("process %s exited", ctx->object_path);
-	ni_testbus_process_get_exit_info(pi, &exit_info);
+	ni_process_get_exit_info(pi, &exit_info);
 
 	proc_object = ni_testbus_call_get_and_refresh_object(ctx->object_path);
 	ni_testbus_call_process_exit(proc_object, &exit_info);

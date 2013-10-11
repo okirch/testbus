@@ -553,6 +553,23 @@ ni_process_exit_status_okay(const ni_process_t *pi)
 	return 0;
 }
 
+void
+ni_process_get_exit_info(const ni_process_t *pi, ni_process_exit_info_t *exit_info)
+{
+	memset(exit_info, 0, sizeof(*exit_info));
+	if (WIFEXITED(pi->status)) {
+		exit_info->how = NI_PROCESS_EXITED;
+		exit_info->exit.code = WEXITSTATUS(pi->status);
+	} else
+	if (WIFSIGNALED(pi->status)) {
+		exit_info->how = NI_PROCESS_CRASHED;
+		exit_info->crash.signal = WTERMSIG(pi->status);
+		exit_info->crash.core_dumped = !!WCOREDUMP(pi->status);
+	} else {
+		exit_info->how = NI_PROCESS_TRANSCENDED;
+	}
+}
+
 /*
  * Connect the subprocess output to our I/O handling loop
  */
