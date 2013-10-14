@@ -44,6 +44,7 @@ ni_testbus_container_wrap(ni_dbus_object_t *parent_object, const ni_dbus_class_t
 			ni_testbus_container_build_path(parent_object, container),
 			class, container);
 	ni_string_dup(&container->dbus_object_path, object->path);
+	ni_string_dup(&container->trace_name, object->path);
 
 	ni_testbus_bind_container_interfaces(object, container);
 	return object;
@@ -56,6 +57,21 @@ ni_testbus_container_unwrap(const ni_dbus_object_t *object, DBusError *error)
 
 	container = ni_dbus_object_get_handle_typecheck(object, ni_testbus_container_class(), error);
 	return container;
+}
+
+void
+ni_testbus_container_unregister(ni_testbus_container_t *container)
+{
+	if (container->dbus_object_path) {
+		ni_dbus_object_t *object;
+
+		ni_debug_wicked("%s(%s)", __func__, container->dbus_object_path);
+		object = ni_objectmodel_object_by_path(container->dbus_object_path);
+		if (object)
+			ni_dbus_server_unregister_object(object);
+
+		ni_string_free(&container->dbus_object_path);
+	}
 }
 
 void
@@ -103,7 +119,6 @@ ni_testbus_bind_container_interfaces(ni_dbus_object_t *object, ni_testbus_contai
 		return;
 	}
 
-	ni_trace("%s: bind container interfaces", object->path);
 	for (info = ni_testbus_container_child_info; info->feature; ++info) {
 		if (ni_testbus_container_has_feature(container, info->feature)) {
 			const ni_dbus_service_t *service;
@@ -112,7 +127,6 @@ ni_testbus_bind_container_interfaces(ni_dbus_object_t *object, ni_testbus_contai
 				ni_warn("cannot bind interface for container feature 0x%x: unknown dbus service %s",
 						info->feature, info->service);
 			} else {
-				ni_trace("  -> %s", service->name);
 				ni_dbus_object_register_service(object, service);
 			}
 		}
@@ -189,27 +203,11 @@ __ni_Testbus_Container_delete(ni_dbus_object_t *object, const ni_dbus_method_t *
 		return FALSE;
 	}
 
-	/* This is indeed a little awkward, but this is really the right place to do it
-	 * if we want to change the in-memory rep of container objects later */
-	{
-		ni_testbus_testcase_t *test;
-		ni_testbus_host_t *host;
-		ni_testbus_file_t *file;
+	/* This should destroy the object and unregister it from the DBus service */
+	ni_testbus_container_get(container);
+	ni_testbus_container_destroy(container);
+	ni_testbus_container_put(container);
 
-		if ((host = ni_testbus_host_unwrap(object, NULL)) != NULL) {
-			ni_testbus_container_remove_host(container->parent, host);
-		} else
-		if ((test = ni_testbus_testcase_unwrap(object, NULL)) != NULL) {
-			ni_testbus_container_remove_test(container->parent, test);
-		} else
-		if ((file = ni_testbus_file_unwrap(object, NULL)) != NULL) {
-			ni_testbus_container_remove_file(container->parent, file);
-		} else {
-			ni_error("delete() not yet implemented for class %s, sorry", object->class->name);
-		}
-	}
-
-	ni_dbus_server_unregister_object(object);
 	return TRUE;
 }
 

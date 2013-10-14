@@ -6,6 +6,10 @@
 
 static void			ni_testbus_command_destroy(ni_testbus_container_t *);
 static void			ni_testbus_command_free(ni_testbus_container_t *);
+static void			ni_testbus_command_release(ni_testbus_container_t *);
+static void			ni_testbus_process_destroy(ni_testbus_container_t *);
+static void			ni_testbus_process_free(ni_testbus_container_t *);
+static void			ni_testbus_process_release(ni_testbus_container_t *);
 
 static struct ni_testbus_container_ops ni_testbus_command_ops = {
 	.features		= NI_TESTBUS_CONTAINER_HAS_ENV |
@@ -14,6 +18,7 @@ static struct ni_testbus_container_ops ni_testbus_command_ops = {
 
 	.destroy		= ni_testbus_command_destroy,
 	.free			= ni_testbus_command_free,
+	.release		= ni_testbus_command_release,
 };
 
 static struct ni_testbus_container_ops ni_testbus_process_ops = {
@@ -21,6 +26,10 @@ static struct ni_testbus_container_ops ni_testbus_process_ops = {
 				  NI_TESTBUS_CONTAINER_HAS_FILES,
 
 	.dbus_name_prefix	= "Process",
+
+	.destroy		= ni_testbus_process_destroy,
+	.free			= ni_testbus_process_free,
+	.release		= ni_testbus_process_release,
 };
 
 
@@ -35,11 +44,13 @@ ni_testbus_command_array_destroy(ni_testbus_command_array_t *array)
 {
 	unsigned int i;
 
-	for (i = 0; i < array->count; ++i) {
-		ni_testbus_command_t *cmd = array->data[i];
+	while (array->count) {
+		ni_testbus_command_t *cmd = array->data[--(array->count)];
 
+		cmd->context.parent = NULL;
 		ni_testbus_command_put(cmd);
 	}
+
 	free(array->data);
 	memset(array, 0, sizeof(*array));
 }
@@ -68,6 +79,49 @@ ni_testbus_command_new(ni_testbus_container_t *parent, const ni_string_array_t *
 			parent);
 
 	return cmd;
+}
+
+int
+ni_testbus_command_array_index(ni_testbus_command_array_t *array, const ni_testbus_command_t *command)
+{
+	unsigned int i;
+
+	for (i = 0; i < array->count; ++i) {
+		if (array->data[i] == command)
+			return i;
+	}
+	return -1;
+}
+
+ni_testbus_command_t *
+ni_testbus_command_array_take_at(ni_testbus_command_array_t *array, unsigned int index)
+{
+	ni_testbus_command_t *taken;
+
+	if (index >= array->count)
+		return NULL;
+
+	taken = array->data[index];
+
+	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
+	array->count --;
+
+	return taken;
+}
+
+ni_bool_t
+ni_testbus_command_array_remove(ni_testbus_command_array_t *array, const ni_testbus_command_t *command)
+{
+	ni_testbus_command_t *taken;
+	int index;
+
+	if ((index = ni_testbus_command_array_index(array, command)) < 0
+	 || (taken = ni_testbus_command_array_take_at(array, index)) == NULL)
+		return FALSE;
+
+	/* Drop the reference to the command */
+	ni_testbus_command_put(taken);
+	return TRUE;
 }
 
 ni_bool_t
@@ -100,6 +154,17 @@ ni_testbus_command_free(ni_testbus_container_t *container)
 }
 
 /*
+ * When the container owning the process goes away, we should also nuke
+ * the command and its state.
+ */
+void
+ni_testbus_command_release(ni_testbus_container_t *container)
+{
+	ni_debug_wicked("%s(%s)", __func__, container->dbus_object_path);
+	ni_testbus_container_destroy(container);
+}
+
+/*
  * Process handling
  * A process is a command in execution. There is no 1:1 relationship, as a command
  * may be executed on several hosts simultanously.
@@ -121,6 +186,7 @@ ni_testbus_process_new(ni_testbus_container_t *parent, ni_testbus_command_t *com
 			&ni_testbus_process_ops,
 			NULL,
 			parent);
+	ni_testbus_container_set_owner(&proc->context, &command->context);
 
 	return proc;
 }
@@ -164,6 +230,17 @@ ni_testbus_process_free(ni_testbus_container_t *container)
 	free(proc);
 }
 
+/*
+ * When the Command owning the process goes away, we should also nuke
+ * the process and its state.
+ */
+void
+ni_testbus_process_release(ni_testbus_container_t *container)
+{
+	ni_debug_wicked("%s(%s)", __func__, container->dbus_object_path);
+	ni_testbus_container_destroy(container);
+}
+
 void
 ni_testbus_process_apply_context(ni_testbus_process_t *proc, ni_testbus_container_t *container)
 {
@@ -204,15 +281,19 @@ ni_testbus_process_array_init(ni_testbus_process_array_t *array)
 void
 ni_testbus_process_array_destroy(ni_testbus_process_array_t *array)
 {
+	ni_testbus_process_array_t temp;
 	unsigned int i;
 
-	for (i = 0; i < array->count; ++i) {
-		ni_testbus_process_t *cmd = array->data[i];
+	temp = *array;
+	memset(array, 0, sizeof(*array));
 
+	while (temp.count) {
+		ni_testbus_process_t *cmd = temp.data[--(temp.count)];
+
+		cmd->context.parent = NULL;
 		ni_testbus_process_put(cmd);
 	}
-	free(array->data);
-	memset(array, 0, sizeof(*array));
+	free(temp.data);
 }
 
 void
@@ -220,5 +301,48 @@ ni_testbus_process_array_append(ni_testbus_process_array_t *array, ni_testbus_pr
 {
 	array->data = ni_realloc(array->data, (array->count + 1) * sizeof(array->data[0]));
 	array->data[array->count++] = ni_testbus_process_get(process);
+}
+
+int
+ni_testbus_process_array_index(ni_testbus_process_array_t *array, const ni_testbus_process_t *process)
+{
+	unsigned int i;
+
+	for (i = 0; i < array->count; ++i) {
+		if (array->data[i] == process)
+			return i;
+	}
+	return -1;
+}
+
+ni_testbus_process_t *
+ni_testbus_process_array_take_at(ni_testbus_process_array_t *array, unsigned int index)
+{
+	ni_testbus_process_t *taken;
+
+	if (index >= array->count)
+		return NULL;
+
+	taken = array->data[index];
+
+	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
+	array->count --;
+
+	return taken;
+}
+
+ni_bool_t
+ni_testbus_process_array_remove(ni_testbus_process_array_t *array, const ni_testbus_process_t *process)
+{
+	ni_testbus_process_t *taken;
+	int index;
+
+	if ((index = ni_testbus_process_array_index(array, process)) < 0
+	 || (taken = ni_testbus_process_array_take_at(array, index)) == NULL)
+		return FALSE;
+
+	/* Drop the reference to the process */
+	ni_testbus_process_put(taken);
+	return TRUE;
 }
 

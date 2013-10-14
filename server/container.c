@@ -67,6 +67,13 @@ ni_testbus_container_init(ni_testbus_container_t *container, const struct ni_tes
 		ni_fatal("Don't know how to init container ID");
 	}
 
+	{
+		char trace_name[64];
+
+		snprintf(trace_name, sizeof(trace_name), "%s%u", ops->dbus_name_prefix, container->id);
+		ni_string_dup(&container->trace_name, trace_name);
+	}
+
 	/* Above, we added the new object to its parent container, which bumped
 	 * its refcount to 2. Now it's safe to drop it back to 1. */
 	ni_testbus_container_put(container);
@@ -87,13 +94,23 @@ void
 ni_testbus_container_put(ni_testbus_container_t *container)
 {
 	ni_assert(container->refcount);
-	if (--(container->refcount) != 0)
+	if (container->refcount > 1) {
+		container->refcount -= 1;
 		return;
+	}
 
-	if (container->owner != NULL)
-		ni_fatal("destroying container object still owned by other container");
+	if (container->owner != NULL) {
+		ni_warn("destroying container object %s%u still owned by other container %s%u",
+				container->ops->dbus_name_prefix, container->id,
+				container->owner->ops->dbus_name_prefix, container->owner->id);
+		container->owner = NULL;
+	}
+
+	ni_assert(container->parent == NULL);
 
 	ni_testbus_container_destroy(container);
+
+	ni_string_free(&container->trace_name);
 
 	if (container->ops->free)
 		container->ops->free(container);
@@ -102,37 +119,107 @@ ni_testbus_container_put(ni_testbus_container_t *container)
 }
 
 void
+ni_testbus_container_set_owner(ni_testbus_container_t *container, ni_testbus_container_t *owner)
+{
+	ni_assert(container->owner == NULL);
+	container->owner = owner;
+}
+
+/*
+ * Remove a child from a container
+ */
+void
+ni_testbus_container_remove_child(ni_testbus_container_t *container, ni_testbus_container_t *parent)
+{
+	if (ni_testbus_container_isa_host(container)) {
+		ni_testbus_host_array_remove(&parent->hosts, ni_testbus_host_cast(container));
+	} else
+	if (ni_testbus_container_isa_testcase(container)) {
+		ni_testbus_test_array_remove(&parent->tests, ni_testbus_testcase_cast(container));
+	} else
+	if (ni_testbus_container_isa_command(container)) {
+		ni_testbus_command_array_remove(&parent->commands, ni_testbus_command_cast(container));
+	} else
+	if (ni_testbus_container_isa_process(container)) {
+		ni_testbus_process_array_remove(&parent->processes, ni_testbus_process_cast(container));
+	} else {
+		ni_fatal("Don't know how to remove container from parent");
+	}
+}
+
+/*
+ * Recursively find objects owned by @owner
+ */
+static void
+ni_testbus_container_all_children(ni_testbus_container_t *container, ni_testbus_container_array_t *result)
+{
+	unsigned int i;
+
+	for (i = 0; i < container->hosts.count; ++i) {
+		ni_testbus_host_t *host = container->hosts.data[i];
+
+		ni_testbus_container_array_append(result, &host->context);
+	}
+	for (i = 0; i < container->tests.count; ++i) {
+		ni_testbus_testcase_t *test = container->tests.data[i];
+
+		ni_testbus_container_array_append(result, &test->context);
+	}
+	for (i = 0; i < container->commands.count; ++i) {
+		ni_testbus_command_t *command = container->commands.data[i];
+
+		ni_testbus_container_array_append(result, &command->context);
+	}
+	for (i = 0; i < container->processes.count; ++i) {
+		ni_testbus_process_t *process = container->processes.data[i];
+
+		ni_testbus_container_array_append(result, &process->context);
+	}
+}
+
+static void
+ni_testbus_container_release_owned(ni_testbus_container_t *container, const ni_testbus_container_t *owner)
+{
+	ni_testbus_container_array_t children = NI_TESTBUS_CONTAINER_ARRAY_INIT;
+	unsigned int i;
+
+	ni_testbus_container_all_children(container, &children);
+	for (i = 0; i < children.count; ++i) {
+		ni_testbus_container_t *child = children.data[i];
+
+		if (child->owner == owner) {
+			child->owner = NULL;
+
+			/* The object may be unregistered/destroyed as part of this.  */
+			if (child->ops->release)
+				child->ops->release(child);
+			child->owner = NULL;
+		}
+		if (child->refcount > 1)
+			ni_testbus_container_release_owned(child, owner);
+	}
+	ni_testbus_container_array_destroy(&children);
+}
+
+void
 ni_testbus_container_destroy(ni_testbus_container_t *container)
 {
+	ni_assert(container->trace_name);
+	ni_debug_wicked("%s(%s)", __func__, container->trace_name);
+
+	ni_assert(container->trace_name);
+	if (container->parent) {
+		ni_testbus_container_t *parent = container->parent;
+
+		container->parent = NULL;
+		ni_testbus_container_remove_child(container, parent);
+	}
+
+	ni_testbus_container_release_owned(ni_testbus_global_context(), container);
+	ni_testbus_container_release_owned(container, container);
 
 	if (container->ops->destroy)
 		container->ops->destroy(container);
-
-	if (container->hosts.count) {
-		unsigned int i;
-
-		for (i = 0; i < container->hosts.count; ++i) {
-			ni_testbus_host_t *host = container->hosts.data[i];
-			ni_dbus_object_t *host_object, *child;
-
-			if (host->context.owner != container)
-				continue;
-
-			/* Release this host */
-			ni_testbus_host_set_role(host, NULL, NULL);
-
-#if 0
-			/* This is bad. We need a diferent way of discarding stale processes */
-			host_object = ni_objectmodel_object_by_path(ni_testbus_host_full_path(host));
-			if (host_object) {
-				child = ni_dbus_object_lookup(host_object, "Process");
-				if (child)
-					ni_dbus_server_object_unregister(child);
-				ni_testbus_process_array_destroy(&host->container.processes);
-			}
-#endif
-		}
-	}
 
 	ni_testbus_env_destroy(&container->env);
 	ni_testbus_command_array_destroy(&container->commands);
@@ -142,6 +229,9 @@ ni_testbus_container_destroy(ni_testbus_container_t *container)
 	ni_testbus_file_array_destroy(&container->files);
 
 	ni_string_free(&container->name);
+
+	if (container->dbus_object_path)
+		ni_testbus_container_unregister(container);
 }
 
 void
@@ -323,3 +413,26 @@ ni_testbus_container_get_test_by_name(ni_testbus_container_t *container, const c
 	}
 	return NULL;
 }
+
+/*
+ * Container array functions
+ */
+void
+ni_testbus_container_array_append(ni_testbus_container_array_t *array, ni_testbus_container_t *container)
+{
+	array->data = ni_realloc(array->data, (array->count + 1) * sizeof(array->data[0]));
+	array->data[array->count++] = ni_testbus_container_get(container);
+}
+
+void
+ni_testbus_container_array_destroy(ni_testbus_container_array_t *array)
+{
+	unsigned int i;
+
+	for (i = 0; i < array->count; ++i)
+		ni_testbus_container_put(array->data[i]);
+
+	free(array->data);
+	memset(array, 0, sizeof(*array));
+}
+

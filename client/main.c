@@ -1048,15 +1048,17 @@ do_create_command(int argc, char **argv)
 int
 do_run_command(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_HOSTPATH, OPT_SEND_STDIN };
+	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN };
 	static struct option local_options[] = {
 		{ "host", required_argument, NULL, OPT_HOSTPATH },
+		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ "send-stdin", no_argument, NULL, OPT_SEND_STDIN },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
-	ni_dbus_object_t *host_object, *cmd_object, *proc_object;
+	ni_dbus_object_t *ctxt_object, *host_object, *cmd_object, *proc_object;
 	const char *opt_hostpath = NULL;
+	const char *opt_contextpath = NULL;
 	ni_bool_t opt_send_stdin = FALSE;
 	ni_process_exit_info_t exit_info;
 	int c;
@@ -1083,6 +1085,10 @@ do_run_command(int argc, char **argv)
 			opt_hostpath = optarg;
 			break;
 
+		case OPT_CONTEXT:
+			opt_contextpath = optarg;
+			break;
+
 		case OPT_SEND_STDIN:
 			opt_send_stdin = TRUE;
 			break;
@@ -1100,9 +1106,20 @@ do_run_command(int argc, char **argv)
 		return 1;
 	}
 
+	if (opt_contextpath != 0) {
+		ctxt_object = ni_testbus_call_get_and_refresh_object(opt_contextpath);
+		if (ctxt_object == NULL) {
+			ni_error("unknown context object %s", opt_contextpath);
+			return 1;
+		}
+	} else {
+		ctxt_object = host_object;
+	}
+
 	if (optind > argc - 1)
 		goto usage;
-	cmd_object = __do_create_command(host_object, argc - optind, argv + optind, opt_send_stdin);
+
+	cmd_object = __do_create_command(ctxt_object, argc - optind, argv + optind, opt_send_stdin);
 	if (!cmd_object)
 		return 1;
 

@@ -77,6 +77,8 @@ __ni_Testbus_CommandQueue_createCommand(ni_dbus_object_t *object, const ni_dbus_
 
 	/* Register this object */
 	command_object = ni_testbus_command_wrap(object, command);
+	ni_testbus_container_set_owner(&command->context, context);
+
 	ni_dbus_message_append_string(reply, command_object->path);
 	return TRUE;
 }

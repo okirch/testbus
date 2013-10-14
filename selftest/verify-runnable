@@ -54,7 +54,7 @@ function testbus_claim_host {
 function testbus_run_command {
 
 	testbus_trace "run command $*"
-	testbus_call run-command "$@"
+	testbus_call run-command --context $TESTBUS_TEST_HANDLE "$@"
 }
 
 testbus_init_test $0

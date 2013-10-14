@@ -60,8 +60,6 @@ ni_testbus_host_cast(ni_testbus_container_t *container)
 
 	ni_assert(container->ops == &ni_testbus_host_ops);
 	host = ni_container_of(container, ni_testbus_host_t, context);
-	ni_trace("ni_testbus_host_cast(%p) -> host=%p, host->context=%p",
-			container, host, &host->context);
 	ni_assert(&host->context == container);
 	return host;
 }
@@ -130,13 +128,14 @@ ni_testbus_host_array_destroy(ni_testbus_host_array_t *array)
 {
 	unsigned int i;
 
-	for (i = 0; i < array->count; ++i) {
-		ni_testbus_host_t *host = array->data[i];
+	while (array->count) {
+		ni_testbus_host_t *host = array->data[--(array->count)];
 
 		if (host->context.owner != NULL) {
 			if (&host->context.owner->hosts == array)
 				ni_testbus_host_set_role(host, NULL, NULL);
 		}
+		host->context.parent = NULL;
 		ni_testbus_host_put(host);
 	}
 
@@ -163,19 +162,34 @@ ni_testbus_host_array_index(ni_testbus_host_array_t *array, const ni_testbus_hos
 	return -1;
 }
 
-ni_bool_t
-ni_testbus_host_array_remove(ni_testbus_host_array_t *array, const ni_testbus_host_t *host)
+ni_testbus_host_t *
+ni_testbus_host_array_take_at(ni_testbus_host_array_t *array, unsigned int index)
 {
-	int index;
+	ni_testbus_host_t *taken;
 
-	if ((index = ni_testbus_host_array_index(array, host)) < 0)
-		return FALSE;
+	if (index >= array->count)
+		return NULL;
 
-	/* Drop the reference to the host */
-	ni_testbus_host_put(array->data[index]);
+	taken = array->data[index];
 
 	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
 	array->count --;
+
+	return taken;
+}
+
+ni_bool_t
+ni_testbus_host_array_remove(ni_testbus_host_array_t *array, const ni_testbus_host_t *host)
+{
+	ni_testbus_host_t *taken;
+	int index;
+
+	if ((index = ni_testbus_host_array_index(array, host)) < 0
+	 || (taken = ni_testbus_host_array_take_at(array, index)) == NULL)
+		return FALSE;
+
+	/* Drop the reference to the host */
+	ni_testbus_host_put(taken);
 	return TRUE;
 }
 

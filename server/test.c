@@ -73,16 +73,17 @@ ni_testbus_test_array_init(ni_testbus_test_array_t *array)
 void
 ni_testbus_test_array_destroy(ni_testbus_test_array_t *array)
 {
-	unsigned int i;
+	ni_testbus_test_array_t temp = *array;
 
-	for (i = 0; i < array->count; ++i) {
-		ni_testbus_testcase_t *test = array->data[i];
+	memset(array, 0, sizeof(*array));
+	while (temp.count) {
+		ni_testbus_testcase_t *test = temp.data[--(temp.count)];
 
+		test->context.parent = NULL;
 		ni_testbus_testcase_put(test);
 	}
 
-	free(array->data);
-	memset(array, 0, sizeof(*array));
+	free(temp.data);
 }
 
 void
@@ -104,19 +105,34 @@ ni_testbus_test_array_index(ni_testbus_test_array_t *array, const ni_testbus_tes
 	return -1;
 }
 
-ni_bool_t
-ni_testbus_test_array_remove(ni_testbus_test_array_t *array, const ni_testbus_testcase_t *test)
+ni_testbus_testcase_t *
+ni_testbus_test_array_take_at(ni_testbus_test_array_t *array, unsigned int index)
 {
-	int index;
+	ni_testbus_testcase_t *taken;
 
-	if ((index = ni_testbus_test_array_index(array, test)) < 0)
-		return FALSE;
+	if (index >= array->count)
+		return NULL;
 
-	/* Drop the reference to the test */
-	ni_testbus_testcase_put(array->data[index]);
+	taken = array->data[index];
 
 	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
 	array->count --;
+
+	return taken;
+}
+
+ni_bool_t
+ni_testbus_test_array_remove(ni_testbus_test_array_t *array, const ni_testbus_testcase_t *test)
+{
+	ni_testbus_testcase_t *taken;
+	int index;
+
+	if ((index = ni_testbus_test_array_index(array, test)) < 0
+	 || (taken = ni_testbus_test_array_take_at(array, index)) == NULL)
+		return FALSE;
+
+	/* Drop the reference to the test */
+	ni_testbus_testcase_put(taken);
 	return TRUE;
 }
 

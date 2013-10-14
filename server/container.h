@@ -42,6 +42,8 @@ struct ni_testbus_container_ops {
 struct ni_testbus_container {
 	const struct ni_testbus_container_ops *ops;
 
+	char *				trace_name;
+
 	char *				dbus_object_path;
 
 	/* Reference counting on containers */
@@ -79,6 +81,13 @@ struct ni_testbus_container {
 	ni_testbus_test_array_t		tests;
 };
 
+typedef struct ni_testbus_container_array ni_testbus_container_array_t;
+struct ni_testbus_container_array {
+	unsigned int			count;
+	ni_testbus_container_t **	data;
+};
+#define NI_TESTBUS_CONTAINER_ARRAY_INIT	{ .count = 0, .data = 0 }
+
 extern ni_testbus_container_t *ni_testbus_global_context(void);
 
 extern void		ni_testbus_container_init(ni_testbus_container_t *container,
@@ -86,8 +95,11 @@ extern void		ni_testbus_container_init(ni_testbus_container_t *container,
 						const char *name,
 						ni_testbus_container_t *parent);
 extern void		ni_testbus_container_destroy(ni_testbus_container_t *);
+extern void		ni_testbus_container_set_owner(ni_testbus_container_t *container, ni_testbus_container_t *owner);
 extern ni_bool_t	ni_testbus_container_merge_environment(ni_testbus_container_t *, ni_testbus_env_t *);
 extern ni_bool_t	ni_testbus_container_merge_files(ni_testbus_container_t *, ni_testbus_file_array_t *);
+
+extern void		ni_testbus_container_unregister(ni_testbus_container_t *);
 
 extern ni_testbus_container_t *	ni_testbus_container_get(ni_testbus_container_t *);
 extern void			ni_testbus_container_put(ni_testbus_container_t *);
@@ -113,6 +125,9 @@ extern ni_bool_t	ni_testbus_container_isa_host(const ni_testbus_container_t *);
 extern ni_bool_t	ni_testbus_container_isa_testcase(const ni_testbus_container_t *);
 extern ni_bool_t	ni_testbus_container_isa_command(const ni_testbus_container_t *);
 extern ni_bool_t	ni_testbus_container_isa_process(const ni_testbus_container_t *);
+
+extern void		ni_testbus_container_array_append(ni_testbus_container_array_t *, ni_testbus_container_t *);
+extern void		ni_testbus_container_array_destroy(ni_testbus_container_array_t *);
 
 static inline ni_bool_t
 ni_testbus_container_has_feature(const ni_testbus_container_t *cc, unsigned int f)
