@@ -11,6 +11,7 @@ static struct ni_testbus_container_ops ni_testbus_testcase_ops = {
 	.features		= NI_TESTBUS_CONTAINER_HAS_ENV |
 				  NI_TESTBUS_CONTAINER_HAS_CMDS |
 				  NI_TESTBUS_CONTAINER_HAS_HOSTS |
+				  NI_TESTBUS_CONTAINER_HAS_TESTS |
 				  NI_TESTBUS_CONTAINER_HAS_FILES,
 	.dbus_name_prefix	= "Test",
 
