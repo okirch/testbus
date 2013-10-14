@@ -27,16 +27,17 @@ struct ni_process {
 
 	pid_t			pid;
 	int			status;
-	ni_socket_t *		socket;
 
 	ni_string_array_t	argv;
 	ni_string_array_t	environ;
 
 	int			stdin;
 	struct ni_process_buffer {
+		ni_socket_t *	socket;
 		ni_buffer_t *	wbuf;
 		unsigned int	low_water_mark;
 	} stdout, stderr;
+	ni_bool_t		separate_stderr;
 
 	ni_tempstate_t *	temp_state;
 

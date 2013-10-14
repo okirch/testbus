@@ -20,7 +20,7 @@
 #include "socket_priv.h"
 #include "util_priv.h"
 
-static int				__ni_process_run(ni_process_t *, int *);
+static int				__ni_process_run(ni_process_t *, int *, int *);
 static ni_socket_t *			__ni_process_get_output(ni_process_t *, int);
 static void				__ni_process_flush_buffer(ni_process_t *, struct ni_process_buffer *);
 static const ni_string_array_t *	__ni_default_environment(void);
@@ -188,9 +188,13 @@ ni_process_free(ni_process_t *pi)
 			ni_error("Unable to kill process %d (%s): %m", pi->pid, pi->process->command);
 	}
 
-	if (pi->socket != NULL) {
-		ni_socket_close(pi->socket);
-		pi->socket = NULL;
+	if (pi->stdout.socket != NULL) {
+		ni_socket_close(pi->stdout.socket);
+		pi->stdout.socket = NULL;
+	}
+	if (pi->stderr.socket != NULL) {
+		ni_socket_close(pi->stderr.socket);
+		pi->stderr.socket = NULL;
 	}
 
 	if (pi->temp_state != NULL) {
@@ -337,26 +341,43 @@ ni_process_sigchild(int sig)
 int
 ni_process_run(ni_process_t *pi)
 {
-	int pfd[2],  rv;
+	int outfds[2], __errfds[2] = { -1, -1 }, *errfds, rv;
 
 	/* Our code in socket.c is only able to deal with sockets for now; */
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pfd) < 0) {
-		ni_error("%s: unable to create pipe: %m", __func__);
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, outfds) < 0) {
+		ni_error("%s: unable to create stdout pipe: %m", __func__);
 		return -1;
 	}
 
-	rv = __ni_process_run(pi, pfd);
+	errfds = outfds;
+	if (pi->separate_stderr) {
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, __errfds) < 0) {
+			ni_error("%s: unable to create stderr pipe: %m", __func__);
+			return -1;
+		}
+		errfds = __errfds;
+	}
+
+	rv = __ni_process_run(pi, outfds, errfds);
 	if (rv >= 0) {
 		/* Set up a socket to receive the redirected output of the
 		 * subprocess. */
-		pi->socket = __ni_process_get_output(pi, pfd[0]);
-		ni_socket_activate(pi->socket);
-		close(pfd[1]);
+		pi->stdout.socket = __ni_process_get_output(pi, outfds[0]);
+		ni_socket_activate(pi->stdout.socket);
+		close(outfds[1]);
+
+		if (errfds != outfds) {
+			pi->stderr.socket = __ni_process_get_output(pi, errfds[0]);
+			ni_socket_activate(pi->stderr.socket);
+			close(errfds[1]);
+		}
 	} else  {
-		if (pfd[0] >= 0)
-			close(pfd[0]);
-		if (pfd[1] >= 0)
-			close(pfd[1]);
+		close(outfds[0]);
+		close(outfds[1]);
+		if (errfds != outfds) {
+			close(errfds[0]);
+			close(errfds[1]);
+		}
 	}
 
 	return rv;
@@ -367,7 +388,7 @@ ni_process_run_and_wait(ni_process_t *pi)
 {
 	int  rv;
 
-	rv = __ni_process_run(pi, NULL);
+	rv = __ni_process_run(pi, NULL, NULL);
 	if (rv < 0)
 		return rv;
 
@@ -403,7 +424,7 @@ ni_process_run_and_capture_output(ni_process_t *pi, ni_buffer_t *out_buffer)
 		return -1;
 	}
 
-	rv = __ni_process_run(pi, pfd);
+	rv = __ni_process_run(pi, pfd, pfd);
 	if (rv < 0) {
 		close(pfd[0]);
 		close(pfd[1]);
@@ -448,7 +469,7 @@ ni_process_run_and_capture_output(ni_process_t *pi, ni_buffer_t *out_buffer)
 }
 
 int
-__ni_process_run(ni_process_t *pi, int *pfd)
+__ni_process_run(ni_process_t *pi, int *outfds, int *errfds)
 {
 	const char *arg0 = pi->argv.data[0];
 	pid_t pid;
@@ -487,10 +508,10 @@ __ni_process_run(ni_process_t *pi, int *pfd)
 		if (fd >= 0 && dup2(fd, 0) < 0)
 			ni_warn("%s: cannot dup stdin descriptor: %m", __func__);
 
-		if (pfd) {
-			if (dup2(pfd[1], 1) < 0 || dup2(pfd[1], 2) < 0)
-				ni_warn("%s: cannot dup pipe out descriptor: %m", __func__);
-		}
+		if (outfds && dup2(outfds[1], 1) < 0)
+			ni_warn("%s: cannot dup stdout descriptor: %m", __func__);
+		if (errfds && dup2(errfds[1], 1) < 0)
+			ni_warn("%s: cannot dup stderr descriptor: %m", __func__);
 
 		maxfd = getdtablesize();
 		for (fd = 3; fd < maxfd; ++fd)
@@ -645,11 +666,11 @@ __ni_process_output_hangup(ni_socket_t *sock)
 {
 	ni_process_t *pi = sock->user_data;
 
-	if (pi && pi->socket == sock) {
+	if (pi && pi->stdout.socket == sock) {
 		if (ni_process_reap(pi) < 0)
 			ni_error("pipe closed by child process, but child did not exit");
-		ni_socket_close(pi->socket);
-		pi->socket = NULL;
+		ni_socket_close(pi->stdout.socket);
+		pi->stdout.socket = NULL;
 	}
 }
 

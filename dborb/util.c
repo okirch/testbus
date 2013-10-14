@@ -1598,6 +1598,7 @@ ni_file_write(FILE *fp, const ni_buffer_t *wbuf)
 		ni_buffer_pull_head(&wbuf_copy, cnt);
 		written += cnt;
 	}
+	fflush(fp);
 	return written;
 }
 
