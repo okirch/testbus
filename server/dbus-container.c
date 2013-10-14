@@ -24,6 +24,31 @@ static struct ni_testbus_container_child_info {
 	{ 0 }
 };
 
+static const char *
+ni_testbus_container_build_path(const ni_dbus_object_t *parent_object, const ni_testbus_container_t *container)
+{
+	static char pathbuf[256];
+
+	ni_assert(container->ops->dbus_name_prefix);
+
+	snprintf(pathbuf, sizeof(pathbuf), "%s/%s%u", parent_object->path, container->ops->dbus_name_prefix, container->id);
+	return pathbuf;
+}
+
+ni_dbus_object_t *
+ni_testbus_container_wrap(ni_dbus_object_t *parent_object, const ni_dbus_class_t *class, ni_testbus_container_t *container)
+{
+	ni_dbus_object_t *object;
+
+	object = ni_objectmodel_create_object(ni_dbus_object_get_server(parent_object),
+			ni_testbus_container_build_path(parent_object, container),
+			class, container);
+	ni_string_dup(&container->dbus_object_path, object->path);
+
+	ni_testbus_bind_container_interfaces(object, container);
+	return object;
+}
+
 ni_testbus_container_t *
 ni_testbus_container_unwrap(const ni_dbus_object_t *object, DBusError *error)
 {
@@ -71,7 +96,6 @@ ni_testbus_bind_container_interfaces(ni_dbus_object_t *object, ni_testbus_contai
 {
 	struct ni_testbus_container_child_info *info;
 
-	ni_trace("%s()", __func__);
 	if (!ni_dbus_object_isa(object, ni_testbus_container_class())) {
 		ni_warn("bind_container_interfaces(%s): object's class \"%s\" is not derived from \"%s\"",
 				object->path, object->class->name,
@@ -81,7 +105,7 @@ ni_testbus_bind_container_interfaces(ni_dbus_object_t *object, ni_testbus_contai
 
 	ni_trace("%s: bind container interfaces", object->path);
 	for (info = ni_testbus_container_child_info; info->feature; ++info) {
-		if (container->features & info->feature) {
+		if (ni_testbus_container_has_feature(container, info->feature)) {
 			const ni_dbus_service_t *service;
 
 			if ((service = ni_objectmodel_service_by_name(info->service)) == NULL) {
@@ -177,7 +201,6 @@ __ni_Testbus_Container_delete(ni_dbus_object_t *object, const ni_dbus_method_t *
 		} else
 		if ((test = ni_testbus_testcase_unwrap(object, NULL)) != NULL) {
 			ni_testbus_container_remove_test(container->parent, test);
-			ni_testbus_testcase_free(test); /* icky */
 		} else
 		if ((file = ni_testbus_file_unwrap(object, NULL)) != NULL) {
 			ni_testbus_container_remove_file(container->parent, file);

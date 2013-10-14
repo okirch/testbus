@@ -4,8 +4,25 @@
 #include <dborb/process.h>
 #include "command.h"
 
-static unsigned int		__ni_testbus_command_next_id;
-static unsigned int		__ni_testbus_process_next_id;
+static void			ni_testbus_command_destroy(ni_testbus_container_t *);
+static void			ni_testbus_command_free(ni_testbus_container_t *);
+
+static struct ni_testbus_container_ops ni_testbus_command_ops = {
+	.features		= NI_TESTBUS_CONTAINER_HAS_ENV |
+		    		  NI_TESTBUS_CONTAINER_HAS_FILES,
+	.dbus_name_prefix	= "Command",
+
+	.destroy		= ni_testbus_command_destroy,
+	.free			= ni_testbus_command_free,
+};
+
+static struct ni_testbus_container_ops ni_testbus_process_ops = {
+	.features		= NI_TESTBUS_CONTAINER_HAS_ENV |
+				  NI_TESTBUS_CONTAINER_HAS_FILES,
+
+	.dbus_name_prefix	= "Process",
+};
+
 
 void
 ni_testbus_command_array_init(ni_testbus_command_array_t *array)
@@ -35,22 +52,6 @@ ni_testbus_command_array_append(ni_testbus_command_array_t *array, ni_testbus_co
 }
 
 ni_testbus_command_t *
-ni_testbus_command_get(ni_testbus_command_t *command)
-{
-	ni_assert(command->refcount);
-	command->refcount += 1;
-	return command;
-}
-
-void
-ni_testbus_command_put(ni_testbus_command_t *command)
-{
-	ni_assert(command->refcount);
-	if (--(command->refcount) == 0)
-		ni_testbus_command_free(command);
-}
-
-ni_testbus_command_t *
 ni_testbus_command_new(ni_testbus_container_t *parent, const ni_string_array_t *argv)
 {
 	ni_testbus_command_t *cmd;
@@ -59,29 +60,42 @@ ni_testbus_command_new(ni_testbus_container_t *parent, const ni_string_array_t *
 	ni_assert(ni_testbus_container_has_commands(parent));
 
 	cmd = ni_malloc(sizeof(*cmd));
-	cmd->refcount = 1;
 	ni_string_array_copy(&cmd->argv, argv);
-	cmd->id = __ni_testbus_process_next_id++;
 
 	ni_testbus_container_init(&cmd->context,
-			NI_TESTBUS_CONTAINER_HAS_ENV |
-			NI_TESTBUS_CONTAINER_HAS_FILES,
+			&ni_testbus_command_ops,
+			NULL,
 			parent);
-
-	ni_testbus_command_array_append(&parent->commands, cmd);
-
-	/* Now unref the command */
-	cmd->refcount--;
 
 	return cmd;
 }
 
-void
-ni_testbus_command_free(ni_testbus_command_t *cmd)
+ni_bool_t
+ni_testbus_container_isa_command(const ni_testbus_container_t *container)
 {
-	ni_assert(cmd->refcount == 0);
+	return container->ops == &ni_testbus_command_ops;
+}
+
+ni_testbus_command_t *
+ni_testbus_command_cast(ni_testbus_container_t *container)
+{
+	ni_assert(container->ops == &ni_testbus_command_ops);
+	return ni_container_of(container, ni_testbus_command_t, context);
+}
+
+void
+ni_testbus_command_destroy(ni_testbus_container_t *container)
+{
+	ni_testbus_command_t *cmd = ni_testbus_command_cast(container);
+
 	ni_string_array_destroy(&cmd->argv);
-	ni_testbus_container_destroy(&cmd->context);
+}
+
+void
+ni_testbus_command_free(ni_testbus_container_t *container)
+{
+	ni_testbus_command_t *cmd = ni_testbus_command_cast(container);
+
 	free(cmd);
 }
 
@@ -90,22 +104,6 @@ ni_testbus_command_free(ni_testbus_command_t *cmd)
  * A process is a command in execution. There is no 1:1 relationship, as a command
  * may be executed on several hosts simultanously.
  */
-ni_testbus_process_t *
-ni_testbus_process_get(ni_testbus_process_t *process)
-{
-	ni_assert(process->refcount);
-	process->refcount += 1;
-	return process;
-}
-
-void
-ni_testbus_process_put(ni_testbus_process_t *process)
-{
-	ni_assert(process->refcount);
-	if (--(process->refcount) == 0)
-		ni_testbus_process_free(process);
-}
-
 ni_testbus_process_t *
 ni_testbus_process_new(ni_testbus_container_t *parent, ni_testbus_command_t *command)
 {
@@ -116,30 +114,53 @@ ni_testbus_process_new(ni_testbus_container_t *parent, ni_testbus_command_t *com
 	ni_assert(ni_testbus_container_has_processes(parent));
 
 	proc = ni_malloc(sizeof(*proc));
-	proc->refcount = 1;
 	proc->command = ni_testbus_command_get(command);
 	ni_string_array_copy(&proc->argv, &command->argv);
-	proc->id = __ni_testbus_command_next_id++;
 
 	ni_testbus_container_init(&proc->context,
-			NI_TESTBUS_CONTAINER_HAS_ENV |
-			NI_TESTBUS_CONTAINER_HAS_FILES,
+			&ni_testbus_process_ops,
+			NULL,
 			parent);
-
-	ni_testbus_process_array_append(&parent->processes, proc);
-
-	/* Now unref the command */
-	proc->refcount--;
 
 	return proc;
 }
 
-void
-ni_testbus_process_free(ni_testbus_process_t *proc)
+ni_bool_t
+ni_testbus_container_isa_process(const ni_testbus_container_t *container)
 {
-	ni_assert(proc->refcount == 0);
+	return container->ops == &ni_testbus_process_ops;
+}
+
+ni_testbus_process_t *
+ni_testbus_process_cast(ni_testbus_container_t *container)
+{
+	ni_assert(container->ops == &ni_testbus_process_ops);
+	return ni_container_of(container, ni_testbus_process_t, context);
+}
+
+void
+ni_testbus_process_destroy(ni_testbus_container_t *container)
+{
+	ni_testbus_process_t *proc = ni_testbus_process_cast(container);
+
+	/* FIXME: We should broadcast a signal informing the agent that he
+	 * can drop the process status, too */
+
 	ni_string_array_destroy(&proc->argv);
-	ni_testbus_container_destroy(&proc->context);
+	if (proc->command) {
+		ni_testbus_command_put(proc->command);
+		proc->command = NULL;
+	}
+
+	if (proc->process)
+		ni_process_free(proc->process);
+}
+
+void
+ni_testbus_process_free(ni_testbus_container_t *container)
+{
+	ni_testbus_process_t *proc = ni_testbus_process_cast(container);
+
 	free(proc);
 }
 

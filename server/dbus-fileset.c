@@ -20,7 +20,7 @@ ni_testbus_file_full_path(const ni_dbus_object_t *container_object, const ni_tes
 {
 	static char pathbuf[256];
 
-	snprintf(pathbuf, sizeof(pathbuf), "%s/File/%u", container_object->path, file->id);
+	snprintf(pathbuf, sizeof(pathbuf), "%s/File%u", container_object->path, file->id);
 	return pathbuf;
 }
 

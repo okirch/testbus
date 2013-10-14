@@ -15,23 +15,14 @@ ni_testbus_process_full_path(const ni_dbus_object_t *container_object, const ni_
 {
 	static char pathbuf[256];
 
-	snprintf(pathbuf, sizeof(pathbuf), "%s/Process/%u", container_object->path, process->id);
+	snprintf(pathbuf, sizeof(pathbuf), "%s/Process%u", container_object->path, process->context.id);
 	return pathbuf;
 }
 
 ni_dbus_object_t *
-ni_testbus_process_wrap(ni_dbus_object_t *container_object, ni_testbus_process_t *process)
+ni_testbus_process_wrap(ni_dbus_object_t *parent_object, ni_testbus_process_t *process)
 {
-	ni_dbus_object_t *object;
-
-	object = ni_objectmodel_create_object(
-			ni_dbus_object_get_server(container_object),
-			ni_testbus_process_full_path(container_object, process),
-			ni_testbus_process_class(),
-			&process->context);
-
-	ni_testbus_bind_container_interfaces(object, &process->context);
-	return object;
+	return ni_testbus_container_wrap(parent_object, ni_testbus_process_class(), &process->context);
 }
 
 ni_testbus_process_t *

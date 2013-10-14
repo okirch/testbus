@@ -1,87 +1,136 @@
 
 #include <stdlib.h>
 #include <dborb/util.h>
+#include <dborb/logging.h>
 #include "testcase.h"
+
+static void		ni_testbus_testcase_destroy(ni_testbus_container_t *);
+static void		ni_testbus_testcase_free(ni_testbus_container_t *);
+
+static struct ni_testbus_container_ops ni_testbus_testcase_ops = {
+	.features		= NI_TESTBUS_CONTAINER_HAS_ENV |
+				  NI_TESTBUS_CONTAINER_HAS_CMDS |
+				  NI_TESTBUS_CONTAINER_HAS_HOSTS |
+				  NI_TESTBUS_CONTAINER_HAS_FILES,
+	.dbus_name_prefix	= "Test",
+
+	.destroy		= ni_testbus_testcase_destroy,
+	.free			= ni_testbus_testcase_free,
+};
 
 ni_testbus_testcase_t *
 ni_testbus_testcase_new(const char *name, ni_testbus_container_t *parent)
 {
-	static unsigned int __global_testcase_seq = 1;
-
 	ni_testbus_testcase_t *test;
 
 	test = ni_malloc(sizeof(*test));
-	test->id = __global_testcase_seq++;
-	ni_string_dup(&test->name, name);
 
 	ni_testbus_container_init(&test->context,
-				NI_TESTBUS_CONTAINER_HAS_ENV |
-				NI_TESTBUS_CONTAINER_HAS_CMDS |
-				NI_TESTBUS_CONTAINER_HAS_HOSTS |
-				NI_TESTBUS_CONTAINER_HAS_FILES,
+				&ni_testbus_testcase_ops,
+				name,
 				parent);
-	ni_testbus_testset_append(&parent->tests, test);
 
 	return test;
 }
 
-void
-ni_testbus_testcase_free(ni_testbus_testcase_t *test)
+ni_bool_t
+ni_testbus_container_isa_testcase(const ni_testbus_container_t *container)
 {
-	ni_testbus_container_destroy(&test->context);
-	ni_string_free(&test->name);
+	return container->ops == &ni_testbus_testcase_ops;
+}
+
+ni_testbus_testcase_t *
+ni_testbus_testcase_cast(ni_testbus_container_t *container)
+{
+	ni_testbus_testcase_t *test;
+
+	ni_assert(container->ops == &ni_testbus_testcase_ops);
+	test = ni_container_of(container, ni_testbus_testcase_t, context);
+	return test;
+}
+
+void
+ni_testbus_testcase_destroy(ni_testbus_container_t *container)
+{
+	ni_testbus_testcase_t *test = ni_testbus_testcase_cast(container);
+
+}
+
+void
+ni_testbus_testcase_free(ni_testbus_container_t *container)
+{
+	ni_testbus_testcase_t *test = ni_testbus_testcase_cast(container);
+
 	free(test);
 }
 
 void
-ni_testbus_testset_init(ni_testbus_testset_t *testset)
+ni_testbus_test_array_init(ni_testbus_test_array_t *array)
 {
-	memset(testset, 0, sizeof(*testset));
+	memset(array, 0, sizeof(*array));
 }
 
 void
-ni_testbus_testset_destroy(ni_testbus_testset_t *testset)
+ni_testbus_test_array_destroy(ni_testbus_test_array_t *array)
 {
-	ni_testbus_testcase_t *test;
+	unsigned int i;
 
-	while ((test = testset->head) != NULL) {
-		testset->head = test->next;
-		ni_testbus_testcase_free(test);
+	for (i = 0; i < array->count; ++i) {
+		ni_testbus_testcase_t *test = array->data[i];
+
+		ni_testbus_testcase_put(test);
 	}
+
+	free(array->data);
+	memset(array, 0, sizeof(*array));
 }
 
 void
-ni_testbus_testset_append(ni_testbus_testset_t *testset, ni_testbus_testcase_t *test)
+ni_testbus_test_array_append(ni_testbus_test_array_t *array, ni_testbus_testcase_t *test)
 {
-	ni_testbus_testcase_t **pos, *f;
-
-	for (pos = &testset->head; (f = *pos) != NULL; pos = &f->next)
-		;
-	*pos = test;
+	array->data = ni_realloc(array->data, (array->count + 1) * sizeof(array->data[0]));
+	array->data[array->count++] = ni_testbus_testcase_get(test);
 }
 
-void
-ni_testbus_testset_remove(ni_testbus_testset_t *testset, const ni_testbus_testcase_t *test)
+int
+ni_testbus_test_array_index(ni_testbus_test_array_t *array, const ni_testbus_testcase_t *test)
 {
-	ni_testbus_testcase_t **pos, *f;
+	unsigned int i;
 
-	for (pos = &testset->head; (f = *pos) != NULL; pos = &f->next) {
-		if (f == test) {
-			*pos = f->next;
-			return;
-		}
+	for (i = 0; i < array->count; ++i) {
+		if (array->data[i] == test)
+			return i;
 	}
+	return -1;
+}
+
+ni_bool_t
+ni_testbus_test_array_remove(ni_testbus_test_array_t *array, const ni_testbus_testcase_t *test)
+{
+	int index;
+
+	if ((index = ni_testbus_test_array_index(array, test)) < 0)
+		return FALSE;
+
+	/* Drop the reference to the test */
+	ni_testbus_testcase_put(array->data[index]);
+
+	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
+	array->count --;
+	return TRUE;
 }
 
 ni_testbus_testcase_t *
-ni_testbus_testset_find_by_name(const ni_testbus_testset_t *testset, const char *name)
+ni_testbus_test_array_find_by_name(const ni_testbus_test_array_t *array, const char *name)
 {
-	ni_testbus_testcase_t *f;
+	unsigned int i;
 
-	for (f = testset->head; f != NULL; f = f->next) {
-		if (ni_string_eq(f->name, name))
-			return f;
+	for (i = 0; i < array->count; ++i) {
+		ni_testbus_testcase_t *test = array->data[i];
+
+		if (ni_string_eq(test->context.name, name))
+			return test;
 	}
-
 	return NULL;
 }
+

@@ -12,23 +12,14 @@ ni_testbus_command_full_path(const ni_dbus_object_t *container_object, const ni_
 {
 	static char pathbuf[256];
 
-	snprintf(pathbuf, sizeof(pathbuf), "%s/Command/%u", container_object->path, command->id);
+	snprintf(pathbuf, sizeof(pathbuf), "%s/Command%u", container_object->path, command->context.id);
 	return pathbuf;
 }
 
 ni_dbus_object_t *
-ni_testbus_command_wrap(ni_dbus_object_t *container_object, ni_testbus_command_t *command)
+ni_testbus_command_wrap(ni_dbus_object_t *parent_object, ni_testbus_command_t *command)
 {
-	ni_dbus_object_t *object;
-
-	object = ni_objectmodel_create_object(
-			ni_dbus_object_get_server(container_object),
-			ni_testbus_command_full_path(container_object, command),
-			ni_testbus_command_class(),
-			&command->context);
-
-	ni_testbus_bind_container_interfaces(object, &command->context);
-	return object;
+	return ni_testbus_container_wrap(parent_object, ni_testbus_command_class(), &command->context);
 }
 
 ni_testbus_command_t *
@@ -43,10 +34,7 @@ ni_testbus_command_unwrap(const ni_dbus_object_t *object, DBusError *error)
 	if (!(context = ni_testbus_container_unwrap(object, error)))
 		return NULL;
 
-	command = ni_container_of(context, ni_testbus_command_t, context);
-	ni_assert(context = &command->context);
-
-	return command;
+	return ni_testbus_command_cast(context);
 }
 
 void *

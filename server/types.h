@@ -7,10 +7,9 @@
 typedef struct ni_testbus_env		ni_testbus_env_t;
 typedef struct ni_testbus_host		ni_testbus_host_t;
 typedef struct ni_testbus_container	ni_testbus_container_t;
-typedef struct ni_testbus_cmdqueue	ni_testbus_cmdqueue_t;
 typedef struct ni_testbus_command	ni_testbus_command_t;
 typedef struct ni_testbus_process	ni_testbus_process_t;
-typedef struct ni_testbus_testset	ni_testbus_testset_t;
+typedef struct ni_testbus_test_array	ni_testbus_test_array_t;
 typedef struct ni_testbus_testcase	ni_testbus_testcase_t;
 
 typedef struct ni_testbus_host_array	ni_testbus_host_array_t;
@@ -25,27 +24,32 @@ typedef struct ni_testbus_process_array	ni_testbus_process_array_t;
 /*
  * Array/list types
  */
-struct ni_testbus_cmdqueue {
-	ni_testbus_command_t *		head;
-};
+struct ni_testbus_test_array {
+	unsigned int			count;
+	ni_testbus_testcase_t **	data;
 
-struct ni_testbus_testset {
-	ni_testbus_testcase_t *		head;
+	unsigned int			next_id;
 };
 
 struct ni_testbus_host_array {
 	unsigned int			count;
 	ni_testbus_host_t **		data;
+
+	unsigned int			next_id;
 };
 
 struct ni_testbus_command_array {
 	unsigned int			count;
 	ni_testbus_command_t **		data;
+
+	unsigned int			next_id;
 };
 
 struct ni_testbus_process_array {
 	unsigned int			count;
 	ni_testbus_process_t **		data;
+
+	unsigned int			next_id;
 };
 
 #endif /* __TESTBUS_SERVER_TYPES_H__ */

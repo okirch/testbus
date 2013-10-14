@@ -14,35 +14,16 @@ ni_testbus_create_static_objects_test(ni_dbus_server_t *server)
 {
 }
 
-const char *
-ni_testbus_testcase_full_path(const ni_dbus_object_t *container_object, const ni_testbus_testcase_t *test)
-{
-	static char pathbuf[256];
-
-	snprintf(pathbuf, sizeof(pathbuf), "%s/Test/%u", container_object->path, test->id);
-	return pathbuf;
-}
-
 ni_dbus_object_t *
-ni_testbus_testcase_wrap(ni_dbus_object_t *container_object, ni_testbus_testcase_t *testcase)
+ni_testbus_testcase_wrap(ni_dbus_object_t *parent_object, ni_testbus_testcase_t *testcase)
 {
-	ni_dbus_object_t *object;
-
-	object = ni_objectmodel_create_object(
-			ni_dbus_object_get_server(container_object),
-			ni_testbus_testcase_full_path(container_object, testcase),
-			ni_testbus_testcase_class(),
-			&testcase->context);
-
-	ni_testbus_bind_container_interfaces(object, &testcase->context);
-	return object;
+	return ni_testbus_container_wrap(parent_object, ni_testbus_testcase_class(), &testcase->context);
 }
 
 ni_testbus_testcase_t *
 ni_testbus_testcase_unwrap(const ni_dbus_object_t *object, DBusError *error)
 {
 	ni_testbus_container_t *context;
-	ni_testbus_testcase_t *testcase;
 
 	if (!ni_dbus_object_get_handle_typecheck(object, ni_testbus_testcase_class(), error))
 		return NULL;
@@ -50,10 +31,7 @@ ni_testbus_testcase_unwrap(const ni_dbus_object_t *object, DBusError *error)
 	if (!(context = ni_testbus_container_unwrap(object, error)))
 		return NULL;
 
-	testcase = ni_container_of(context, ni_testbus_testcase_t, context);
-	ni_assert(context = &testcase->context);
-
-	return testcase;
+	return ni_testbus_testcase_cast(context);
 }
 
 void *
@@ -106,7 +84,7 @@ NI_TESTBUS_METHOD_BINDING(Testset, createTest);
 
 
 static ni_dbus_property_t       __ni_Testbus_Testcase_properties[] = {
-	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_testcase, name, name, RO),
+	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_testcase, name, context.name, RO),
 	{ NULL }
 };
 NI_TESTBUS_PROPERTIES_BINDING(Testcase);

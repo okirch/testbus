@@ -17,33 +17,24 @@ ni_testbus_create_static_objects_host(ni_dbus_server_t *server)
 }
 
 const char *
-ni_testbus_host_full_path(const ni_testbus_host_t *host)
+xni_testbus_host_full_path(const ni_testbus_host_t *host)
 {
 	static char pathbuf[256];
 
-	snprintf(pathbuf, sizeof(pathbuf), "%s/%u", NI_TESTBUS_HOST_BASE_PATH, host->id);
+	snprintf(pathbuf, sizeof(pathbuf), "%s%u", NI_TESTBUS_HOST_BASE_PATH, host->context.id);
 	return pathbuf;
 }
 
 ni_dbus_object_t *
-ni_testbus_host_wrap(ni_dbus_server_t *server, ni_testbus_host_t *host)
+ni_testbus_host_wrap(ni_dbus_object_t *parent_object, ni_testbus_host_t *host)
 {
-	ni_dbus_object_t *object;
-
-	object = ni_objectmodel_create_object(server,
-			ni_testbus_host_full_path(host),
-			ni_testbus_host_class(),
-			&host->context);
-
-	ni_testbus_bind_container_interfaces(object, &host->context);
-	return object;
+	return ni_testbus_container_wrap(parent_object, ni_testbus_host_class(), &host->context);
 }
 
 ni_testbus_host_t *
 ni_testbus_host_unwrap(const ni_dbus_object_t *object, DBusError *error)
 {
 	ni_testbus_container_t *context;
-	ni_testbus_host_t *host;
 
 	if (!ni_dbus_object_get_handle_typecheck(object, ni_testbus_host_class(), error))
 		return NULL;
@@ -51,10 +42,7 @@ ni_testbus_host_unwrap(const ni_dbus_object_t *object, DBusError *error)
 	if (!(context = ni_testbus_container_unwrap(object, error)))
 		return NULL;
 
-	host = ni_container_of(context, ni_testbus_host_t, context);
-	ni_assert(context = &host->context);
-
-	return host;
+	return ni_testbus_host_cast(context);
 }
 
 void *
@@ -71,7 +59,7 @@ __ni_testbus_host_set_agent(ni_testbus_host_t *host, const char *owner)
 {
 	owner = ni_testbus_lookup_wellknown_bus_name(owner);
 
-	ni_debug_wicked("host %s owned by %s", host->name, owner);
+	ni_debug_wicked("host %s owned by %s", host->context.name, owner);
 	ni_string_dup(&host->agent_bus_name, owner);
 }
 
@@ -103,7 +91,7 @@ __ni_Testbus_Hostlist_createHost(ni_dbus_object_t *object, const ni_dbus_method_
 	__ni_testbus_host_set_agent(host, dbus_message_get_destination(reply));
 
 	/* Register this object */
-	host_object = ni_testbus_host_wrap(ni_dbus_object_get_server(object), host);
+	host_object = ni_testbus_host_wrap(object, host);
 	ni_dbus_message_append_string(reply, host_object->path);
 	return TRUE;
 }
@@ -150,7 +138,7 @@ __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t
 		ni_dbus_message_t *reply, DBusError *error)
 {
 	ni_testbus_container_t *context = ni_testbus_global_context();
-	const char *name, *object_path = "";
+	const char *name;
 	ni_testbus_host_t *host;
 	ni_uuid_t uuid;
 
@@ -169,7 +157,7 @@ __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t
 		}
 		host->uuid = uuid;
 
-		(void) ni_testbus_host_wrap(ni_dbus_object_get_server(object), host);
+		(void) ni_testbus_host_wrap(object, host);
 	} else if (!ni_uuid_equal(&host->uuid, &uuid)) {
 		ni_debug_wicked("Hostlist.reconnect: cannot reconnect host \"%s\", uuid mismatch", name);
 		dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "host name \"%s\" already taken (uuid mismatch)", name);
@@ -181,21 +169,19 @@ __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t
 		return FALSE;
 	}
 	
-	object_path = ni_testbus_host_full_path(host);
-
 	/* Remember the DBus name of the service owning this object, so that we can
 	 * send it messages. */
 	__ni_testbus_host_set_agent(host, dbus_message_get_destination(reply));
 
-	ni_debug_wicked("reconnecting host \"%s\" - object path %s", name, object_path);
-	ni_dbus_message_append_string(reply, object_path);
+	ni_debug_wicked("reconnecting host \"%s\" - object path %s", name, host->context.dbus_object_path);
+	ni_dbus_message_append_string(reply, host->context.dbus_object_path);
 	return TRUE;
 }
 
 NI_TESTBUS_METHOD_BINDING(Hostlist, reconnect);
 
 static ni_dbus_property_t       __ni_Testbus_Host_properties[] = {
-	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, name, name, RO),
+	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, name, context.name, RO),
 	NI_DBUS_GENERIC_UUID_PROPERTY(testbus_host, uuid, uuid, RO),
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, agent, agent_bus_name, RO),
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, role, role, RO),
@@ -301,7 +287,7 @@ __ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 	 */
 	ni_testbus_host_signal_process_scheduled(object, process_object, proc);
 
-	ni_debug_wicked("created process object %s (pid=%u)", process_object->path, proc->id);
+	ni_debug_wicked("created process object %s", process_object->path);
 	ni_dbus_message_append_string(reply, process_object->path);
 	return TRUE;
 }

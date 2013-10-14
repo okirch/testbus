@@ -4,7 +4,25 @@
 #include "model.h"
 #include "host.h"
 
-static unsigned int		__ni_testbus_host_next_id;
+static void			ni_testbus_host_release(ni_testbus_container_t *);
+static void			ni_testbus_host_destroy(ni_testbus_container_t *);
+static void			ni_testbus_host_free(ni_testbus_container_t *);
+
+static struct ni_testbus_container_ops ni_testbus_host_ops = {
+	.features		= NI_TESTBUS_CONTAINER_HAS_ENV|
+				  NI_TESTBUS_CONTAINER_HAS_CMDS|
+				  NI_TESTBUS_CONTAINER_HAS_PROCS|
+				  NI_TESTBUS_CONTAINER_HAS_FILES,
+
+	.dbus_name_prefix	= "Host",
+
+	/* Releasing a host: clear the role field */
+	.release		= ni_testbus_host_release,
+
+	.destroy		= ni_testbus_host_destroy,
+	.free			= ni_testbus_host_free,
+};
+
 
 ni_testbus_host_t *
 ni_testbus_host_new(ni_testbus_container_t *parent, const char *name, int *err_ret)
@@ -18,53 +36,59 @@ ni_testbus_host_new(ni_testbus_container_t *parent, const char *name, int *err_r
 		return NULL;
 
 	host = ni_malloc(sizeof(*host));
-	host->refcount = 1;
-	host->name = ni_strdup(name);
-	host->id = __ni_testbus_host_next_id++;
 	ni_uuid_generate(&host->uuid);
 
 	ni_testbus_container_init(&host->context,
-			NI_TESTBUS_CONTAINER_HAS_ENV|
-			NI_TESTBUS_CONTAINER_HAS_CMDS|
-			NI_TESTBUS_CONTAINER_HAS_PROCS|
-			NI_TESTBUS_CONTAINER_HAS_FILES,
+			&ni_testbus_host_ops,
+			name,
 			parent);
-
-	/* This will implicitly set the host's refcount to 2 */
-	ni_testbus_container_add_host(parent, host);
-
-	/* Now unref the host */
-	host->refcount--;
 
 	*err_ret = 0;
 	return host;
 }
 
-void
-ni_testbus_host_free(ni_testbus_host_t *host)
+ni_bool_t
+ni_testbus_container_isa_host(const ni_testbus_container_t *container)
 {
-	ni_assert(host->refcount == 0);
-	ni_string_free(&host->name);
-	ni_string_free(&host->agent_bus_name);
-	ni_string_free(&host->role);
-	ni_testbus_container_destroy(&host->context);
-	free(host);
+	return container->ops == &ni_testbus_host_ops;
 }
 
 ni_testbus_host_t *
-ni_testbus_host_get(ni_testbus_host_t *host)
+ni_testbus_host_cast(ni_testbus_container_t *container)
 {
-	ni_assert(host->refcount);
-	host->refcount += 1;
+	ni_testbus_host_t *host;
+
+	ni_assert(container->ops == &ni_testbus_host_ops);
+	host = ni_container_of(container, ni_testbus_host_t, context);
+	ni_trace("ni_testbus_host_cast(%p) -> host=%p, host->context=%p",
+			container, host, &host->context);
+	ni_assert(&host->context == container);
 	return host;
 }
 
 void
-ni_testbus_host_put(ni_testbus_host_t *host)
+ni_testbus_host_release(ni_testbus_container_t *container)
 {
-	ni_assert(host->refcount);
-	if (--(host->refcount) == 0)
-		ni_testbus_host_free(host);
+	ni_testbus_host_t *host = ni_testbus_host_cast(container);
+
+	ni_string_free(&host->role);
+}
+
+void
+ni_testbus_host_destroy(ni_testbus_container_t *container)
+{
+	ni_testbus_host_t *host = ni_testbus_host_cast(container);
+
+	ni_string_free(&host->agent_bus_name);
+	ni_string_free(&host->role);
+}
+
+void
+ni_testbus_host_free(ni_testbus_container_t *container)
+{
+	ni_testbus_host_t *host = ni_testbus_host_cast(container);
+
+	free(host);
 }
 
 ni_bool_t
@@ -72,18 +96,18 @@ ni_testbus_host_set_role(ni_testbus_host_t *host, const char *role, ni_testbus_c
 {
 	if (role_owner == NULL) {
 		ni_string_free(&host->role);
-		host->role_owner = NULL;
+		host->context.owner = NULL;
 		return TRUE;
 	}
 	if (host->role != NULL) {
 		/* Handle re-registration gracefully */
-		if (ni_string_eq(host->role, role) && host->role_owner == role_owner)
+		if (ni_string_eq(host->role, role) && host->context.owner == role_owner)
 			return TRUE;
 		return FALSE;
 	}
 
 	ni_string_dup(&host->role, role);
-	host->role_owner = role_owner;
+	host->context.owner = role_owner;
 	return TRUE;
 }
 
@@ -109,8 +133,8 @@ ni_testbus_host_array_destroy(ni_testbus_host_array_t *array)
 	for (i = 0; i < array->count; ++i) {
 		ni_testbus_host_t *host = array->data[i];
 
-		if (host->role_owner != NULL) {
-			if (&host->role_owner->hosts == array)
+		if (host->context.owner != NULL) {
+			if (&host->context.owner->hosts == array)
 				ni_testbus_host_set_role(host, NULL, NULL);
 		}
 		ni_testbus_host_put(host);
@@ -163,7 +187,7 @@ ni_testbus_host_array_find_by_name(ni_testbus_host_array_t *array, const char *n
 	for (i = 0; i < array->count; ++i) {
 		ni_testbus_host_t *host = array->data[i];
 
-		if (ni_string_eq(host->name, name))
+		if (ni_string_eq(host->context.name, name))
 			return host;
 	}
 	return NULL;
@@ -191,8 +215,7 @@ ni_testbus_host_array_detach_from(ni_testbus_host_array_t *array, const ni_testb
 	for (i = 0; i < array->count; ++i) {
 		ni_testbus_host_t *host = array->data[i];
 
-		if (host->role_owner == owner)
+		if (host->context.owner == owner)
 			ni_testbus_host_set_role(host, NULL, NULL);
 	}
 }
-
