@@ -42,6 +42,8 @@ function testbus_init_test {
 
 	TESTBUS_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
 
+	testbus_call show-xml --raw > $TESTBUS_TEMPDIR/xml-tree-before
+
 	TESTBUS_TEST_HANDLE=`testbus_call create-test $TESTCASE_NAME`
 }
 
@@ -81,6 +83,14 @@ if ! diff -bu $stdout $expect >$diff; then
 	echo "---"
 	cat $diff
 	echo "---"
+	exit 1
+fi >&2
+
+testbus_call show-xml --raw > $TESTBUS_TEMPDIR/xml-tree-after
+if cmp -s $TESTBUS_TEMPDIR/xml-tree-before $TESTBUS_TEMPDIR/xml-tree-after; then
+	echo "Testbus object tree not clean after test run"
+	echo "Differences before/after"
+	diff -u $TESTBUS_TEMPDIR/xml-tree-before $TESTBUS_TEMPDIR/xml-tree-after
 	exit 1
 fi >&2
 
