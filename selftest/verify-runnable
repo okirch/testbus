@@ -6,64 +6,12 @@
 # host.
 #
 
-#DEBUG="--debug all"
-CONFIG="--config etc/common.xml"
-CLIENT="./testbus-client --config etc/common.xml $DEBUG"
-
-function testbus_call {
-
-	./testbus-client $CONFIG $DEBUG "$@"
-}
-
-function testbus_trace {
-
-	echo "$@" >&2
-}
-
-function testbus_cleanup {
-
-	if [ -n "$TESTBUS_TEMPDIR" ]; then
-		rm -rf $TESTBUS_TEMPDIR
-	fi
-
-	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
-		testbus_call delete $TESTBUS_TEST_HANDLE
-	fi
-}
-
-function testbus_init_test {
-
-	myname=$1
-
-	TESTCASE_NAME=`basename $myname| tr - _`
-
-	trap testbus_cleanup 0 1 2
-	set -e
-
-	TESTBUS_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
-
-	testbus_call show-xml --raw > $TESTBUS_TEMPDIR/xml-tree-before
-
-	TESTBUS_TEST_HANDLE=`testbus_call create-test $TESTCASE_NAME`
-}
-
-function testbus_claim_host {
-
-	testbus_trace "claim host $*"
-	testbus_call claim-host $TESTBUS_TEST_HANDLE "$@"
-}
-
-function testbus_run_command {
-
-	testbus_trace "run command $*"
-	testbus_call run-command --context $TESTBUS_TEST_HANDLE "$@"
-}
+. ${0%/*}/functions
 
 testbus_init_test $0
 
 TESTBUS_HOST=`testbus_claim_host`
 
-# ch=`$CLIENT create-command /bin/true`
 testbus_run_command --host $TESTBUS_HOST /bin/true
 
 if testbus_run_command --host $TESTBUS_HOST /bin/false; then

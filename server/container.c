@@ -381,6 +381,15 @@ ni_testbus_container_get_file_by_name(ni_testbus_container_t *container, const c
 	return NULL;
 }
 
+ni_testbus_file_t *
+__ni_testbus_container_get_file_by_name(ni_testbus_container_t *container, const char *name)
+{
+	if (ni_testbus_container_has_files(container))
+		return ni_testbus_file_array_find_by_name(&container->files, name);
+
+	return NULL;
+}
+
 /*
  * Test registration/lookup
  */

@@ -6,6 +6,8 @@ Agent:
 
 	testbus-client agent-ready
 
+	environment variable expansion
+
 Server:
 	Fix /org/openSUSE/Testbus/Host/Host* naming
 

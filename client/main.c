@@ -549,10 +549,10 @@ do_remove_host(int argc, char **argv)
 int
 do_delete_object(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_CONTAINER };
+	enum  { OPT_HELP, OPT_CONTEXT };
 	static struct option local_options[] = {
 		{ "help", no_argument, NULL, OPT_HELP },
-		{ "container", required_argument, NULL, OPT_CONTAINER },
+		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ NULL }
 	};
 	ni_dbus_object_t *container_object = NULL, *test_object;
@@ -567,14 +567,14 @@ do_delete_object(int argc, char **argv)
 		usage:
 			fprintf(stderr,
 				"wicked [options] delete <object-handle> ...\n"
-				"wicked [options] delete --container <object-handle> nickname ...\n"
+				"wicked [options] delete --context <object-handle> nickname ...\n"
 				"\nSupported options:\n"
 				"  --help\n"
 				"      Show this help text.\n"
 				);
 			return 1;
 
-		case OPT_CONTAINER:
+		case OPT_CONTEXT:
 			opt_container = optarg;
 			break;
 		}
@@ -584,8 +584,7 @@ do_delete_object(int argc, char **argv)
 		goto usage;
 
 	if (opt_container) {
-		ni_error("container option not supported right now");
-		// container_object = ni_testbus_call_get_container(opt_container);
+		container_object = ni_testbus_call_get_and_refresh_object(opt_container);
 	} else {
 		int failed = 0;
 
@@ -617,10 +616,10 @@ out:
 int
 do_create_test(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_CONTAINER };
+	enum  { OPT_HELP, OPT_CONTEXT };
 	static struct option local_options[] = {
 		{ "help", no_argument, NULL, OPT_HELP },
-		{ "container", required_argument, NULL, OPT_CONTAINER },
+		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ NULL }
 	};
 	ni_dbus_object_t *container_object = NULL, *test_object;
@@ -644,7 +643,7 @@ do_create_test(int argc, char **argv)
 				);
 			return 1;
 
-		case OPT_CONTAINER:
+		case OPT_CONTEXT:
 			opt_container = optarg;
 			break;
 		}

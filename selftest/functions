@@ -1,0 +1,119 @@
+#!/bin/bash
+#
+# Support functions for testbus self tests
+#
+
+DEBUG="--debug all"
+CONFIG="--config etc/common.xml"
+CLIENT="./testbus-client --config etc/common.xml $DEBUG"
+
+function testbus_call {
+
+	./testbus-client $CONFIG $DEBUG "$@"
+}
+
+function testbus_trace {
+
+	echo "$@" >&2
+}
+
+function __testbus_make_name {
+
+	myname=$1
+	basename $myname| tr - _
+}
+
+function testbus_init_group {
+
+	TESTGROUP_NAME=`__testbus_make_name $1`; shift
+
+	TESTBUS_GROUP_HANDLE=`testbus_call create-test $TESTGROUP_NAME`
+	TESTBUS_GROUP_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
+}
+
+function testbus_finish_group {
+
+	# testbus_call show-xml --raw
+	
+	testbus_finish_test $*
+	if [ -n "$TESTBUS_GROUP_TEMPDIR" ]; then
+		rm -rf $TESTBUS_GROUP_TEMPDIR
+		unset TESTBUS_GROUP_TEMPDIR
+	fi
+
+	if [ -n "$TESTBUS_GROUP_HANDLE" ]; then
+		testbus_call delete $TESTBUS_GROUP_HANDLE
+		unset TESTBUS_GROUP_HANDLE
+	fi
+}
+
+function testbus_init_test {
+
+	testbus_finish_test
+
+	TESTCASE_NAME=`__testbus_make_name $1`; shift
+
+	if [ -z "$TESTBUS_GROUP_TEMPDIR" ]; then
+		TESTBUS_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
+	else
+		TESTBUS_TEMPDIR=$TESTBUS_GROUP_TEMPDIR/$TESTCASE_NAME
+		mkdir -p $TESTBUS_TEMPDIR
+	fi
+
+	testbus_call show-xml --raw > $TESTBUS_TEMPDIR/xml-tree-before
+
+	if [ -z "$TESTBUS_GROUP_HANDLE" ]; then
+		TESTBUS_TEST_HANDLE=`testbus_call create-test $TESTCASE_NAME`
+	else
+		TESTBUS_TEST_HANDLE=`testbus_call create-test --context $TESTBUS_GROUP_HANDLE $TESTCASE_NAME`
+	fi
+}
+
+function testbus_finish_test {
+
+	status=${1:-SUCCESS}
+
+	if [ -n "$TESTBUS_TEMPDIR" ]; then
+		rm -rf $TESTBUS_TEMPDIR
+		unset TESTBUS_TEMPDIR
+	fi
+
+	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
+		testbus_call delete $TESTBUS_TEST_HANDLE
+		unset TESTBUS_TEST_HANDLE
+	fi
+	if [ -n "$TESTCASE_NAME" ]; then
+		echo "$TESTCASE_NAME: $status"
+	fi >&2
+	unset TESTCASE_NAME
+}
+
+function testbus_claim_host {
+
+	testbus_trace "claim host $*"
+
+	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
+		testbus_call claim-host $TESTBUS_TEST_HANDLE "$@"
+	elif [ -n "$TESTBUS_GROUP_HANDLE" ]; then
+		testbus_call claim-host $TESTBUS_GROUP_HANDLE "$@"
+	else
+		echo "No context to claim host for" >&2
+		exit 1
+	fi
+}
+
+function __testbus_upload_file {
+
+	testbus_trace "upload file $*"
+	testbus_call upload-file "$@"
+}
+
+function testbus_run_command {
+
+	testbus_trace "run command $*"
+	testbus_call run-command --context $TESTBUS_TEST_HANDLE "$@"
+}
+
+trap "testbus_finish_group FAILED" 0 1 2
+testbus_trace "Succesfully sourced testbus functions"
+set -e

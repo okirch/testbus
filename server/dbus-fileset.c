@@ -77,7 +77,7 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 	if (!ni_testbus_identifier_valid(name, error))
 		return FALSE;
 
-	if (ni_testbus_container_get_file_by_name(context, name) != NULL) {
+	if (__ni_testbus_container_get_file_by_name(context, name) != NULL) {
 		dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "tmpfile with this name already exists");
 		return FALSE;
 	}

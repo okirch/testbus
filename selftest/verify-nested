@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# Very simple test to verify that the basic functionality works
+#
+# For this to work, you need to run both master and agent on your local
+# host.
+#
+
+. ${0%/*}/functions
+
+testbus_init_group $0
+
+TESTBUS_HOST=`testbus_claim_host`
+
+testbus_init_test subtest0
+testbus_run_command --host $TESTBUS_HOST /bin/true
+
+testbus_init_test subtest1
+testbus_run_command --host $TESTBUS_HOST /bin/true
+
+testbus_init_test subtest2
+groupfile=$TESTBUS_TEMPDIR/groupfile
+testfile=$TESTBUS_TEMPDIR/testfile
+echo 43 > $groupfile
+echo 42 > $testfile
+
+__testbus_upload_file --context $TESTBUS_GROUP_HANDLE $groupfile foobar
+__testbus_upload_file --context $TESTBUS_TEST_HANDLE $testfile foobar
+response=`testbus_run_command --host $TESTBUS_HOST /bin/cat "%{file:foobar}"`
+
+testbus_finish_group okay
+
+echo "All tests completed successfully"
