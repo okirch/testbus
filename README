@@ -1,0 +1,151 @@
+
+This is an incomplete, woefully under-documented implementation of a generic
+multi-host test framework.
+
+The goal is to provide a framework for writing multi-host test cases that work
+
+ -	for virtualized hosts (xen, kvm, lxc, ...)
+ -	for physical hosts connected via ethernet
+ -	for physical hosts connected via serial modem
+
+
+The mode of operation is this
+
+1. Master
+
+	There is a master node that controls the tests. This *may* be one of
+	the test nodes, but can also be separate.
+
+	The master manages an object hierarchy, which is a nested collection
+	of
+
+	 -	Host objects, representing the hosts that are available
+	 	as part of the test network
+
+ 	 -	Test objects, representing a single test or collection of
+	 	tests that should be executed
+
+	 -	File objects, representing data files that need to be
+	 	distributed to the hosts participating in a test case
+
+	 -	Command objects, representing a command that should be
+	 	run somewhere. This command can refer to commands installed
+		on a host (/bin/true), but it's also possible to upload a
+		script that needs to be installed.
+
+	 -	Process objects, representing a command being executed
+
+	Of course, it doesn't make sense to nest these objects arbitrarily.
+	As a rule of thumb, you can
+
+	 -	nest Tests within tests
+	 -	attach a host to a test
+	 -	attach files and commands to any object
+	 -	process objects are created when a command is scheduled to
+	 	be run on a given host
+
+	In addition to this, any object has an environment associated with it,
+	pretty much like a Unix process environment. When executing a command,
+	the process will inherit its environment and its set of files from
+	the Command and its ancestors, and from the Host and its ancestors.
+
+2. Agents
+
+	Several agents register themselves with the master node, and inform
+	it about their capabilities and publish some vital configuration
+	data.
+
+	Capabilities are essentially string identifiers; their meaning is
+	totally up to the user. For instance, one could think of capability
+	names such as "nfs-server" or "nfs-client", indicating that the host
+	can act as a NFS server or client, respectively.
+	These capabilities would be registered, for instance, as part of
+	a test RPM being installed on the SUT.
+
+	The information that gets published might include things like the
+	host's FQDN, its list of IP addresses, etc.
+
+3. Test script
+
+	This script talks to the master, and will usually do things like this:
+
+	 -	Create a Test object in the master
+
+	 -	Claim several hosts for the tests it wants to run, and assign
+	 	them to the test.
+
+	 	For instance, an NFS test script may want to claim one
+		host that published the capability "nfs-server", and
+		four hosts that published the capability "nfs-client".
+		Each host being claimed is assigned a unique identifier
+		by the client, eg "server" and "client0", "client1", etc.
+
+		As part of this, the master will populate the Test case's
+		environment with variables. For instance, if each host
+		publishes a variable "fqdn" with its fqdn, then the
+		test case result will contain
+
+			host_server_fqdn="..."
+			host_client0_fqdn="..."
+			host_client1_fqdn="..."
+			host_client2_fqdn="..."
+			host_client3_fqdn="..."
+
+		In addition, if the nfs-server host publishes a variable
+		named "nfspath", then this will also be copied to the test
+		case's environment as the variable "host_server_nfspath".
+
+	 -	Upload files to any object on the master.
+
+	 	There are different scenarios, depending on which sort of
+		object you attach it to.
+
+		When you attach a file to a test case, it will be made available
+		to all hosts when a command is run.  This could be a Kerberos or LDAP
+		client configuration that needs to be established on all hosts
+		involved in the test run.
+
+		When you attach a file to a host, it will be made available to all
+		commands run on this host. This could be some host specific
+		configuration.
+
+		When you attach a file to a command, the file will be distributed
+		to the hosts that the command is executed on.
+
+		Files can be passed to a command upon execution in several ways.
+		It's possible to refer to it on the command line, via the
+		environment, or to pipe it into the command on stdin.
+
+	 -	Create a Command object; mostly this is an argv[] array.
+	 
+	 	The argv vector allows variable substitution using the environment.
+		This substitution happens on the host immediately before the
+		command is being executed.
+
+	 -	Execute one or more commands, and wait for them to complete.
+
+	 	When a command is executed on one or more hosts, the master
+		will create a Process object for each host. This Process
+		object will receive its environment and files from the Command
+		object, augmented with any environment variables of files
+		attached to the Host object.
+
+		Then, the agent on the host will be notified that a process
+		was scheduled. It will retrieve any files that need to be
+		present for the process to run (this download will be skipped
+		if the file has been downloaded before).
+
+		Next, the agent will perform variable substitution on the
+		argv[] array, using the variables from the environment.
+
+		Finally, the process will be started using the given argv and
+		environment. Once the command terminates, a notification will
+		be sent to the master informing it about the process'
+		completion. As part of this, the agent will also upload the
+		stderr/stdout of the process to the master.
+
+	 -	When the client receives a notification that the process
+	 	has exited, it will download their standard error/standard
+		output, and exit with the exit code of the remote process.
+
+	 -	Delete the test object.
