@@ -149,3 +149,76 @@ The mode of operation is this
 		output, and exit with the exit code of the remote process.
 
 	 -	Delete the test object.
+
+
+4. Communication between Master, Agent and Client
+
+Communication uses DBus. As this is a local protocol only, a proxy is needed
+for communication between hosts and host/guest. For this purpose, testbus
+comes with a helper application called dbus-proxy.
+
+dbus-proxy can tunnel DBus sessions in a number of ways. A DBus process
+connects two endpoits, referring to them as "upstream" and "downstream".
+
+Conceptually, the downstream endpoint accept connections from DBus
+clients, and forwards their messages upstream across one or more hops
+of proxy-to-proxy connections.  The final proxy process will open separate
+connection for each client connected to the downstream endpoint.
+
+To put it into a picture:
+
++------+     +-----+                +-----+     +------+
+|client| --> |     |                |     | --> |      |
++------+     |     |                |     |     |      |
+             |     |                |     |     |      |
++------+     |     |                |     |     |      |
+|client| --> |proxy| --multiplex--> |proxy| --> |daemon|
++------+     |     |                |     |     |      |
+             |     |                |     |     |      |
++------+     |     |                |     |     |      |
+|client| --> |     |                |     | --> |      |
++------+     +-----+                +-----+     +------+
+
+
+
+4.1. Using dbus-proxy with LXC
+
+In the simplest configuration, dbus-proxy could be used to forward
+a DBus connection from a service running inside an LXC container to
+the DBus daemon running on the host, like this:
+
+ dbus-proxy --downstream unix:$path_to_container/var/run/dbus-proxy.socket
+
+where $path_to_container is the root directory of your LXC instance.
+As no upstream endpoint is specified, the proxy will connect directly
+to the host's system dbus daemon.
+
+Inside the LXC container, you would start the agent from an init
+script using
+
+ export DBUS_SESSION_BUS_ADDRESS=unix:/var/run/dbus-proxy.socket
+ testbus-agent
+
+
+4.2. Using dbus-proxy with ssh
+
+[TBD]
+
+
+4.3. Using dbus-proxy over serial lines
+
+If you have two hosts connected through a null modem cable, you
+can also use that for a point-to-point connection between two
+proxy processes.
+
+The upstream instance would be run like this:
+
+ dbus-proxy --downstream serial:ttyS0,38000N1
+
+while the upstream instance would be started as
+
+ dbus-proxy --upstream serial:ttyS0,38000N1
+
+4.4. Using dbus-proxy with KVM and XEN guests
+
+This is something I still need to figure out how to do best.
