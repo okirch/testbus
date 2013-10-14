@@ -1,0 +1,18 @@
+
+Agent:
+	testbus-client agent-add-capability foo bar baz
+
+	testbus-client agent-setenv foo=bar ...
+
+	testbus-client agent-ready
+
+Server:
+	Fix /org/openSUSE/Testbus/Host/Host* naming
+
+	When a process object is destroyed, send a signal
+
+	When a host capability is added, send a signal
+	When a host comes back, send a signal
+
+Proxy:
+	Write serial line support
