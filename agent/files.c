@@ -8,6 +8,8 @@
 
 static ni_testbus_file_array_t	global_files;
 
+static ni_bool_t		ni_testbus_agent_download_file(ni_testbus_file_t *);
+
 ni_bool_t
 ni_testbus_agent_process_attach_files(ni_process_t *pi, ni_testbus_file_array_t *files)
 {
@@ -16,7 +18,6 @@ ni_testbus_agent_process_attach_files(ni_process_t *pi, ni_testbus_file_array_t 
 	for (i = 0; i < files->count; ++i) {
 		ni_testbus_file_t *file = files->data[i];
 		ni_testbus_file_t *gfile;
-		ni_dbus_object_t *file_object;
 
 		gfile = ni_testbus_file_array_find_by_inum(&global_files, file->inum);
 		if (gfile == NULL) {
@@ -32,26 +33,12 @@ ni_testbus_agent_process_attach_files(ni_process_t *pi, ni_testbus_file_array_t 
 			file = gfile;
 		}
 
-		/* Need to download file data */
-		if (file->object_path == NULL) {
-download_failed:
-			ni_error("Cannot download file content for %s (object path %s)", file->name, file->object_path);
-			return FALSE;
-		}
-
 		/* only download files marked as NI_TESTBUS_FILE_READ */
 		if (file->mode & NI_TESTBUS_FILE_READ) {
-			ni_debug_wicked("need to download file %s (inum %u)", file->name, file->inum);
-			file_object = ni_testbus_call_get_and_refresh_object(file->object_path);
-			if (!file_object)
-				goto download_failed;
-			file->data = ni_testbus_call_download_file(file_object);
-			if (file->data == NULL)
-				goto download_failed;
-
-			file->size = ni_buffer_count(file->data);
-			ni_debug_wicked("file %s (%s): downloaded %u bytes",
-					file->name, file->object_path, file->size);
+			if (!ni_testbus_agent_download_file(file)) {
+				ni_error("Cannot download file content for %s (object path %s)", file->name, file->object_path);
+				return FALSE;
+			}
 		}
 	}
 
@@ -98,6 +85,33 @@ download_failed:
 		}
 	}
 
+	return TRUE;
+}
+
+/*
+ * Download a file
+ */
+ni_bool_t
+ni_testbus_agent_download_file(ni_testbus_file_t *file)
+{
+	ni_dbus_object_t *file_object;
+
+	/* Need to download file data */
+	if (file->object_path == NULL)
+		return FALSE;
+
+	ni_debug_wicked("need to download file %s (inum %u)", file->name, file->inum);
+	file_object = ni_testbus_call_get_and_refresh_object(file->object_path);
+	if (!file_object)
+		return FALSE;
+		
+	file->data = ni_testbus_call_download_file(file_object);
+	if (file->data == NULL)
+		return FALSE;
+
+	file->size = ni_buffer_count(file->data);
+	ni_debug_wicked("file %s (%s): downloaded %u bytes",
+			file->name, file->object_path, file->size);
 	return TRUE;
 }
 
