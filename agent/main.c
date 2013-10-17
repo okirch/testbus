@@ -366,6 +366,8 @@ __ni_testbus_process_exit_notify(ni_process_t *pi)
 
 	__ni_testbus_process_context_free(ctx);
 	pi->user_data = NULL;
+
+	ni_process_free(pi);
 }
 
 static void
