@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# Stress test the process execution
+#
+# For this to work, you need to run both master and agent on your local
+# host.
+#
+
+. ${0%/*}/functions
+
+testbus_init_test $0
+
+TESTBUS_HOST=`testbus_claim_host`
+
+loop_count=2048
+
+for n in `seq 1 $loop_count`; do
+	echo -n .
+	testbus_run_command --host $TESTBUS_HOST /bin/true 2>client.log
+done
+
+testbus_exit

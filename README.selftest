@@ -1,0 +1,16 @@
+
+To test this code, run master and agent like this:
+
+./testbus-master --config etc/common.xml --foreground --debug all 2>master.log
+./testbus-agent --foreground --debug all --config etc/common.xml --reconnect 2>agent.log
+
+You can then pick individual tests from the selftest directory, and run them like this:
+
+./selftest/verify-runnable
+
+Or you can run collections of tests:
+
+./selftest/verify-all
+./selftest/verify-all quick
+
+etc

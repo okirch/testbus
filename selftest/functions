@@ -3,8 +3,8 @@
 # Support functions for testbus self tests
 #
 
-DEBUG="--debug all"
-exec 2>client.log
+#DEBUG="--debug all"
+#exec 2>client.log
 CONFIG="--config etc/common.xml"
 CLIENT="./testbus-client --config etc/common.xml $DEBUG"
 
