@@ -6,7 +6,7 @@ Agent:
 
 	testbus-client agent-ready
 
-	environment variable expansion
+	Clean up cached files when their container goes away.
 
 Server:
 	Fix /org/openSUSE/Testbus/Host/Host* naming

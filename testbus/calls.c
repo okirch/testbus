@@ -870,19 +870,25 @@ ni_testbus_call_create_command(ni_dbus_object_t *container_object, const ni_stri
 }
 
 ni_bool_t
-ni_testbus_call_command_set_input(ni_dbus_object_t *cmd_object, const ni_buffer_t *data)
+ni_testbus_call_command_add_file(ni_dbus_object_t *cmd_object, const char *name, const ni_buffer_t *data, unsigned int mode)
 {
 	ni_dbus_object_t *file_object;
-	ni_buffer_t data_copy;
 
-	file_object = ni_testbus_call_create_tempfile("stdin", NI_TESTBUS_FILE_READ, cmd_object);
+	file_object = ni_testbus_call_create_tempfile(name, mode, cmd_object);
 	if (!file_object) {
-		ni_error("%s: unable to create stdin", cmd_object->path);
+		ni_error("%s: unable to create input file \"%s\"", cmd_object->path, name);
 		return FALSE;
 	}
 
-	data_copy = *data; /* Need to copy data to allow advancing the head pointer */
-	return __ni_testbus_call_upload_file(file_object, &data_copy);
+	if (mode & NI_TESTBUS_FILE_READ) {
+		ni_buffer_t data_copy;
+
+		data_copy = *data; /* Need to copy data to allow advancing the head pointer */
+		if (!__ni_testbus_call_upload_file(file_object, &data_copy))
+			return FALSE;
+	}
+
+	return TRUE;
 }
 
 /*

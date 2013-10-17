@@ -163,6 +163,25 @@ function testbus_exit_fail {
 	__testbus_exit >&2
 }
 
+function testbus_new_script {
+
+	name=${1:-script}; shift
+
+	if [ -n "$TESTBUS_TEMPDIR" ]; then
+		dir=$TESTBUS_TEMPDIR
+	elif [ -n "$TESTBUS_GROUP_TEMPDIR" ]; then
+		dir=$TESTBUS_GROUP_TEMPDIR
+	else
+		echo "testbus_new_script called without a tempdir" >&2
+	fi
+
+	script="$dir/$name"
+	touch $script
+	chmod 755 $script
+
+	echo "$script"
+}
+
 trap "testbus_exit_fail" 0 1 2
 testbus_trace "Succesfully sourced testbus functions"
 set -e

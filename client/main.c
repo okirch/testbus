@@ -936,11 +936,17 @@ __samefile(int fd1, int fd2)
  * Helper function for creating a command
  */
 static ni_dbus_object_t *
-__do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, ni_bool_t send_stdin)
+__do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, ni_bool_t send_stdin, ni_bool_t send_script)
 {
 	ni_string_array_t command_argv = NI_STRING_ARRAY_INIT;
 	ni_dbus_object_t *cmd_object;
+	const char *script_file = NULL;
 	int index;
+
+	if (send_script) {
+		script_file = argv[0];
+		argv[0] = "%{file:script}";
+	}
 
 	for (index = 0; index < argc; ++index)
 		ni_string_array_append(&command_argv, argv[index]);
@@ -952,7 +958,23 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 		ni_buffer_t *data;
 
 		data = ni_file_read(stdin);
-		ni_testbus_call_command_set_input(cmd_object, data);
+		ni_testbus_call_command_add_file(cmd_object, "stdin", data, NI_TESTBUS_FILE_READ);
+		ni_buffer_free(data);
+	}
+
+	if (script_file) {
+		FILE *script;
+		ni_buffer_t *data;
+
+		if (!(script = fopen(script_file, "r"))) {
+			ni_error("cannot send script %s: %m", script_file);
+			return NULL;
+		}
+
+		data = ni_file_read(script);
+		fclose(script);
+
+		ni_testbus_call_command_add_file(cmd_object, "script", data, NI_TESTBUS_FILE_READ | NI_TESTBUS_FILE_EXEC);
 		ni_buffer_free(data);
 	}
 
@@ -1061,7 +1083,7 @@ do_create_command(int argc, char **argv)
 	if (optind > argc - 1)
 		goto usage;
 
-	cmd_object = __do_create_command(container_object, argc - optind, argv + optind, FALSE);
+	cmd_object = __do_create_command(container_object, argc - optind, argv + optind, FALSE, FALSE);
 	if (cmd_object == NULL)
 		return 1;
 
@@ -1075,11 +1097,12 @@ do_create_command(int argc, char **argv)
 int
 do_run_command(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN };
+	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT };
 	static struct option local_options[] = {
 		{ "host", required_argument, NULL, OPT_HOSTPATH },
 		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ "send-stdin", no_argument, NULL, OPT_SEND_STDIN },
+		{ "send-script", no_argument, NULL, OPT_SEND_SCRIPT },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
@@ -1087,6 +1110,7 @@ do_run_command(int argc, char **argv)
 	const char *opt_hostpath = NULL;
 	const char *opt_contextpath = NULL;
 	ni_bool_t opt_send_stdin = FALSE;
+	ni_bool_t opt_send_script = FALSE;
 	ni_process_exit_info_t exit_info;
 	int c;
 
@@ -1119,6 +1143,10 @@ do_run_command(int argc, char **argv)
 		case OPT_SEND_STDIN:
 			opt_send_stdin = TRUE;
 			break;
+
+		case OPT_SEND_SCRIPT:
+			opt_send_script = TRUE;
+			break;
 		}
 	}
 
@@ -1146,7 +1174,7 @@ do_run_command(int argc, char **argv)
 	if (optind > argc - 1)
 		goto usage;
 
-	cmd_object = __do_create_command(ctxt_object, argc - optind, argv + optind, opt_send_stdin);
+	cmd_object = __do_create_command(ctxt_object, argc - optind, argv + optind, opt_send_stdin, opt_send_script);
 	if (!cmd_object)
 		return 1;
 

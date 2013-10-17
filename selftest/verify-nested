@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# Very simple test to verify that the basic functionality works
+# Very simple test to verify that nested tests and basic command line
+# expansion works.
 #
-# For this to work, you need to run both master and agent on your local
-# host.
+# See README.selftest for more information
 #
 
 . ${0%/*}/functions

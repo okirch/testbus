@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# Very simple test to verify that uploading of scripts works
+#
+# See README.selftest for more information
+#
+
+. ${0%/*}/functions
+
+testbus_init_group $0
+
+TESTBUS_HOST=`testbus_claim_host`
+
+testbus_init_test subtest0
+testbus_run_command --host $TESTBUS_HOST /bin/true
+
+testbus_init_test subtest1
+script=`testbus_new_script foobar`
+cat >$script <<EOF
+#!/bin/bash
+
+exit 0
+EOF
+
+testbus_run_command --host $TESTBUS_HOST --send-script $script
+
+testbus_init_test subtest2
+script=`testbus_new_script foobar`
+cat >$script <<EOF
+#!/bin/bash
+
+echo 42
+exit 0
+EOF
+
+response=`testbus_run_command --host $TESTBUS_HOST --send-script $script`
+if [ "$response" != "42" ]; then
+	echo "expected answer 42; instead I got \"$response\""
+	testbus_fail_test
+fi >&2
+
+testbus_exit
