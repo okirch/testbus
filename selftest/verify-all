@@ -1,0 +1,24 @@
+#!/bin/bash
+
+dir=${0%/*}
+
+function run {
+
+	for name; do
+		case $name in
+		@*)	file=$dir/${name#@}
+			run `cat $file`
+			: ;;
+		*)
+			$dir/verify-$name
+			: ;;
+		esac
+	done
+}
+
+if [ $# -eq 0 ]; then
+	run @all
+else
+	run "$@"
+fi
+

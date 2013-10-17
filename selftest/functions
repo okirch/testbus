@@ -3,11 +3,15 @@
 # Support functions for testbus self tests
 #
 
-#DEBUG="--debug all"
+DEBUG="--debug all"
+exec 2>client.log
 CONFIG="--config etc/common.xml"
 CLIENT="./testbus-client --config etc/common.xml $DEBUG"
 
 TESTBUS_GLOBAL_STATUS=SUCCESS
+TESTBUS_GROUP_STATUS=SUCCESS
+
+TESTGROUP_NAME=default
 
 function testbus_call {
 
