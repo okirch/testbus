@@ -1,8 +1,8 @@
 
 ARCH	:= $(shell arch)
-ifneq ($(findstring $(ARCH),i586 i686),'')
+ifneq ($(findstring $(ARCH),i586 i686),)
 	ARCHLIB = lib
-else ifneq ($(findstring $(ARCH),x86_64 s390x ppc64),'')
+else ifneq ($(findstring $(ARCH),x86_64 s390x ppc64),)
 	ARCHLIB = lib64
 endif
 
