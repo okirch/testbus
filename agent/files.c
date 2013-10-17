@@ -39,16 +39,20 @@ download_failed:
 			return FALSE;
 		}
 
-		ni_debug_wicked("need to download file %s (inum %u)", file->name, file->inum);
-		file_object = ni_testbus_call_get_and_refresh_object(file->object_path);
-		if (!file_object)
-			goto download_failed;
-		file->data = ni_testbus_call_download_file(file_object);
-		if (file->data == NULL)
-			goto download_failed;
+		/* only download files marked as NI_TESTBUS_FILE_READ */
+		if (file->mode & NI_TESTBUS_FILE_READ) {
+			ni_debug_wicked("need to download file %s (inum %u)", file->name, file->inum);
+			file_object = ni_testbus_call_get_and_refresh_object(file->object_path);
+			if (!file_object)
+				goto download_failed;
+			file->data = ni_testbus_call_download_file(file_object);
+			if (file->data == NULL)
+				goto download_failed;
 
-		file->size = ni_buffer_count(file->data);
-		ni_debug_wicked("file %s (%s): downloaded %u bytes", file->name, file->object_path, file->size);
+			file->size = ni_buffer_count(file->data);
+			ni_debug_wicked("file %s (%s): downloaded %u bytes",
+					file->name, file->object_path, file->size);
+		}
 	}
 
 	pi->stdout.capture = TRUE;
@@ -75,6 +79,10 @@ download_failed:
 		}
 		ni_string_dup(&file->instance_path, path);
 
+		if (file->mode & NI_TESTBUS_FILE_EXEC) {
+			chmod(file->instance_path, 0755);
+		}
+
 		/* FIXME: record the file's md5 hash, so that we
 		 * can detect whether the file changed during the process run.
 		 * FIXME2: should we mark files as read, write, readwrite?
@@ -88,6 +96,126 @@ download_failed:
 			else
 				ni_warn("process: failed to attach file %s to stdin", file->name);
 		}
+	}
+
+	return TRUE;
+}
+
+/*
+ * Substitute %{...} strings in arguments and file names
+ */
+static ni_bool_t
+ni_testbus_agent_substitute(char **sp, const ni_string_array_t *env, const ni_testbus_file_array_t *files)
+{
+	ni_stringbuf_t buf = NI_STRINGBUF_INIT_DYNAMIC;
+	char *s = *sp, *pos, *perc;
+
+	if (strchr(s, '%') == NULL)
+		return TRUE;
+
+	for (pos = *sp; *pos; ) {
+		char *var_start;
+		char cc = *pos++;
+
+		if (cc != '%') {
+			ni_stringbuf_putc(&buf, cc);
+			continue;
+		}
+
+		cc = *pos++;
+		if (cc == '%') {
+			ni_stringbuf_putc(&buf, cc);
+			continue;
+		}
+		if (cc == '\0') {
+			ni_error("expansion error: %% at end of string");
+			goto failed;
+		}
+		if (cc != '{') {
+			ni_error("expansion error: %% followed by %c", cc);
+			goto failed;
+		}
+
+		var_start = pos;
+		while ((cc = *pos++) != '}') {
+			if (cc == '\0') {
+				ni_error("expansion error: \"%%{%s\" lacks closing bracket", var_start);
+				goto failed;
+			}
+		}
+
+		pos[-1] = '\0';
+
+		if (!strncmp(var_start, "file:", 5)) {
+			char *name = var_start + 5;
+			ni_testbus_file_t *file;
+
+			file = ni_testbus_file_array_find_by_name(files, name);
+			if (file == NULL || file->instance_path == NULL) {
+				ni_error("expansion error: cannot expand \"%%{%s}\" - no such file in this context", var_start);
+				goto failed;
+			}
+
+			ni_stringbuf_puts(&buf, file->instance_path);
+		} else {
+			unsigned int j, var_len;
+			const char *env_value = NULL;
+
+			if (strchr(var_start, ':')) {
+				ni_error("expansion error: cannot expand \"%%{%s}\" - unknown type", var_start);
+				goto failed;
+			}
+
+			var_len = strlen(var_start);
+			for (j = 0; j < env->count; ++j) {
+				const char *ex = env->data[j];
+
+				if (!strncmp(ex, var_start, var_len) && ex[var_len] == '=') {
+					env_value = ex + var_len + 1;
+					break;
+				}
+			}
+
+			if (env_value == NULL) {
+				ni_error("expansion error: cannot expand \"%%{%s}\" - environment variable not set in this context", var_start);
+				goto failed;
+			}
+
+			ni_stringbuf_puts(&buf, env_value);
+		}
+	}
+
+	ni_string_dup(sp, buf.string);
+	ni_stringbuf_destroy(&buf);
+	return TRUE;
+
+failed:
+	ni_stringbuf_destroy(&buf);
+	return FALSE;
+}
+
+/*
+ * Now export the filename to the environment.
+ */
+ni_bool_t
+ni_testbus_agent_process_export_files(ni_process_t *pi, ni_testbus_file_array_t *files)
+{
+	char namebuf[256];
+	unsigned int i;
+
+	for (i = 0; i < files->count; ++i) {
+		ni_testbus_file_t *file = files->data[i];
+
+		if (file->instance_path) {
+			snprintf(namebuf, sizeof(namebuf), "testbus_file_%s", file->name);
+			ni_process_setenv(pi, namebuf, file->instance_path);
+		}
+	}
+
+	/* Do file path substitution on the command line */
+	for (i = 0; i < pi->argv.count; ++i) {
+		if (!ni_testbus_agent_substitute(&pi->argv.data[i], &pi->environ, files))
+			return FALSE;
 	}
 
 	return TRUE;

@@ -58,12 +58,14 @@ void
 ni_testbus_setenv(ni_testbus_env_t *env, const char *name, const char *value)
 {
 	ni_var_array_set(&env->vars, name, value);
+	env->sorted = FALSE;
 }
 
 void
 ni_testbus_unsetenv(ni_testbus_env_t *env, const char *name)
 {
 	ni_var_array_set(&env->vars, name, NULL);
+	env->sorted = FALSE;
 }
 
 #if 0

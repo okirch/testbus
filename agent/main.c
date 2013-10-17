@@ -393,9 +393,12 @@ __ni_testbus_process_run(ni_process_t *pi, const char *master_object_path, ni_te
 	struct __ni_testbus_process_context *ctx;
 	ni_testbus_file_t *f;
 
-	if (files && !ni_testbus_agent_process_attach_files(pi, files)) {
-		ni_error("process %u: failed to attach files", pi->pid);
-		return FALSE;
+	if (files) {
+		if (!ni_testbus_agent_process_attach_files(pi, files)
+		 || !ni_testbus_agent_process_export_files(pi, files)) {
+			ni_error("process %u: failed to attach files", pi->pid);
+			return FALSE;
+		}
 	}
 
 	if (ni_process_run(pi) < 0)

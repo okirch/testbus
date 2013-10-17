@@ -7,6 +7,8 @@
 CONFIG="--config etc/common.xml"
 CLIENT="./testbus-client --config etc/common.xml $DEBUG"
 
+TESTBUS_GLOBAL_STATUS=SUCCESS
+
 function testbus_call {
 
 	./testbus-client $CONFIG $DEBUG "$@"
@@ -29,6 +31,7 @@ function testbus_init_group {
 
 	TESTBUS_GROUP_HANDLE=`testbus_call create-test $TESTGROUP_NAME`
 	TESTBUS_GROUP_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
+	TESTBUS_GROUP_STATUS=SUCCESS
 }
 
 function testbus_finish_group {
@@ -45,6 +48,13 @@ function testbus_finish_group {
 		testbus_call delete $TESTBUS_GROUP_HANDLE
 		unset TESTBUS_GROUP_HANDLE
 	fi
+
+	if [ "$TESTBUS_GROUP_STATUS" != "SUCCESS" ]; then
+		echo "One or more tests in group $TESTGROUP_NAME failed"
+		TESTBUS_GLOBAL_STATUS=FAILED
+	fi
+
+	unset TESTGROUP_NAME
 }
 
 function testbus_init_test {
@@ -86,6 +96,15 @@ function testbus_finish_test {
 		echo "$TESTCASE_NAME: $status"
 	fi >&2
 	unset TESTCASE_NAME
+
+	if [ "$status" != "SUCCESS" ]; then
+		TESTBUS_GROUP_STATUS=FAILED
+	fi
+}
+
+function testbus_fail_test {
+
+	testbus_finish_test FAILED
 }
 
 function testbus_claim_host {
@@ -114,6 +133,32 @@ function testbus_run_command {
 	testbus_call run-command --context $TESTBUS_TEST_HANDLE "$@"
 }
 
-trap "testbus_finish_group FAILED" 0 1 2
+function __testbus_exit {
+
+	if [ "$TESTBUS_GLOBAL_STATUS" = "SUCCESS" ]; then
+		echo "All tests completed successfully"
+		return 0
+	else
+		echo "Not all tests succeeded"
+		return 1
+	fi
+}
+
+function testbus_exit {
+
+	trap "" 0 1 2
+
+	testbus_finish_group SUCCESS
+	__testbus_exit >&2
+	exit $?
+}
+
+function testbus_exit_fail {
+
+	testbus_finish_group FAILED
+	__testbus_exit >&2
+}
+
+trap "testbus_exit_fail" 0 1 2
 testbus_trace "Succesfully sourced testbus functions"
 set -e

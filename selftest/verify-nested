@@ -27,7 +27,9 @@ echo 42 > $testfile
 __testbus_upload_file --context $TESTBUS_GROUP_HANDLE $groupfile foobar
 __testbus_upload_file --context $TESTBUS_TEST_HANDLE $testfile foobar
 response=`testbus_run_command --host $TESTBUS_HOST /bin/cat "%{file:foobar}"`
+if [ "$response" != "42" ]; then
+	echo "expected answer 42; instead I got \"$response\""
+	testbus_fail_test
+fi >&2
 
-testbus_finish_group okay
-
-echo "All tests completed successfully"
+testbus_exit

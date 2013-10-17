@@ -190,10 +190,10 @@ __ni_Testbus_Tmpfile_retrieve(ni_dbus_object_t *object, const ni_dbus_method_t *
 	}
 
 	rv = ni_dbus_message_serialize_variants(reply, 1, &res, error);
-	ni_dbus_variant_destroy(&res);
-
 	if (rv)
 		ni_debug_wicked("file %s: retrieved %u bytes", file->name, res.array.len);
+	ni_dbus_variant_destroy(&res);
+
 	return rv;
 }
 
