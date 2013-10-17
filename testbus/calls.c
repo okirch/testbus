@@ -973,12 +973,13 @@ __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t 
 		}
 
 		ni_trace("received signal %s from %s", signal_name, object_path);
-		if ((wq = __ni_testbus_process_waitq_find(object_path)) != NULL) {
-			__ni_testbus_process_waitq_unlink(wq);
+		if ((wq = __ni_testbus_process_waitq_find(object_path)) == NULL) {
+			ni_warn("spurious signal %s.%s()", object_path, signal_name);
+		} else if (wq->done) {
+			ni_warn("duplicate signal %s.%s()", object_path, signal_name);
+		} else {
 			wq->exit_info = ni_testbus_process_exit_info_deserialize(&arg);
 			wq->done = TRUE;
-		} else {
-			ni_trace("spurious signal %s.%s()", object_path, signal_name);
 		}
 	}
 
@@ -1087,6 +1088,7 @@ ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_p
 			ni_debug_wicked("process %s is done", proc_object->path);
 			if (exit_info && wq->exit_info)
 				*exit_info = *(wq->exit_info);
+			__ni_testbus_process_waitq_unlink(wq);
 			__ni_testbus_process_waitq_free(wq);
 
 			if (!ni_dbus_object_refresh_children(proc_object)) {
