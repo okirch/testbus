@@ -8,6 +8,9 @@ Agent:
 
 	Clean up cached files when their container goes away.
 
+	Monitor when the master goes away. Reconnect when that
+	happens.
+
 Server:
 	Fix /org/openSUSE/Testbus/Host/Host* naming
 
@@ -16,5 +19,21 @@ Server:
 	When a host capability is added, send a signal
 	When a host comes back, send a signal
 
+Client:
+	make sure we can do the same as run-command using individual
+	steps?
+
+	how to wait for a process to exit if we're doing this
+	in separate steps?
+
 Proxy:
 	Write serial line support
+
+General:
+	Support file monitors
+
+	A monitor specifies how a system file should be watched as part
+	of the test execution. For instance, you may want to take a
+	snapshot of a specific /sys or /proc file before and after the
+	test run. Or you may want to grab any syslog messages that were
+	generated during the execution.
