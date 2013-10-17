@@ -5,6 +5,7 @@
 #include "config.h"
 #endif
 
+#include <sys/stat.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -166,10 +167,8 @@ main(int argc, char **argv)
 				opt_log_target);
 			return 1;
 		}
-	} else if (getppid() != 1) {
-		ni_log_destination(program_name, "syslog:perror:user");
 	} else {
-		ni_log_destination(program_name, "syslog::user");
+		ni_log_destination(program_name, "perror:user");
 	}
 
 	if (ni_init("client") < 0)
@@ -912,6 +911,28 @@ do_claim_host(int argc, char **argv)
 }
 
 /*
+ * Check if two fds refer to the same file
+ */
+static ni_bool_t
+__samefile(int fd1, int fd2)
+{
+	struct stat stb1, stb2;
+
+	if (fstat(fd1, &stb1) < 0) {
+		ni_error("samefile(%d): %m", fd1);
+		return FALSE;
+	}
+	if (fstat(fd2, &stb2) < 0) {
+		ni_error("samefile(%d): %m", fd1);
+		return FALSE;
+	}
+
+	return stb1.st_dev == stb2.st_dev
+	    && stb1.st_ino == stb2.st_ino;
+}
+
+
+/*
  * Helper function for creating a command
  */
 static ni_dbus_object_t *
@@ -945,6 +966,12 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 	 * If they refer to different files, we should tell the server to capture
 	 * these separately.
 	 */
+	ni_testbus_call_create_tempfile("stdout", cmd_object); /* FIXME: NI_TESTBUS_FILE_WRITE */
+	if (!__samefile(1, 2)) {
+		ni_dbus_object_t *file_object;
+
+		file_object = ni_testbus_call_create_tempfile("stderr", cmd_object);
+	}
 
 	return cmd_object;
 }
@@ -958,6 +985,7 @@ flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *of
 	ni_dbus_object_t *file_object;
 	ni_buffer_t *data;
 
+	ni_debug_wicked("%s(%s, %s)", __func__, proc_object->path, filename);
 	file_object = ni_testbus_call_container_child_by_name(proc_object,
 					ni_testbus_file_class(),
 					filename);

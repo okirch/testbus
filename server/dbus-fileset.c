@@ -27,11 +27,18 @@ ni_testbus_file_full_path(const ni_dbus_object_t *container_object, const ni_tes
 ni_dbus_object_t *
 ni_testbus_file_wrap(ni_dbus_object_t *container_object, ni_testbus_file_t *file)
 {
-	return ni_objectmodel_create_object(
+	ni_dbus_object_t *file_object;
+
+	file_object = ni_objectmodel_create_object(
 			ni_dbus_object_get_server(container_object),
 			ni_testbus_file_full_path(container_object, file),
 			ni_testbus_file_class(),
 			file);
+
+	/* This is a bit of a layering violation, but we need this piece of information
+	 * in the processScheduled signal */
+	ni_string_dup(&file->object_path, file_object->path);
+	return file_object;
 }
 
 ni_testbus_file_t *
@@ -82,6 +89,7 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 		return FALSE;
 	}
 
+	ni_debug_wicked("%s: creating file \"%s\"", object->path, name);
 	if ((file = ni_testbus_file_new(name, &context->files)) == NULL) {
 		ni_dbus_set_error_from_code(error, rc, "unable to create new file \"%s\"", name);
 		return FALSE;
@@ -89,18 +97,17 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 
 	if (attr_dict) {
 		dbus_bool_t b;
+		uint32_t t;
 
 		if (ni_dbus_dict_get_bool(attr_dict, "executable", &b))
 			file->executable = b;
+		if (ni_dbus_dict_get_uint32(attr_dict, "type", &t))
+			file->type = t;
 	}
 
 	/* Register this object */
 	file_object = ni_testbus_file_wrap(object, file);
 	ni_dbus_message_append_string(reply, file_object->path);
-
-	/* This is a bit of a layering violation, but we need this piece of information
-	 * in the processScheduled signal */
-	ni_string_dup(&file->object_path, file_object->path);
 
 	return TRUE;
 }

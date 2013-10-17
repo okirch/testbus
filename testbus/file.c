@@ -12,14 +12,15 @@ static void		ni_testbus_file_free(ni_testbus_file_t *file);
 ni_testbus_file_t *
 ni_testbus_file_new(const char *name, ni_testbus_file_array_t *file_array)
 {
-	static unsigned int __global_file_seq = 1;
+	static unsigned int __global_file_inum = 1;
 
 	ni_testbus_file_t *file;
 
 	file = ni_malloc(sizeof(*file));
 	file->refcount = 1;
-	file->inum = __global_file_seq++;
-	file->id = file->inum;		/* For now */
+	file->inum = __global_file_inum++;
+	file->id = file_array->next_id++;
+	file->type = NI_TESTBUS_FILE_READ;
 	ni_string_dup(&file->name, name);
 
 	ni_testbus_file_array_append(file_array, file);
@@ -130,7 +131,7 @@ ni_testbus_file_array_remove(ni_testbus_file_array_t *array, const ni_testbus_fi
 	/* Drop the reference to the file */
 	ni_testbus_file_put(array->data[index]);
 
-	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
+	memmove(&array->data[index], &array->data[index+1], (array->count - (index + 1)) * sizeof(array->data[0]));
 	array->count --;
 	return TRUE;
 }

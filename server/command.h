@@ -35,6 +35,7 @@ extern ni_testbus_process_t *	ni_testbus_process_new(ni_testbus_container_t *, n
 extern ni_testbus_process_t *	ni_testbus_process_cast(ni_testbus_container_t *);
 extern void			ni_testbus_process_apply_context(ni_testbus_process_t *, ni_testbus_container_t *);
 extern ni_bool_t		ni_testbus_process_run(ni_testbus_process_t *, void (*)(ni_process_t *), void *);
+extern ni_bool_t		ni_testbus_process_finalize(ni_testbus_process_t *);
 
 static inline ni_testbus_command_t *
 ni_testbus_command_get(ni_testbus_command_t *command)

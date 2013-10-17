@@ -9,6 +9,11 @@
 
 #define NI_TESTBUS_TMPFILE_SIZE_MAX	(1024 * 1024)
 
+enum {
+	NI_TESTBUS_FILE_READ	= 0x0001,
+	NI_TESTBUS_FILE_WRITE	= 0x0002,
+};
+
 struct ni_testbus_file {
 	unsigned int		refcount;
 
@@ -16,6 +21,7 @@ struct ni_testbus_file {
 
 	char *			object_path;	/* master object path */
 	char *			name;		/* file nickname (such as "stdin" or "hostfile") */
+	unsigned int		type;		/* NI_TESTBUS_FILE_{READ,WRITE} */
 	unsigned int		inum;		/* globally unique "inode" */
 	unsigned int		iseq;		/* sequence number of last change */
 

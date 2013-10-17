@@ -42,4 +42,5 @@ if cmp -s $TESTBUS_TEMPDIR/xml-tree-before $TESTBUS_TEMPDIR/xml-tree-after; then
 	exit 1
 fi >&2
 
+testbus_finish_test
 echo "All tests completed successfully"

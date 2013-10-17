@@ -51,10 +51,22 @@ download_failed:
 		ni_debug_wicked("file %s (%s): downloaded %u bytes", file->name, file->object_path, file->size);
 	}
 
+	pi->stdout.capture = TRUE;
+
 	for (i = 0; i < files->count; ++i) {
 		ni_tempstate_t *ts = ni_process_tempstate(pi);
 		ni_testbus_file_t *file = files->data[i];
 		const char *path;
+
+		/* There's no need to store stderr/stdout in real tempfiles */
+		if (ni_string_eq(file->name, "stdout")) {
+			/* Nothing */
+			continue;
+		}
+		if (ni_string_eq(file->name, "stderr")) {
+			pi->stderr.capture = TRUE;
+			continue;
+		}
 
 		path = ni_tempstate_mkfile(ts, file->name, file->data);
 		if (!path) {
@@ -62,6 +74,11 @@ download_failed:
 			return FALSE;
 		}
 		ni_string_dup(&file->instance_path, path);
+
+		/* FIXME: record the file's md5 hash, so that we
+		 * can detect whether the file changed during the process run.
+		 * FIXME2: should we mark files as read, write, readwrite?
+		 */
 
 		if (ni_string_eq(file->name, "stdin")) {
 			/* attach to stdin */

@@ -12,8 +12,6 @@ ni_testbus_process_serialize(const ni_process_t *pi, ni_dbus_variant_t *dict)
 	ni_dbus_dict_add_string_array(dict, "argv", (const char **) pi->argv.data, pi->argv.count);
 	ni_dbus_dict_add_string_array(dict, "env", (const char **) pi->environ.data, pi->environ.count);
 
-	/* TBD: file information */
-
 	return TRUE;
 }
 
@@ -33,8 +31,6 @@ ni_testbus_process_deserialize(const ni_dbus_variant_t *dict)
 	if (!(e = ni_dbus_dict_get(dict, "env"))
 	 || !ni_dbus_variant_get_string_array(e, &pi->environ))
 		goto failed;
-
-	/* TBD: file information */
 
 	return pi;
 

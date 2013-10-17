@@ -20,7 +20,7 @@
 #include "socket_priv.h"
 #include "util_priv.h"
 
-static int				__ni_process_run(ni_process_t *, int *, int *);
+static int				__ni_process_run(ni_process_t *);
 static ni_socket_t *			__ni_process_get_output(ni_process_t *, int);
 static void				__ni_process_flush_buffer(ni_process_t *, struct ni_process_buffer *);
 static const ni_string_array_t *	__ni_default_environment(void);
@@ -130,6 +130,102 @@ ni_shellcmd_add_arg(ni_shellcmd_t *proc, const char *arg)
 	return TRUE;
 }
 
+/*
+ * Process handling code
+ */
+void
+ni_process_buffer_init(struct ni_process_buffer *pb, ni_process_t *pi)
+{
+	memset(pb, 0, sizeof(*pb));
+	pb->low_water_mark = 4096;
+	pb->fdpair[0] = -1;
+	pb->fdpair[1] = -1;
+	pb->process = pi;
+}
+
+static ni_bool_t
+ni_process_buffer_open_pipe(struct ni_process_buffer *pb)
+{
+	if (pb->capture) {
+		/* Our code in socket.c is only able to deal with sockets for now; */
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, pb->fdpair) < 0) {
+			ni_error("%s: unable to create stdout pipe: %m", __func__);
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+static ni_bool_t
+ni_process_buffer_prepare_writer(struct ni_process_buffer *pb, int destfd)
+{
+	if (pb->capture) {
+		ni_assert(pb->fdpair[1] >= 0);
+
+		ni_trace("prepare writer fd=%d", destfd);
+		if (dup2(pb->fdpair[1], destfd) < 0)
+			goto failed;
+	} else {
+		int fd;
+
+		if ((fd = open("/dev/null", O_RDONLY)) < 0) {
+			ni_warn("%s: unable to open /dev/null: %m", __func__);
+			return FALSE;
+		}
+		if (fd != destfd) {
+			if (dup2(fd, destfd) < 0)
+				goto failed;
+			close(fd);
+		}
+	}
+
+	return TRUE;
+
+failed:
+	ni_warn("%s: cannot dup %s descriptor: %m", __func__, destfd == 1? "stdout" : "stderr");
+	return FALSE;
+}
+
+static ni_bool_t
+ni_process_buffer_prepare_reader(struct ni_process_buffer *pb, ni_process_t *pi)
+{
+	if (pb->capture) {
+		ni_assert(pb->fdpair[0] >= 0);
+
+		pb->socket = __ni_process_get_output(pi, pb->fdpair[0]);
+		ni_socket_activate(pb->socket);
+		close(pb->fdpair[1]);
+
+		ni_trace("%s: pb %p sock %p", __func__, pb, pb->socket);
+		pb->fdpair[0] = pb->fdpair[1] = -1;
+	}
+
+	return TRUE;
+}
+
+void
+ni_process_buffer_destroy(struct ni_process_buffer *pb)
+{
+	if (pb->socket != NULL) {
+		ni_socket_close(pb->socket);
+		pb->socket = NULL;
+	}
+	if (pb->wbuf)
+		ni_buffer_free(pb->wbuf);
+
+	if (pb->fdpair[0] >= 0) {
+		close(pb->fdpair[0]);
+		pb->fdpair[0] = -1;
+	}
+	if (pb->fdpair[1] >= 0) {
+		close(pb->fdpair[1]);
+		pb->fdpair[1] = -1;
+	}
+
+	ni_process_buffer_init(pb, NULL);
+}
+
 ni_process_t *
 ni_process_new(ni_bool_t use_default_env)
 {
@@ -137,8 +233,9 @@ ni_process_new(ni_bool_t use_default_env)
 
 	pi = xcalloc(1, sizeof(*pi));
 	pi->stdin = -1;
-	pi->stdout.low_water_mark = 4096;
-	pi->stderr.low_water_mark = 4096;
+
+	ni_process_buffer_init(&pi->stdout, pi);
+	ni_process_buffer_init(&pi->stderr, pi);
 
 	if (use_default_env)
 		ni_string_array_copy(&pi->environ, __ni_default_environment());
@@ -188,14 +285,8 @@ ni_process_free(ni_process_t *pi)
 			ni_error("Unable to kill process %d (%s): %m", pi->pid, pi->process->command);
 	}
 
-	if (pi->stdout.socket != NULL) {
-		ni_socket_close(pi->stdout.socket);
-		pi->stdout.socket = NULL;
-	}
-	if (pi->stderr.socket != NULL) {
-		ni_socket_close(pi->stderr.socket);
-		pi->stderr.socket = NULL;
-	}
+	ni_process_buffer_destroy(&pi->stdout);
+	ni_process_buffer_destroy(&pi->stderr);
 
 	if (pi->temp_state != NULL) {
 		ni_tempstate_finish(pi->temp_state);
@@ -204,10 +295,6 @@ ni_process_free(ni_process_t *pi)
 
 	if (pi->stdin >= 0)
 		close(pi->stdin);
-	if (pi->stdout.wbuf)
-		ni_buffer_free(pi->stdout.wbuf);
-	if (pi->stderr.wbuf)
-		ni_buffer_free(pi->stderr.wbuf);
 
 	ni_string_array_destroy(&pi->argv);
 	ni_string_array_destroy(&pi->environ);
@@ -341,43 +428,20 @@ ni_process_sigchild(int sig)
 int
 ni_process_run(ni_process_t *pi)
 {
-	int outfds[2], __errfds[2] = { -1, -1 }, *errfds, rv;
+	int rv;
 
-	/* Our code in socket.c is only able to deal with sockets for now; */
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, outfds) < 0) {
-		ni_error("%s: unable to create stdout pipe: %m", __func__);
+	if (!ni_process_buffer_open_pipe(&pi->stdout))
 		return -1;
-	}
 
-	errfds = outfds;
-	if (pi->separate_stderr) {
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, __errfds) < 0) {
-			ni_error("%s: unable to create stderr pipe: %m", __func__);
-			return -1;
-		}
-		errfds = __errfds;
-	}
+	if (!ni_process_buffer_open_pipe(&pi->stderr))
+		return -1;
 
-	rv = __ni_process_run(pi, outfds, errfds);
+	rv = __ni_process_run(pi);
 	if (rv >= 0) {
 		/* Set up a socket to receive the redirected output of the
 		 * subprocess. */
-		pi->stdout.socket = __ni_process_get_output(pi, outfds[0]);
-		ni_socket_activate(pi->stdout.socket);
-		close(outfds[1]);
-
-		if (errfds != outfds) {
-			pi->stderr.socket = __ni_process_get_output(pi, errfds[0]);
-			ni_socket_activate(pi->stderr.socket);
-			close(errfds[1]);
-		}
-	} else  {
-		close(outfds[0]);
-		close(outfds[1]);
-		if (errfds != outfds) {
-			close(errfds[0]);
-			close(errfds[1]);
-		}
+		ni_process_buffer_prepare_reader(&pi->stdout, pi);
+		ni_process_buffer_prepare_reader(&pi->stderr, pi);
 	}
 
 	return rv;
@@ -388,7 +452,7 @@ ni_process_run_and_wait(ni_process_t *pi)
 {
 	int  rv;
 
-	rv = __ni_process_run(pi, NULL, NULL);
+	rv = __ni_process_run(pi);
 	if (rv < 0)
 		return rv;
 
@@ -414,22 +478,18 @@ ni_process_run_and_wait(ni_process_t *pi)
 	return rv;
 }
 
+#ifdef currently_broken
 int
 ni_process_run_and_capture_output(ni_process_t *pi, ni_buffer_t *out_buffer)
 {
-	int pfd[2],  rv;
+	int rv;
 
-	if (pipe(pfd) < 0) {
-		ni_error("%s: unable to create pipe: %m", __func__);
+	if (!ni_process_buffer_open_pipe(&pi->stdout))
 		return -1;
-	}
 
-	rv = __ni_process_run(pi, pfd, pfd);
-	if (rv < 0) {
-		close(pfd[0]);
-		close(pfd[1]);
+	rv = __ni_process_run(pi);
+	if (rv < 0)
 		return rv;
-	}
 
 	close(pfd[1]);
 	while (1) {
@@ -467,9 +527,10 @@ ni_process_run_and_capture_output(ni_process_t *pi, ni_buffer_t *out_buffer)
 
 	return rv;
 }
+#endif
 
 int
-__ni_process_run(ni_process_t *pi, int *outfds, int *errfds)
+__ni_process_run(ni_process_t *pi)
 {
 	const char *arg0 = pi->argv.data[0];
 	pid_t pid;
@@ -508,10 +569,8 @@ __ni_process_run(ni_process_t *pi, int *outfds, int *errfds)
 		if (fd >= 0 && dup2(fd, 0) < 0)
 			ni_warn("%s: cannot dup stdin descriptor: %m", __func__);
 
-		if (outfds && dup2(outfds[1], 1) < 0)
-			ni_warn("%s: cannot dup stdout descriptor: %m", __func__);
-		if (errfds && dup2(errfds[1], 1) < 0)
-			ni_warn("%s: cannot dup stderr descriptor: %m", __func__);
+		ni_process_buffer_prepare_writer(&pi->stdout, 1);
+		ni_process_buffer_prepare_writer(&pi->stderr, 2);
 
 		maxfd = getdtablesize();
 		for (fd = 3; fd < maxfd; ++fd)
@@ -619,26 +678,35 @@ __ni_process_flush_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
 {
 	if (pb->wbuf) {
 		if (pi->read_callback)
-			pi->read_callback(pi, 1, pb->wbuf);
-		else
+			pi->read_callback(pi, pb);
+
+		if (pb->wbuf) {
 			ni_buffer_free(pb->wbuf);
-		pb->wbuf = NULL;
+			pb->wbuf = NULL;
+		}
 	}
 }
 
 static void
 __ni_process_output_recv(ni_socket_t *sock)
 {
+	struct ni_process_buffer *pb;
 	ni_process_t *pi = sock->user_data;
 	ni_buffer_t *wbuf;
 	int cnt;
 
 	ni_assert(pi);
+	if (sock == pi->stdout.socket)
+		pb = &pi->stdout;
+	else if (sock == pi->stderr.socket)
+		pb = &pi->stderr;
+	else
+		ni_fatal("%s: don't know this socket", __func__);
 
 repeat:
-	if (pi->stdout.wbuf == NULL)
-		pi->stdout.wbuf = ni_buffer_new(4096);
-	wbuf = pi->stdout.wbuf;
+	if (pb->wbuf == NULL)
+		pb->wbuf = ni_buffer_new(4096);
+	wbuf = pb->wbuf;
 
 	cnt = recv(sock->__fd, ni_buffer_tail(wbuf), ni_buffer_tailroom(wbuf), MSG_DONTWAIT);
 	if (cnt >= 0) {
@@ -648,11 +716,11 @@ repeat:
 
 		if (ni_buffer_tailroom(wbuf) == 0)
 			notify = repeat = TRUE;
-		else if (ni_buffer_count(wbuf) >= pi->stdout.low_water_mark)
+		else if (ni_buffer_count(wbuf) >= pb->low_water_mark)
 			notify = TRUE;
 
 		if (notify)
-			__ni_process_flush_buffer(pi, &pi->stdout);
+			__ni_process_flush_buffer(pi, pb);
 		if (repeat)
 			goto repeat;
 	} else if (errno != EWOULDBLOCK) {

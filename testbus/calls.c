@@ -1028,6 +1028,8 @@ ni_testbus_call_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *
 
 	ni_dbus_variant_set_string(&arg, cmd_object->path);
 
+	// FIXME we need to add an argument telling the server to capture stdout/stderr
+
 	if (!ni_dbus_object_call_variant(host_object, NULL, "run", 1, &arg, 1, &res, &error)) {
 		ni_dbus_print_error(&error, "%s.run(): failed", host_object->path);
 		dbus_error_free(&error);

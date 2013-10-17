@@ -268,7 +268,8 @@ ni_testbus_agent_write_state(const char *state_file, const ni_testbus_agent_stat
  * After the process has finished, upload the output
  */
 static void
-ni_testbus_agent_upload_output(ni_dbus_object_t *proc_object, const char *filename, ni_buffer_chain_t **chain)
+ni_testbus_agent_upload_output(ni_dbus_object_t *proc_object, const char *filename,
+			ni_buffer_chain_t **chain, ni_testbus_file_t *file)
 {
 	ni_dbus_object_t *file_object;
 	ni_buffer_t *bp;
@@ -276,10 +277,16 @@ ni_testbus_agent_upload_output(ni_dbus_object_t *proc_object, const char *filena
 	if (ni_buffer_chain_count(*chain) == 0)
 		return;
 
-	file_object = ni_testbus_call_create_tempfile(filename, proc_object);
-	if (file_object == NULL)
-		goto failed;
+	if (file && file->object_path) {
+		file_object = ni_testbus_call_get_and_refresh_object(file->object_path);
+	} else {
+		file_object = ni_testbus_call_create_tempfile(filename, proc_object);
+		if (file_object == NULL)
+			goto failed;
+	}
 
+	ni_debug_wicked("%s(%s, %s, %u bytes)", __func__, proc_object->path, filename,
+			ni_buffer_chain_count(*chain));
 	while ((bp = ni_buffer_chain_get_next(chain)) != NULL) {
 		if (!ni_testbus_call_upload_file(file_object, bp)) {
 			ni_buffer_free(bp);
@@ -301,8 +308,12 @@ failed:
 struct __ni_testbus_process_context {
 	ni_dbus_server_t *	server;
 	char *			object_path;
-	ni_buffer_chain_t *	stdout_buffers;
-	ni_buffer_chain_t *	stderr_buffers;
+	ni_testbus_file_array_t *files;
+
+	struct {
+		ni_testbus_file_t *file;
+		ni_buffer_chain_t *buffers;
+	} stdout, stderr;
 };
 
 static struct __ni_testbus_process_context *
@@ -319,9 +330,16 @@ __ni_testbus_process_context_new(const char *master_object_path)
 static void
 __ni_testbus_process_context_free(struct __ni_testbus_process_context *ctx)
 {
-	ni_buffer_chain_discard(&ctx->stdout_buffers);
-	ni_buffer_chain_discard(&ctx->stderr_buffers);
+	ni_buffer_chain_discard(&ctx->stdout.buffers);
+	ni_buffer_chain_discard(&ctx->stderr.buffers);
+	if (ctx->stdout.file)
+		ni_testbus_file_put(ctx->stdout.file);
+	if (ctx->stderr.file)
+		ni_testbus_file_put(ctx->stderr.file);
 	ni_string_free(&ctx->object_path);
+
+	if (ctx->files)
+		ni_testbus_file_array_free(ctx->files);
 	free(ctx);
 }
 
@@ -337,8 +355,8 @@ __ni_testbus_process_exit_notify(ni_process_t *pi)
 
 	proc_object = ni_testbus_call_get_and_refresh_object(ctx->object_path);
 
-	ni_testbus_agent_upload_output(proc_object, "stdout", &ctx->stdout_buffers);
-	ni_testbus_agent_upload_output(proc_object, "stderr", &ctx->stderr_buffers);
+	ni_testbus_agent_upload_output(proc_object, "stdout", &ctx->stdout.buffers, ctx->stdout.file);
+	ni_testbus_agent_upload_output(proc_object, "stderr", &ctx->stderr.buffers, ctx->stderr.file);
 
 	ni_testbus_call_process_exit(proc_object, &exit_info);
 
@@ -347,21 +365,22 @@ __ni_testbus_process_exit_notify(ni_process_t *pi)
 }
 
 static void
-__ni_testbus_process_read_notify(ni_process_t *pi, int fd, ni_buffer_t *bp)
+__ni_testbus_process_read_notify(ni_process_t *pi, ni_process_buffer_t *pbf)
 {
 	struct __ni_testbus_process_context *ctx = pi->user_data;
 	ni_buffer_chain_t **chain = NULL;
 
-	ni_trace("%s(%u, %d, %u)", __func__, pi->pid, fd, ni_buffer_count(bp));
-	if (fd == 1)
-		chain = &ctx->stdout_buffers;
-	else if (fd == 2)
-		chain = &ctx->stderr_buffers;
-
-	if (chain != NULL)
-		ni_buffer_chain_append(chain, bp);
+	ni_trace("%s(%u, %u)", __func__, pi->pid, ni_buffer_count(pbf->wbuf));
+	if (pbf == &pi->stdout)
+		chain = &ctx->stdout.buffers;
 	else
-		ni_buffer_free(bp);
+	if (pbf == &pi->stderr)
+		chain = &ctx->stderr.buffers;
+
+	if (chain != NULL) {
+		ni_buffer_chain_append(chain, pbf->wbuf);
+		pbf->wbuf = NULL;
+	}
 
 	/* Future extension: signal the master that we have data.
 	 * This would allow continuous streaming of the process output,
@@ -372,6 +391,7 @@ static ni_bool_t
 __ni_testbus_process_run(ni_process_t *pi, const char *master_object_path, ni_testbus_file_array_t *files)
 {
 	struct __ni_testbus_process_context *ctx;
+	ni_testbus_file_t *f;
 
 	if (files && !ni_testbus_agent_process_attach_files(pi, files)) {
 		ni_error("process %u: failed to attach files", pi->pid);
@@ -382,6 +402,12 @@ __ni_testbus_process_run(ni_process_t *pi, const char *master_object_path, ni_te
 		return FALSE;
 
 	ctx = __ni_testbus_process_context_new(master_object_path);
+
+	if ((f = ni_testbus_file_array_find_by_name(files, "stdout")) != NULL)
+		ctx->stdout.file = ni_testbus_file_get(f);
+	if ((f = ni_testbus_file_array_find_by_name(files, "stderr")) != NULL)
+		ctx->stderr.file = ni_testbus_file_get(f);
+
 	pi->notify_callback = __ni_testbus_process_exit_notify;
 	pi->read_callback = __ni_testbus_process_read_notify;
 	pi->user_data = ctx;
@@ -433,9 +459,9 @@ __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus
 			ni_process_exit_info_t exit_info = { .how = NI_PROCESS_NONSTARTER };
 
 			/* FIXME: notify master that we failed to fork */
+			ni_testbus_file_array_free(files);
 			ni_process_free(pi);
 		}
-		ni_testbus_file_array_free(files);
 	}
 
 out:

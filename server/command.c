@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <dborb/logging.h>
 #include <dborb/process.h>
+#include <testbus/file.h>
 #include "command.h"
 
 static void			ni_testbus_command_destroy(ni_testbus_container_t *);
@@ -246,6 +247,35 @@ ni_testbus_process_apply_context(ni_testbus_process_t *proc, ni_testbus_containe
 {
 	ni_testbus_container_merge_environment(container, &proc->context.env);
 	ni_testbus_container_merge_files(container, &proc->context.files);
+}
+
+/*
+ * Prior to starting the process, set up all the output files etc.
+ */
+static ni_bool_t
+__ni_testbus_process_attach_stdio(ni_testbus_process_t *proc, const char *name)
+{
+	ni_testbus_file_t *file, *ofile;
+
+	if ((file = __ni_testbus_container_get_file_by_name(&proc->context, name)) != NULL) {
+		ni_testbus_file_get(file);
+		ni_testbus_file_array_remove(&proc->context.files, file);
+		ofile = ni_testbus_file_new(file->name, &proc->context.files);
+		/* ofile->executable = file->executable; */
+		ofile->type = NI_TESTBUS_FILE_WRITE;
+		ni_testbus_file_put(file);
+	}
+
+	return TRUE;
+}
+
+ni_bool_t
+ni_testbus_process_finalize(ni_testbus_process_t *proc)
+{
+	__ni_testbus_process_attach_stdio(proc, "stdout");
+	__ni_testbus_process_attach_stdio(proc, "stderr");
+
+	return TRUE;
 }
 
 /*

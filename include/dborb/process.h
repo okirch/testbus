@@ -22,6 +22,17 @@ struct ni_shellcmd {
 	unsigned int		timeout;
 };
 
+typedef struct ni_process_buffer ni_process_buffer_t;
+struct ni_process_buffer {
+	ni_bool_t		capture;
+	int			fdpair[2];
+	ni_socket_t *		socket;
+	ni_buffer_t *		wbuf;
+	unsigned int		low_water_mark;
+
+	ni_process_t *		process;		/* back pointer */
+};
+
 struct ni_process {
 	ni_shellcmd_t *		process;
 
@@ -32,16 +43,11 @@ struct ni_process {
 	ni_string_array_t	environ;
 
 	int			stdin;
-	struct ni_process_buffer {
-		ni_socket_t *	socket;
-		ni_buffer_t *	wbuf;
-		unsigned int	low_water_mark;
-	} stdout, stderr;
-	ni_bool_t		separate_stderr;
+	ni_process_buffer_t	stdout, stderr;
 
 	ni_tempstate_t *	temp_state;
 
-	void			(*read_callback)(ni_process_t *, int fd, ni_buffer_t *);
+	void			(*read_callback)(ni_process_t *, ni_process_buffer_t *);
 	/* XXX: rename to exit_notify */
 	void			(*notify_callback)(ni_process_t *);
 	void *			user_data;

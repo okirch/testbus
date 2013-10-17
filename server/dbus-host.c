@@ -273,7 +273,26 @@ __ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 	ni_testbus_process_apply_context(proc, &cmd->context);
 	ni_testbus_process_apply_context(proc, &host->context);
 
+	/* Create the DBus object for this process */
 	process_object = ni_testbus_process_wrap(object, proc);
+
+	/* For all the output files attached to the command, we create
+	 * a new file object relative to the process. Otherwise, the
+	 * process would store its output in the Command's file - which
+	 * is bad if you run several intances of the same command on
+	 * different hosts. */
+	if (ni_testbus_process_finalize(proc)) {
+		unsigned int i;
+
+		for (i = 0; i < proc->context.files.count; ++i) {
+			ni_testbus_file_t *file = proc->context.files.data[i];
+
+			if ((file->type & NI_TESTBUS_FILE_WRITE)
+			 && file->object_path == NULL)
+				ni_testbus_file_wrap(process_object, file);
+			 
+		}
+	}
 
 	/* Rather than executing it locally (on the master host) send it
 	 * to the agent and make it execute there.
