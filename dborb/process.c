@@ -673,9 +673,13 @@ ni_process_get_exit_info(const ni_process_t *pi, ni_process_exit_info_t *exit_in
 /*
  * Connect the subprocess output to our I/O handling loop
  */
+static void		__ni_process_output_recv(ni_socket_t *sock);
+
 static void
 __ni_process_flush_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
 {
+	if (pb->socket)
+		__ni_process_output_recv(pb->socket);
 	if (pb->wbuf) {
 		if (pi->read_callback)
 			pi->read_callback(pi, pb);
