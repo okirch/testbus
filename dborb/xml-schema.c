@@ -866,7 +866,6 @@ ni_xs_process_include(xml_node_t *node, ni_xs_scope_t *scope)
 		}
 	}
 
-	ni_debug_xml("trying to include %s", nameAttr);
 	return ni_xs_process_schema_file(nameAttr, scope);
 }
 

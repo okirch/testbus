@@ -173,7 +173,6 @@ main(int argc, char **argv)
 static void
 ni_testbus_bind_builtin()
 {
-	ni_debug_wicked("%s()", __func__);
 	ni_testbus_bind_builtin_command();
 	ni_testbus_bind_builtin_host();
 	ni_testbus_bind_builtin_file();

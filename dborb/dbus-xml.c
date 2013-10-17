@@ -248,7 +248,7 @@ ni_dbus_xml_register_properties(const ni_dbus_service_t *service, ni_xs_type_t *
 		return FALSE;
 	}
 
-	ni_debug_dbus("%s(%s)", __func__, service->name);
+	// ni_debug_dbus("%s(%s)", __func__, service->name);
 
 	dict_info = ni_xs_dict_info(type);
 	for (i = 0; i < dict_info->children.count; ++i) {
@@ -260,7 +260,6 @@ ni_dbus_xml_register_properties(const ni_dbus_service_t *service, ni_xs_type_t *
 					service->name, nt->name);
 			return FALSE;
 		}
-		ni_debug_dbus("  %s - %s", nt->name, signature);
 
 		if (ni_dbus_service_get_property(service, nt->name) == NULL)
 			ni_objectmodel_service_register_property((ni_dbus_service_t *) service, nt->name, signature);
