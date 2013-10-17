@@ -467,8 +467,8 @@ ni_process_run_and_wait(ni_process_t *pi)
 	__ni_process_flush_buffer(pi, &pi->stderr);
 
 	pi->pid = 0;
-	if (pi->notify_callback)
-		pi->notify_callback(pi);
+	if (pi->exit_callback)
+		pi->exit_callback(pi);
 
 	if (!ni_process_exit_status_okay(pi)) {
 		ni_error("subprocesses exited with error");
@@ -517,8 +517,8 @@ ni_process_run_and_capture_output(ni_process_t *pi, ni_buffer_t *out_buffer)
 	}
 
 	pi->pid = 0;
-	if (pi->notify_callback)
-		pi->notify_callback(pi);
+	if (pi->exit_callback)
+		pi->exit_callback(pi);
 
 	if (!ni_process_exit_status_okay(pi)) {
 		ni_error("subprocesses exited with error");
@@ -638,8 +638,8 @@ ni_process_reap(ni_process_t *pi)
 
 	pi->pid = 0;
 
-	if (pi->notify_callback)
-		pi->notify_callback(pi);
+	if (pi->exit_callback)
+		pi->exit_callback(pi);
 
 	return 0;
 }

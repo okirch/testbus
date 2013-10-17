@@ -408,7 +408,7 @@ __ni_testbus_process_run(ni_process_t *pi, const char *master_object_path, ni_te
 	if ((f = ni_testbus_file_array_find_by_name(files, "stderr")) != NULL)
 		ctx->stderr.file = ni_testbus_file_get(f);
 
-	pi->notify_callback = __ni_testbus_process_exit_notify;
+	pi->exit_callback = __ni_testbus_process_exit_notify;
 	pi->read_callback = __ni_testbus_process_read_notify;
 	pi->user_data = ctx;
 

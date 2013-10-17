@@ -48,8 +48,7 @@ struct ni_process {
 	ni_tempstate_t *	temp_state;
 
 	void			(*read_callback)(ni_process_t *, ni_process_buffer_t *);
-	/* XXX: rename to exit_notify */
-	void			(*notify_callback)(ni_process_t *);
+	void			(*exit_callback)(ni_process_t *);
 	void *			user_data;
 };
 

@@ -661,7 +661,7 @@ ni_dbus_async_server_call_run_command(ni_dbus_connection_t *conn,
 
 	async = __ni_dbus_async_server_call_new(conn, method, call_message);
 	async->sub_process = process;
-	process->notify_callback = __ni_dbus_async_server_call_callback;
+	process->exit_callback = __ni_dbus_async_server_call_callback;
 	process->user_data = conn;
 
 	return 0;

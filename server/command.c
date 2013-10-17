@@ -316,7 +316,7 @@ ni_testbus_process_run(ni_testbus_process_t *proc, void (*callback)(ni_process_t
 	if (rv < 0)
 		return FALSE;
 
-	pi->notify_callback = callback;
+	pi->exit_callback = callback;
 	pi->user_data = user_data;
 	return TRUE;
 }
