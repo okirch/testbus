@@ -805,7 +805,7 @@ do_upload_file(int argc, char **argv)
 			return 1;
 		count = ni_buffer_count(data);
 
-		file_object = ni_testbus_call_create_tempfile(identifier, context_object);
+		file_object = ni_testbus_call_create_tempfile(identifier, NI_TESTBUS_FILE_READ, context_object);
 		if (file_object == NULL)
 			return 1;
 
@@ -966,11 +966,11 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 	 * If they refer to different files, we should tell the server to capture
 	 * these separately.
 	 */
-	ni_testbus_call_create_tempfile("stdout", cmd_object); /* FIXME: NI_TESTBUS_FILE_WRITE */
+	ni_testbus_call_create_tempfile("stdout", NI_TESTBUS_FILE_WRITE, cmd_object);
 	if (!__samefile(1, 2)) {
 		ni_dbus_object_t *file_object;
 
-		file_object = ni_testbus_call_create_tempfile("stderr", cmd_object);
+		file_object = ni_testbus_call_create_tempfile("stderr", NI_TESTBUS_FILE_WRITE, cmd_object);
 	}
 
 	return cmd_object;

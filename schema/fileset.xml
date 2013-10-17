@@ -3,6 +3,7 @@
   <method name="createFile">
     <arguments>
       <name type="string" />
+      <mode type="uint32" />
     </arguments>
     <result>
       <object-path type="string" />

@@ -65,11 +65,11 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 		unsigned int argc, const ni_dbus_variant_t *argv,
 		ni_dbus_message_t *reply, DBusError *error)
 {
-	const ni_dbus_variant_t *attr_dict = NULL;
 	ni_testbus_container_t *context;
 	ni_dbus_object_t *file_object;
 	ni_testbus_file_t *file;
 	const char *name;
+	uint32_t mode = 0;
 	int rc;
 
 	if ((context = ni_testbus_container_unwrap(object, error)) == NULL)
@@ -77,7 +77,7 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 
 	if (argc == 0
 	 || !ni_dbus_variant_get_string(&argv[0], &name)
-	 || (argc == 2 && !ni_dbus_variant_is_dict(attr_dict = &argv[1]))
+	 || (argc == 2 && !ni_dbus_variant_get_uint32(&argv[1], &mode))
 	 || argc > 2)
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
@@ -90,20 +90,11 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 	}
 
 	ni_debug_wicked("%s: creating file \"%s\"", object->path, name);
-	if ((file = ni_testbus_file_new(name, &context->files)) == NULL) {
+	if ((file = ni_testbus_file_new(name, &context->files, mode)) == NULL) {
 		ni_dbus_set_error_from_code(error, rc, "unable to create new file \"%s\"", name);
 		return FALSE;
 	}
 
-	if (attr_dict) {
-		dbus_bool_t b;
-		uint32_t t;
-
-		if (ni_dbus_dict_get_bool(attr_dict, "executable", &b))
-			file->executable = b;
-		if (ni_dbus_dict_get_uint32(attr_dict, "type", &t))
-			file->type = t;
-	}
 
 	/* Register this object */
 	file_object = ni_testbus_file_wrap(object, file);

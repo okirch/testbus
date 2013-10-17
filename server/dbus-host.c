@@ -287,7 +287,7 @@ __ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 		for (i = 0; i < proc->context.files.count; ++i) {
 			ni_testbus_file_t *file = proc->context.files.data[i];
 
-			if ((file->type & NI_TESTBUS_FILE_WRITE)
+			if ((file->mode & NI_TESTBUS_FILE_WRITE)
 			 && file->object_path == NULL)
 				ni_testbus_file_wrap(process_object, file);
 			 

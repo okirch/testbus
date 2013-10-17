@@ -9,11 +9,6 @@
 
 #define NI_TESTBUS_TMPFILE_SIZE_MAX	(1024 * 1024)
 
-enum {
-	NI_TESTBUS_FILE_READ	= 0x0001,
-	NI_TESTBUS_FILE_WRITE	= 0x0002,
-};
-
 struct ni_testbus_file {
 	unsigned int		refcount;
 
@@ -21,14 +16,13 @@ struct ni_testbus_file {
 
 	char *			object_path;	/* master object path */
 	char *			name;		/* file nickname (such as "stdin" or "hostfile") */
-	unsigned int		type;		/* NI_TESTBUS_FILE_{READ,WRITE} */
+	unsigned int		mode;		/* NI_TESTBUS_FILE_* */
 	unsigned int		inum;		/* globally unique "inode" */
 	unsigned int		iseq;		/* sequence number of last change */
 
 	char *			instance_path;	/* path name of file on disk, if needed */
 	ni_buffer_t *		data;
 	uint32_t		size;
-	ni_bool_t		executable;
 };
 
 extern ni_bool_t		ni_testbus_file_serialize(const ni_testbus_file_t *, ni_dbus_variant_t *);
@@ -47,7 +41,7 @@ extern ni_testbus_file_t *	ni_testbus_file_array_find_by_inum(const ni_testbus_f
 extern void			ni_testbus_file_array_set(ni_testbus_file_array_t *, unsigned int, ni_testbus_file_t *);
 extern void			ni_testbus_file_array_merge(ni_testbus_file_array_t *result, const ni_testbus_file_array_t *);
 
-extern ni_testbus_file_t *	ni_testbus_file_new(const char *, ni_testbus_file_array_t *);
+extern ni_testbus_file_t *	ni_testbus_file_new(const char *, ni_testbus_file_array_t *, unsigned int mode);
 extern ni_testbus_file_t *	ni_testbus_file_get(ni_testbus_file_t *);
 extern void			ni_testbus_file_put(ni_testbus_file_t *);
 

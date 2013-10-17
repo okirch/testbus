@@ -10,7 +10,7 @@
 static void		ni_testbus_file_free(ni_testbus_file_t *file);
 
 ni_testbus_file_t *
-ni_testbus_file_new(const char *name, ni_testbus_file_array_t *file_array)
+ni_testbus_file_new(const char *name, ni_testbus_file_array_t *file_array, unsigned int mode)
 {
 	static unsigned int __global_file_inum = 1;
 
@@ -20,7 +20,7 @@ ni_testbus_file_new(const char *name, ni_testbus_file_array_t *file_array)
 	file->refcount = 1;
 	file->inum = __global_file_inum++;
 	file->id = file_array->next_id++;
-	file->type = NI_TESTBUS_FILE_READ;
+	file->mode = mode? mode : NI_TESTBUS_FILE_READ;
 	ni_string_dup(&file->name, name);
 
 	ni_testbus_file_array_append(file_array, file);
@@ -202,6 +202,7 @@ ni_testbus_file_serialize(const ni_testbus_file_t *file, ni_dbus_variant_t *dict
 	ni_dbus_dict_add_string(dict, "name", file->name);
 	ni_dbus_dict_add_uint32(dict, "inum", file->inum);
 	ni_dbus_dict_add_uint32(dict, "iseq", file->iseq);
+	ni_dbus_dict_add_uint32(dict, "mode", file->mode);
 	if (file->object_path)
 		ni_dbus_dict_add_string(dict, "object-path", file->object_path);
 	return TRUE;
@@ -212,16 +213,17 @@ ni_testbus_file_deserialize(const ni_dbus_variant_t *dict, ni_testbus_file_array
 {
 	ni_testbus_file_t *file;
 	const char *name, *path;
-	uint32_t inum, iseq;
+	uint32_t inum, iseq, mode;
 
 	if (!ni_dbus_dict_get_string(dict, "name", &name))
 		return NULL;
 
 	if (!ni_dbus_dict_get_uint32(dict, "inum", &inum)
-	 || !ni_dbus_dict_get_uint32(dict, "iseq", &iseq))
+	 || !ni_dbus_dict_get_uint32(dict, "iseq", &iseq)
+	 || !ni_dbus_dict_get_uint32(dict, "mode", &mode))
 		return FALSE;
 
-	file = ni_testbus_file_new(name, container);
+	file = ni_testbus_file_new(name, container, mode);
 	file->inum = inum;
 	file->iseq = iseq;
 

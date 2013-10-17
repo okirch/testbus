@@ -280,7 +280,7 @@ ni_testbus_agent_upload_output(ni_dbus_object_t *proc_object, const char *filena
 	if (file && file->object_path) {
 		file_object = ni_testbus_call_get_and_refresh_object(file->object_path);
 	} else {
-		file_object = ni_testbus_call_create_tempfile(filename, proc_object);
+		file_object = ni_testbus_call_create_tempfile(filename, NI_TESTBUS_FILE_READ, proc_object);
 		if (file_object == NULL)
 			goto failed;
 	}

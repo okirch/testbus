@@ -234,26 +234,30 @@ __ni_testbus_handle_path_result(const ni_dbus_variant_t *res, const char *method
 }
 
 static ni_dbus_object_t *
-__ni_testbus_container_create_child(ni_dbus_object_t *container, const char *method_name, const char *name)
+__ni_testbus_container_create_child(ni_dbus_object_t *container, const char *method_name,
+			const char *name, const ni_dbus_variant_t *extraArg)
 {
-	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	ni_dbus_variant_t args[2];
 	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
 	DBusError error = DBUS_ERROR_INIT;
 	ni_dbus_object_t *result = NULL;
+	int argc = 1;
 
 	ni_assert(container);
 
-	ni_dbus_variant_set_string(&arg, name);
-	if (!ni_dbus_object_call_variant(container, NULL, method_name, 1, &arg, 1, &res, &error)) {
+	memset(args, 0, sizeof(*args));
+	ni_dbus_variant_set_string(&args[0], name);
+	if (extraArg)
+		args[argc++] = *extraArg;
+
+	if (!ni_dbus_object_call_variant(container, NULL, method_name, argc, args, 1, &res, &error)) {
 		ni_dbus_print_error(&error, "%s.%s(%s): failed", container->path, method_name, name);
 		dbus_error_free(&error);
-		goto failed;
 	} else {
 		result = __ni_testbus_handle_path_result(&res, method_name);
 	}
 
-failed:
-	ni_dbus_variant_destroy(&arg);
+	ni_dbus_variant_destroy(&args[0]);
 	ni_dbus_variant_destroy(&res);
 	return result;
 }
@@ -330,7 +334,7 @@ ni_testbus_call_create_host(const char *name)
 	if (!hostlist_object)
 		return NULL;
 
-	return __ni_testbus_container_create_child(hostlist_object, "createHost", name);
+	return __ni_testbus_container_create_child(hostlist_object, "createHost", name, NULL);
 }
 
 ni_dbus_object_t *
@@ -395,7 +399,7 @@ ni_testbus_call_create_test(const char *name, ni_dbus_object_t *parent)
 	if (parent == NULL)
 		parent = ni_testbus_call_get_object_and_metadata(NI_TESTBUS_GLOBAL_CONTEXT_PATH);
 
-	return __ni_testbus_container_create_child(parent, "createTest", name);
+	return __ni_testbus_container_create_child(parent, "createTest", name, NULL);
 }
 
 static const ni_dbus_service_t *
@@ -740,12 +744,18 @@ out_fail:
 }
 
 ni_dbus_object_t *
-ni_testbus_call_create_tempfile(const char *name, ni_dbus_object_t *parent)
+ni_testbus_call_create_tempfile(const char *name, unsigned int mode, ni_dbus_object_t *parent)
 {
+	ni_dbus_variant_t marg = NI_DBUS_VARIANT_INIT;
+	ni_dbus_object_t *result;
+
 	if (parent == NULL)
 		parent = ni_testbus_call_get_object_and_metadata(NI_TESTBUS_GLOBAL_CONTEXT_PATH);
 
-	return __ni_testbus_container_create_child(parent, "createFile", name);
+	ni_dbus_variant_set_uint32(&marg, mode);
+	result = __ni_testbus_container_create_child(parent, "createFile", name, &marg);
+	ni_dbus_variant_destroy(&marg);
+	return result;
 }
 
 ni_bool_t
@@ -865,7 +875,7 @@ ni_testbus_call_command_set_input(ni_dbus_object_t *cmd_object, const ni_buffer_
 	ni_dbus_object_t *file_object;
 	ni_buffer_t data_copy;
 
-	file_object = ni_testbus_call_create_tempfile("stdin", cmd_object);
+	file_object = ni_testbus_call_create_tempfile("stdin", NI_TESTBUS_FILE_READ, cmd_object);
 	if (!file_object) {
 		ni_error("%s: unable to create stdin", cmd_object->path);
 		return FALSE;

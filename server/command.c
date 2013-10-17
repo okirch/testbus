@@ -260,9 +260,7 @@ __ni_testbus_process_attach_stdio(ni_testbus_process_t *proc, const char *name)
 	if ((file = __ni_testbus_container_get_file_by_name(&proc->context, name)) != NULL) {
 		ni_testbus_file_get(file);
 		ni_testbus_file_array_remove(&proc->context.files, file);
-		ofile = ni_testbus_file_new(file->name, &proc->context.files);
-		/* ofile->executable = file->executable; */
-		ofile->type = NI_TESTBUS_FILE_WRITE;
+		ofile = ni_testbus_file_new(file->name, &proc->context.files, file->mode);
 		ni_testbus_file_put(file);
 	}
 
@@ -272,9 +270,30 @@ __ni_testbus_process_attach_stdio(ni_testbus_process_t *proc, const char *name)
 ni_bool_t
 ni_testbus_process_finalize(ni_testbus_process_t *proc)
 {
-	__ni_testbus_process_attach_stdio(proc, "stdout");
-	__ni_testbus_process_attach_stdio(proc, "stderr");
+	ni_testbus_file_array_t ofiles = NI_TESTBUS_FILE_ARRAY_INIT;
+	ni_testbus_file_array_t *array = &proc->context.files;
+	unsigned int i;
 
+	for (i = 0; i < array->count; ++i) {
+		ni_testbus_file_t *file = array->data[i];
+
+		if (file->mode & NI_TESTBUS_FILE_WRITE) {
+			ni_trace("output file %s", file->name);
+			ni_testbus_file_array_append(&ofiles, file);
+		}
+	}
+
+
+	for (i = 0; i < ofiles.count; ++i) {
+		ni_testbus_file_t *file = ofiles.data[i];
+		ni_testbus_file_t *nfile;
+
+		ni_trace("instantiating output file %s", file->name);
+		nfile = ni_testbus_file_new(file->name, &proc->context.files, file->mode);
+		ni_testbus_file_array_remove(array, file);
+	}
+
+	ni_testbus_file_array_destroy(&ofiles);
 	return TRUE;
 }
 
