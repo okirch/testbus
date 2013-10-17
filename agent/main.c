@@ -188,7 +188,11 @@ main(int argc, char **argv)
 			return 1;
 		}
 	} else if (getppid() != 1) {
-		ni_log_destination(program_name, "syslog:perror:user");
+		if (ni_debug) {
+			ni_log_destination(program_name, "perror:user");
+		} else {
+			ni_log_destination(program_name, "syslog:perror:user");
+		}
 	} else {
 		ni_log_destination(program_name, "syslog::user");
 	}
