@@ -691,20 +691,29 @@ __ni_process_flush_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
 	}
 }
 
-static void
-__ni_process_output_recv(ni_socket_t *sock)
+static ni_process_buffer_t *
+__ni_process_buffer_for_socket(ni_socket_t *sock)
 {
 	struct ni_process_buffer *pb;
 	ni_process_t *pi = sock->user_data;
-	ni_buffer_t *wbuf;
-	int cnt;
 
 	ni_assert(pi);
 	if (sock == pi->stdout.socket)
-		pb = &pi->stdout;
+		return &pi->stdout;
 	else if (sock == pi->stderr.socket)
-		pb = &pi->stderr;
-	else
+		return &pi->stderr;
+	return NULL;
+}
+
+static void
+__ni_process_output_recv(ni_socket_t *sock)
+{
+	ni_process_t *pi = sock->user_data;
+	struct ni_process_buffer *pb;
+	ni_buffer_t *wbuf;
+	int cnt;
+
+	if (!(pb = __ni_process_buffer_for_socket(sock)))
 		ni_fatal("%s: don't know this socket", __func__);
 
 repeat:
@@ -737,12 +746,17 @@ static void
 __ni_process_output_hangup(ni_socket_t *sock)
 {
 	ni_process_t *pi = sock->user_data;
+	struct ni_process_buffer *pb;
 
-	if (pi && pi->stdout.socket == sock) {
+	if (!(pb = __ni_process_buffer_for_socket(sock)))
+		return;
+
+	if (pb->socket == sock) {
 		if (ni_process_reap(pi) < 0)
 			ni_error("pipe closed by child process, but child did not exit");
-		ni_socket_close(pi->stdout.socket);
-		pi->stdout.socket = NULL;
+		if (pb->socket)
+			ni_socket_close(pb->socket);
+		pb->socket = NULL;
 	}
 }
 
