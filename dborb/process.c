@@ -23,6 +23,7 @@
 static int				__ni_process_run(ni_process_t *);
 static ni_socket_t *			__ni_process_get_output(ni_process_t *, int);
 static void				__ni_process_flush_buffer(ni_process_t *, struct ni_process_buffer *);
+static void				__ni_process_fill_exit_info(ni_process_t *);
 static const ni_string_array_t *	__ni_default_environment(void);
 
 static inline ni_bool_t
@@ -654,8 +655,22 @@ ni_process_exit_status_okay(const ni_process_t *pi)
 }
 
 void
+ni_process_set_exit_info(ni_process_t *pi, const ni_process_exit_info_t *exit_info)
+{
+	pi->exit_info = *exit_info;
+}
+
+void
 ni_process_get_exit_info(const ni_process_t *pi, ni_process_exit_info_t *exit_info)
 {
+	*exit_info = pi->exit_info;
+}
+
+void
+__ni_process_fill_exit_info(ni_process_t *pi)
+{
+	ni_process_exit_info_t *exit_info = &pi->exit_info;
+
 	memset(exit_info, 0, sizeof(*exit_info));
 	if (WIFEXITED(pi->status)) {
 		exit_info->how = NI_PROCESS_EXITED;
