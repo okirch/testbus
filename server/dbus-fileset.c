@@ -33,7 +33,7 @@ ni_testbus_file_wrap(ni_dbus_object_t *container_object, ni_testbus_file_t *file
 			ni_dbus_object_get_server(container_object),
 			ni_testbus_file_full_path(container_object, file),
 			ni_testbus_file_class(),
-			file);
+			ni_testbus_file_get(file));
 
 	/* This is a bit of a layering violation, but we need this piece of information
 	 * in the processScheduled signal */
@@ -48,6 +48,46 @@ ni_testbus_file_unwrap(const ni_dbus_object_t *object, DBusError *error)
 
 	file = ni_dbus_object_get_handle_typecheck(object, ni_testbus_file_class(), error);
 	return file;
+}
+
+static void
+__ni_testbus_file_unregister(ni_dbus_object_t *object, ni_testbus_file_t *file)
+{
+	if (object) {
+		ni_dbus_server_send_signal(ni_dbus_object_get_server(object), object,
+				NI_TESTBUS_TMPFILE_INTERFACE,
+				"deleted",
+				0, NULL);
+	}
+
+	ni_testbus_file_check(file);
+	ni_string_free(&file->object_path);
+}
+
+void
+ni_testbus_file_unregister(ni_testbus_file_t *file)
+{
+	if (file->object_path) {
+		ni_dbus_object_t *object;
+
+		object = ni_objectmodel_object_by_path(file->object_path);
+		if (object)
+			ni_dbus_server_unregister_object(object);
+	}
+}
+
+static void
+__ni_testbus_file_object_destroy(ni_dbus_object_t *object)
+{
+	ni_testbus_file_t *file;
+
+	ni_debug_wicked("%s(%s)", __func__, object->path);
+	if ((file = ni_testbus_file_unwrap(object, NULL)) != NULL) {
+		ni_testbus_file_check(file);
+		__ni_testbus_file_unregister(object, file);
+		ni_testbus_file_put(file);
+		object->handle = NULL;
+	}
 }
 
 void *
@@ -210,9 +250,14 @@ NI_TESTBUS_PROPERTIES_BINDING(Tmpfile);
 void
 ni_testbus_bind_builtin_file(void)
 {
+	const ni_dbus_class_t *class;
+
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Fileset_createFile_binding);
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Tmpfile_append_binding);
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Tmpfile_retrieve_binding);
 	ni_dbus_objectmodel_bind_properties(&__ni_Testbus_Tmpfile_Properties_binding);
+
+	class = ni_testbus_file_class();
+	((ni_dbus_class_t *) class)->destroy = __ni_testbus_file_object_destroy;
 }
 

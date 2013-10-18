@@ -32,4 +32,6 @@
       <data class="array" element-type="byte" />
     </result>
   </method>
+
+  <signal name="deleted" />
 </service>

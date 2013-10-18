@@ -11,5 +11,6 @@
   </method>
 
   <method name="delete" />
+  <signal name="deleted" />
 </service>
 

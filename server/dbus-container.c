@@ -59,18 +59,39 @@ ni_testbus_container_unwrap(const ni_dbus_object_t *object, DBusError *error)
 	return container;
 }
 
+static void
+__ni_testbus_container_unregister(ni_dbus_object_t *object, ni_testbus_container_t *container)
+{
+	if (object && ni_string_eq(object->path, container->dbus_object_path)) {
+		ni_dbus_server_send_signal(ni_dbus_object_get_server(object), object,
+				NI_TESTBUS_CONTAINER_INTERFACE,
+				"deleted",
+				0, NULL);
+	}
+
+	ni_string_free(&container->dbus_object_path);
+}
+
 void
 ni_testbus_container_unregister(ni_testbus_container_t *container)
 {
 	if (container->dbus_object_path) {
 		ni_dbus_object_t *object;
 
-		ni_debug_wicked("%s(%s)", __func__, container->dbus_object_path);
 		object = ni_objectmodel_object_by_path(container->dbus_object_path);
 		if (object)
 			ni_dbus_server_unregister_object(object);
+	}
+}
 
-		ni_string_free(&container->dbus_object_path);
+static void
+__ni_testbus_container_object_destroy(ni_dbus_object_t *object)
+{
+	ni_testbus_container_t *container;
+
+	if ((container = ni_testbus_container_unwrap(object, NULL)) != NULL) {
+		__ni_testbus_container_unregister(object, container);
+		object->handle = NULL;
 	}
 }
 
@@ -216,6 +237,11 @@ NI_TESTBUS_METHOD_BINDING(Container, delete);
 void
 ni_testbus_bind_builtin_container(void)
 {
+	const ni_dbus_class_t *class;
+
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Container_getChildByName_binding);
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Container_delete_binding);
+
+	class = ni_testbus_container_class();
+	((ni_dbus_class_t *) class)->destroy = __ni_testbus_container_object_destroy;
 }
