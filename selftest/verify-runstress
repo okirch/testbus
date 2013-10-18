@@ -18,5 +18,6 @@ for n in `seq 1 $loop_count`; do
 	echo -n .
 	testbus_run_command --host $TESTBUS_HOST /bin/true 2>client.log
 done
+echo
 
 testbus_exit
