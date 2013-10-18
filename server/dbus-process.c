@@ -79,7 +79,7 @@ __ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_
 	}
 
 #ifdef notyet
-	ni_process_set_exit_info(proc, exit_info);
+	ni_process_set_exit_info(proc->process, exit_info);
 #endif
 
 	ni_testbus_process_exit_info_serialize(exit_info, &dict);
@@ -91,6 +91,7 @@ __ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_
 			1, &dict);
 	ni_dbus_variant_destroy(&dict);
 
+	free(exit_info);
 	return TRUE;
 }
 
