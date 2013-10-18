@@ -9,7 +9,10 @@
 
 #define NI_TESTBUS_TMPFILE_SIZE_MAX	(1024 * 1024)
 
+#define NI_TESTBUS_FILE_MAGIC	0xbadde5d
+
 struct ni_testbus_file {
+	uint32_t		__magic;
 	unsigned int		refcount;
 
 	unsigned int		id;
@@ -44,6 +47,12 @@ extern void			ni_testbus_file_array_merge(ni_testbus_file_array_t *result, const
 extern ni_testbus_file_t *	ni_testbus_file_new(const char *, ni_testbus_file_array_t *, unsigned int mode);
 extern ni_testbus_file_t *	ni_testbus_file_get(ni_testbus_file_t *);
 extern void			ni_testbus_file_put(ni_testbus_file_t *);
+
+static inline void
+ni_testbus_file_check(ni_testbus_file_t *file)
+{
+	ni_assert(file->__magic == NI_TESTBUS_FILE_MAGIC);
+}
 
 #endif /* __TESTBUS_FILE_H__ */
 

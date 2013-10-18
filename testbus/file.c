@@ -17,6 +17,7 @@ ni_testbus_file_new(const char *name, ni_testbus_file_array_t *file_array, unsig
 	ni_testbus_file_t *file;
 
 	file = ni_malloc(sizeof(*file));
+	file->__magic = NI_TESTBUS_FILE_MAGIC;
 	file->refcount = 1;
 	file->inum = __global_file_inum++;
 	file->id = file_array->next_id++;
@@ -40,6 +41,7 @@ ni_testbus_file_get(ni_testbus_file_t *file)
 void
 ni_testbus_file_put(ni_testbus_file_t *file)
 {
+	ni_testbus_file_check(file);
 	ni_assert(file->refcount);
 	if (--(file->refcount) == 0)
 		ni_testbus_file_free(file);
@@ -52,6 +54,7 @@ ni_testbus_file_free(ni_testbus_file_t *file)
 	ni_string_free(&file->instance_path);
 	ni_string_free(&file->name);
 	ni_string_free(&file->object_path);
+	file->__magic = 0xdeadbabe;
 	free(file);
 }
 
