@@ -96,6 +96,16 @@
 
 /*
  * Interface:
+ *	Container
+ * Methods:
+ *	...
+ * Compatible with class:
+ *	container
+ */
+#define NI_TESTBUS_CONTAINER_INTERFACE	NI_TESTBUS_NAMESPACE ".Container"
+
+/*
+ * Interface:
  *	Host
  * Methods:
  *	reboot()
@@ -143,6 +153,16 @@
  *	process -> container
  */
 #define NI_TESTBUS_PROCESS_INTERFACE	NI_TESTBUS_NAMESPACE ".Process"
+
+/*
+ * Interface:
+ *	File
+ * Methods:
+ *	-
+ * Compatible with class:
+ *	tmpfile
+ */
+#define NI_TESTBUS_TMPFILE_INTERFACE	NI_TESTBUS_NAMESPACE ".Tmpfile"
 
 /*
  * Interface:
