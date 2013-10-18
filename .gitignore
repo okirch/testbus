@@ -24,3 +24,6 @@ dbus-proxy
 core
 vgcore.*
 obj
+
+# Other
+*.log
