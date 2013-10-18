@@ -895,9 +895,12 @@ ni_testbus_call_command_add_file(ni_dbus_object_t *cmd_object, const char *name,
  * Handle process completion signals
  */
 
-struct __ni_testbus_process_waitq {
-	struct __ni_testbus_process_waitq **prev;
-	struct __ni_testbus_process_waitq *next;
+typedef struct ni_testbus_waitq ni_testbus_waitq_t;
+typedef struct ni_testbus_wait_queue ni_testbus_wait_queue_t;
+
+struct ni_testbus_waitq {
+	ni_testbus_waitq_t **	prev;
+	ni_testbus_waitq_t *	next;
 
 	char *			object_path;
 	ni_bool_t		done;
@@ -905,20 +908,37 @@ struct __ni_testbus_process_waitq {
 	ni_process_exit_info_t *exit_info;
 };
 
-static struct __ni_testbus_process_waitq *__ni_testbus_process_waitq;
+struct ni_testbus_wait_queue {
+	ni_testbus_waitq_t *	head;
+};
+
+static ni_testbus_wait_queue_t	ni_testbus_waitq;
+static ni_testbus_wait_queue_t *ni_testbus_spurious_waitq;
+
+static ni_testbus_waitq_t *
+ni_testbus_waitq_new(const char *object_path)
+{
+	ni_testbus_waitq_t *wq;
+
+	wq = ni_malloc(sizeof(*wq));
+	ni_string_dup(&wq->object_path, object_path);
+
+	return wq;
+}
 
 static void
-__ni_testbus_process_waitq_free(struct __ni_testbus_process_waitq *wq)
+ni_testbus_waitq_free(ni_testbus_waitq_t *wq)
 {
 	ni_assert(!wq->prev && !wq->next);
 	if (wq->exit_info)
 		free(wq->exit_info);
+	wq->exit_info = NULL;
 	ni_string_free(&wq->object_path);
 	free(wq);
 }
 
 static inline void
-__ni_testbus_process_waitq_insert(struct __ni_testbus_process_waitq **pos, struct __ni_testbus_process_waitq *wq)
+__ni_testbus_waitq_insert(ni_testbus_waitq_t **pos, ni_testbus_waitq_t *wq)
 {
 	wq->prev = pos;
 	wq->next = *pos;
@@ -928,7 +948,13 @@ __ni_testbus_process_waitq_insert(struct __ni_testbus_process_waitq **pos, struc
 }
 
 static inline void
-__ni_testbus_process_waitq_unlink(struct __ni_testbus_process_waitq *wq)
+ni_testbus_waitq_insert(ni_testbus_wait_queue_t *q, ni_testbus_waitq_t *wq)
+{
+	__ni_testbus_waitq_insert(&q->head, wq);
+}
+
+static inline void
+ni_testbus_waitq_unlink(ni_testbus_waitq_t *wq)
 {
 	if (wq->prev) {
 		*(wq->prev) = wq->next;
@@ -940,17 +966,34 @@ __ni_testbus_process_waitq_unlink(struct __ni_testbus_process_waitq *wq)
 	}
 }
 
-static struct __ni_testbus_process_waitq *
-__ni_testbus_process_waitq_find(const char *object_path)
+static ni_testbus_waitq_t *
+__ni_testbus_waitq_find(ni_testbus_wait_queue_t *q, const char *object_path)
 {
-	struct __ni_testbus_process_waitq *wq;
+	ni_testbus_waitq_t *wq;
 
-	for (wq = __ni_testbus_process_waitq; wq; wq = wq->next) {
+	for (wq = q->head; wq; wq = wq->next) {
 		if (ni_string_eq(wq->object_path, object_path))
 			return wq;
 	}
 
 	return wq;
+}
+
+static ni_testbus_waitq_t *
+ni_testbus_waitq_find(const char *object_path)
+{
+	return __ni_testbus_waitq_find(&ni_testbus_waitq, object_path);
+}
+
+static void
+ni_testbus_wait_queue_destroy(ni_testbus_wait_queue_t *q)
+{
+	ni_testbus_waitq_t *wq;
+
+	while ((wq = q->head) != NULL) {
+		ni_testbus_waitq_unlink(wq);
+		ni_testbus_waitq_free(wq);
+	}
 }
 
 static void
@@ -971,7 +1014,7 @@ __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t 
 	}
 
 	if (ni_string_eq(signal_name, "processExited")) {
-		struct __ni_testbus_process_waitq *wq;
+		ni_testbus_waitq_t *wq;
 
 		if (argc < 1 || !ni_dbus_variant_is_dict(&arg)) {
 			ni_error("%s: bad argument for signal %s()", __func__, signal_name);
@@ -979,8 +1022,13 @@ __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t 
 		}
 
 		ni_trace("received signal %s from %s", signal_name, object_path);
-		if ((wq = __ni_testbus_process_waitq_find(object_path)) == NULL) {
-			ni_warn("spurious signal %s.%s()", object_path, signal_name);
+		if ((wq = ni_testbus_waitq_find(object_path)) == NULL) {
+			if (ni_testbus_spurious_waitq) {
+				wq = ni_testbus_waitq_new(object_path);
+				ni_testbus_waitq_insert(ni_testbus_spurious_waitq, wq);
+			} else {
+				ni_warn("spurious signal %s.%s()", object_path, signal_name);
+			}
 		} else if (wq->done) {
 			ni_warn("duplicate signal %s.%s()", object_path, signal_name);
 		} else {
@@ -993,20 +1041,39 @@ out:
 	ni_dbus_variant_destroy(&arg);
 }
 
-static struct __ni_testbus_process_waitq *
+static ni_testbus_waitq_t *
 __ni_testbus_process_wait(const char *object_path)
 {
-	struct __ni_testbus_process_waitq *wq;
+	ni_testbus_waitq_t *wq;
 
 	if (object_path == NULL)
 		return NULL;
 
-	if ((wq = __ni_testbus_process_waitq_find(object_path)) == NULL) {
-		wq = ni_calloc(1, sizeof(*wq));
-		ni_string_dup(&wq->object_path, object_path);
+	/* We may receive the exit notification before we receive the response to
+	 * our run() command. Not sure how this happens, but the dbus library seems
+	 * to be doing some funny reordering.
+	 * So what we do is:
+	 *  -	during the DBus run() call, we collect all signals for unknown processes
+	 *	in a "spurious_waitq".
+	 *  -	When the run() call returns, we call __ni_testbus_process_wait() to establish
+	 *	the regular waitq entry. So we end up in this place
+	 *  -	therefore, we need to check here if the process we want to wait for
+	 *	has already signaled its exit status
+	 */
+	if (ni_testbus_spurious_waitq) {
+		wq = __ni_testbus_waitq_find(ni_testbus_spurious_waitq, object_path);
+		if (wq != NULL) {
+			ni_testbus_waitq_unlink(wq);
+			ni_testbus_waitq_insert(&ni_testbus_waitq, wq);
+		}
+	}
+	if (wq == NULL)
+		wq = ni_testbus_waitq_find(object_path);
 
-		__ni_testbus_process_waitq_insert(&__ni_testbus_process_waitq, wq);
-		ni_assert(__ni_testbus_process_waitq_find(object_path));
+	if (wq == NULL) {
+		wq = ni_testbus_waitq_new(object_path);
+
+		ni_testbus_waitq_insert(&ni_testbus_waitq, wq);
 	}
 
 	return wq;
@@ -1037,15 +1104,15 @@ ni_dbus_object_t *
 ni_testbus_call_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *cmd_object)
 {
 	DBusError error = DBUS_ERROR_INIT;
+	ni_testbus_wait_queue_t spurious_queue = { .head = NULL };
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
 	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
 	ni_dbus_object_t *result;
 
 	__ni_testbus_setup_process_handling();
+	ni_testbus_spurious_waitq = &spurious_queue;
 
 	ni_dbus_variant_set_string(&arg, cmd_object->path);
-
-	// FIXME we need to add an argument telling the server to capture stdout/stderr
 
 	if (!ni_dbus_object_call_variant(host_object, NULL, "run", 1, &arg, 1, &res, &error)) {
 		ni_dbus_print_error(&error, "%s.run(): failed", host_object->path);
@@ -1072,6 +1139,8 @@ ni_testbus_call_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *
 	}
 
 failed:
+	ni_testbus_wait_queue_destroy(&spurious_queue);
+	ni_testbus_spurious_waitq = NULL;
 	ni_dbus_variant_destroy(&arg);
 	ni_dbus_variant_destroy(&res);
 	return result;
@@ -1080,9 +1149,9 @@ failed:
 ni_bool_t
 ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_process_exit_info_t *exit_info)
 {
-	struct __ni_testbus_process_waitq *wq;
+	ni_testbus_waitq_t *wq;
 
-	if ((wq = __ni_testbus_process_waitq_find(proc_object->path)) == NULL) {
+	if ((wq = ni_testbus_waitq_find(proc_object->path)) == NULL) {
 		ni_error("cannot wait for process %s - not recorded", proc_object->path);
 		return FALSE;
 	}
@@ -1092,8 +1161,8 @@ ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_p
 			ni_debug_wicked("process %s is done", proc_object->path);
 			if (exit_info && wq->exit_info)
 				*exit_info = *(wq->exit_info);
-			__ni_testbus_process_waitq_unlink(wq);
-			__ni_testbus_process_waitq_free(wq);
+			ni_testbus_waitq_unlink(wq);
+			ni_testbus_waitq_free(wq);
 
 			if (!ni_dbus_object_refresh_children(proc_object)) {
 				ni_error("%s: unable to refresh process object after exit", proc_object->path);
