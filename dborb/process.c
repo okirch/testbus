@@ -616,6 +616,8 @@ ni_process_reap(ni_process_t *pi)
 		return -1;
 	}
 
+	__ni_process_fill_exit_info(pi);
+
 	__ni_process_flush_buffer(pi, &pi->stdout);
 	__ni_process_flush_buffer(pi, &pi->stderr);
 
