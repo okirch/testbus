@@ -478,6 +478,35 @@ out:
 }
 
 static void
+__ni_testbus_agent_process_container_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+{
+	const char *signal_name = dbus_message_get_member(msg);
+	const char *object_path = dbus_message_get_path(msg);
+
+	if (!signal_name)
+		return;
+
+	if (ni_string_eq(signal_name, "deleted")) {
+		ni_trace("received signal %s from %s", signal_name, object_path);
+	}
+}
+
+static void
+__ni_testbus_agent_process_file_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+{
+	const char *signal_name = dbus_message_get_member(msg);
+	const char *object_path = dbus_message_get_path(msg);
+
+	if (!signal_name)
+		return;
+
+	if (ni_string_eq(signal_name, "deleted")) {
+		ni_trace("received signal %s from %s", signal_name, object_path);
+		ni_testbus_agent_discard_cached_file(object_path);
+	}
+}
+
+static void
 ni_testbus_agent_setup_signals(ni_dbus_client_t *client)
 {
 	ni_dbus_client_add_signal_handler(client,
@@ -485,6 +514,20 @@ ni_testbus_agent_setup_signals(ni_dbus_client_t *client)
 			NULL,					/* path */
 			NI_TESTBUS_HOST_INTERFACE,		/* interface */
 			__ni_testbus_agent_process_host_signal,
+			NULL);
+
+	ni_dbus_client_add_signal_handler(client,
+			NI_TESTBUS_DBUS_BUS_NAME,		/* sender */
+			NULL,					/* path */
+			NI_TESTBUS_CONTAINER_INTERFACE,		/* interface */
+			__ni_testbus_agent_process_container_signal,
+			NULL);
+
+	ni_dbus_client_add_signal_handler(client,
+			NI_TESTBUS_DBUS_BUS_NAME,		/* sender */
+			NULL,					/* path */
+			NI_TESTBUS_TMPFILE_INTERFACE,		/* interface */
+			__ni_testbus_agent_process_file_signal,
 			NULL);
 }
 

@@ -234,3 +234,25 @@ ni_testbus_agent_process_export_files(ni_process_t *pi, ni_testbus_file_array_t 
 
 	return TRUE;
 }
+
+/*
+ * We get here when the master deleted a file object.
+ */
+void
+ni_testbus_agent_discard_cached_file(const char *object_path)
+{
+	unsigned int i, j;
+
+	for (i = j = 0; i < global_files.count; ++i) {
+		ni_testbus_file_t *file = global_files.data[i];
+
+		if (ni_string_eq(file->object_path, object_path)) {
+			ni_debug_wicked("file cache: discarding file %s (inum %u)", file->name, file->inum);
+			ni_testbus_file_put(file);
+		} else {
+			global_files.data[j++] = file;
+		}
+	}
+
+	global_files.count = j;
+}
