@@ -1087,8 +1087,6 @@ ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_p
 		return FALSE;
 	}
 
-	wq->exit_info = exit_info;
-
 	while (TRUE) {
 		if (wq->done) {
 			ni_debug_wicked("process %s is done", proc_object->path);
