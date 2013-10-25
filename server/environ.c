@@ -164,6 +164,7 @@ ni_bool_t
 ni_testbus_env_merge(ni_testbus_env_t *result, ni_testbus_env_array_t *env_array)
 {
 	struct env_merge_input *merge;
+	ni_var_t *last = NULL;
 	unsigned int n;
 
 	merge = ni_calloc(env_array->count, sizeof(*merge));
@@ -173,7 +174,7 @@ ni_testbus_env_merge(ni_testbus_env_t *result, ni_testbus_env_array_t *env_array
 	}
 
 	while (TRUE) {
-		ni_var_t *var = NULL, *last = NULL;
+		ni_var_t *var = NULL;
 		struct env_merge_input *m;
 		unsigned int n;
 
