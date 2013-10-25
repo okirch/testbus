@@ -125,6 +125,20 @@ function testbus_claim_host {
 	fi
 }
 
+function testbus_setenv {
+
+	testbus_trace "setenv $*"
+
+	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
+		testbus_call setenv $TESTBUS_TEST_HANDLE "$@"
+	elif [ -n "$TESTBUS_GROUP_HANDLE" ]; then
+		testbus_call setenv $TESTBUS_GROUP_HANDLE "$@"
+	else
+		echo "No context to setenv for" >&2
+		exit 1
+	fi
+}
+
 function __testbus_upload_file {
 
 	testbus_trace "upload file $*"

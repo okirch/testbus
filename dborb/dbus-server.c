@@ -671,6 +671,7 @@ __ni_dbus_object_message(DBusConnection *conn, DBusMessage *call, void *user_dat
 	method = ni_dbus_service_get_method(svc, method_name);
 	if (method == NULL
 	 || (!method->handler && !method->handler_ex && !method->async_handler)) {
+		ni_error("No server side handler for method %s.%s", interface, method_name);
 		dbus_set_error(&error,
 				DBUS_ERROR_UNKNOWN_METHOD,
 				"Unknown method in call to object %s, %s.%s",

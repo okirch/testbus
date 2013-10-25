@@ -313,6 +313,31 @@ ni_testbus_call_container_child_by_name(ni_dbus_object_t *container_object, cons
 }
 
 ni_bool_t
+ni_testbus_call_setenv(ni_dbus_object_t *container, const char *name, const char *value)
+{
+	ni_dbus_variant_t args[2];
+	DBusError error = DBUS_ERROR_INIT;
+	ni_bool_t result = FALSE;
+
+	ni_assert(container);
+	ni_debug_wicked("%s.setenv(%s, %s): failed", container->path, name, value);
+
+	ni_dbus_variant_vector_init(args, 2);
+	ni_dbus_variant_set_string(&args[0], name);
+	ni_dbus_variant_set_string(&args[1], value);
+	if (!ni_dbus_object_call_variant(container, NULL, "setenv", 2, args, 0, NULL, &error)) {
+		ni_dbus_print_error(&error, "%s.setenv(%s, %s): failed", container->path, name, value);
+		dbus_error_free(&error);
+	} else {
+		result = TRUE;
+	}
+
+failed:
+	ni_dbus_variant_vector_destroy(args, 2);
+	return result;
+}
+
+ni_bool_t
 ni_testbus_call_delete(ni_dbus_object_t *object)
 {
 	DBusError error = DBUS_ERROR_INIT;

@@ -256,3 +256,22 @@ ni_testbus_agent_discard_cached_file(const char *object_path)
 
 	global_files.count = j;
 }
+
+/*
+ * Prior to running a process, modify the environment that we pass to it.
+ * All user environment variables should be prefixed with "testbus_" to
+ * avoid name space collisions.
+ */
+void
+ni_testbus_agent_process_frob_environ(ni_process_t *pi)
+{
+	unsigned int i;
+
+	for (i = 0; i < pi->environ.count; ++i) {
+		ni_stringbuf_t sb = NI_STRINGBUF_INIT_DYNAMIC;
+
+		ni_stringbuf_printf(&sb, "testbus_%s", pi->environ.data[i]);
+		free(pi->environ.data[i]);
+		pi->environ.data[i] = sb.string;
+	}
+}

@@ -66,6 +66,7 @@ static int		do_delete_object(int, char **);
 static int		do_create_host(int, char **);
 static int		do_remove_host(int, char **);
 static int		do_create_test(int, char **);
+static int		do_setenv(int, char **);
 static int		do_retrieve_file(int, char **);
 static int		do_upload_file(int, char **);
 static int		do_claim_host(int, char **);
@@ -204,6 +205,8 @@ main(int argc, char **argv)
 		return do_create_command(argc - optind, argv + optind);
 	if (!strcmp(cmd, "run-command"))
 		return do_run_command(argc - optind, argv + optind);
+	if (!strcmp(cmd, "setenv"))
+		return do_setenv(argc - optind, argv + optind);
 
 	fprintf(stderr, "Unsupported command %s\n", cmd);
 	goto usage;
@@ -665,6 +668,56 @@ do_create_test(int argc, char **argv)
 
 out:
 	return rv;
+}
+
+int
+do_setenv(int argc, char **argv)
+{
+	enum  { OPT_HELP, };
+	static struct option local_options[] = {
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ NULL }
+	};
+	const char *opt_context;
+	ni_dbus_object_t *context_object;
+	int c;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] setenv object-path name=value ...\n"
+				"\nSupported options:\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+		}
+	}
+
+	if (optind >= argc - 1)
+		goto usage;
+	opt_context = argv[optind++];
+
+	context_object = ni_testbus_call_get_container(opt_context);
+	if (context_object == NULL)
+		return 1;
+
+	while (optind < argc) {
+		char *name, *value;
+
+		name = argv[optind++];
+		if (!(value = strchr(name, '=')))
+			ni_fatal("setenv: argument must be name=value");
+		*value++ = '\0';
+
+		ni_testbus_call_setenv(context_object, name, value);
+	}
+
+	return 0;
 }
 
 int

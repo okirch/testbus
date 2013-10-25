@@ -173,6 +173,7 @@ main(int argc, char **argv)
 static void
 ni_testbus_bind_builtin()
 {
+	ni_testbus_bind_builtin_environ();
 	ni_testbus_bind_builtin_command();
 	ni_testbus_bind_builtin_host();
 	ni_testbus_bind_builtin_file();

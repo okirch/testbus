@@ -399,6 +399,8 @@ __ni_testbus_process_run(ni_process_t *pi, const char *master_object_path, ni_te
 	struct __ni_testbus_process_context *ctx;
 	ni_testbus_file_t *f;
 
+	ni_testbus_agent_process_frob_environ(pi);
+
 	if (files) {
 		if (!ni_testbus_agent_process_attach_files(pi, files)
 		 || !ni_testbus_agent_process_export_files(pi, files)) {

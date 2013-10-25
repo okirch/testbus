@@ -1,4 +1,5 @@
 
+#include <dborb/logging.h>
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-service.h>
 
@@ -57,7 +58,7 @@ __ni_Testbus_Environment_setenv(ni_dbus_object_t *object, const ni_dbus_method_t
 NI_TESTBUS_METHOD_BINDING(Environment, setenv);
 
 void
-ni_testbus_bind_builtin_environment(void)
+ni_testbus_bind_builtin_environ(void)
 {
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Environment_setenv_binding);
 }

@@ -7,6 +7,22 @@
 
 . ${0%/*}/functions
 
+##################################################################
+# Helper function to run a script - expected output is 42
+##################################################################
+function do_run {
+
+	script=$1; shift;
+
+	response=`testbus_run_command --host $TESTBUS_HOST --send-script $script`
+	if [ "$response" != "42" ]; then
+		echo "expected answer 42; instead I got \"$response\""
+		testbus_fail_test
+	else
+		testbus_finish_test
+	fi >&2
+}
+
 testbus_init_group $0
 
 TESTBUS_HOST=`testbus_claim_host`
@@ -24,19 +40,92 @@ EOF
 
 testbus_run_command --host $TESTBUS_HOST --send-script $script
 
+##################################################################
+# Run script and capture output
+##################################################################
 testbus_init_test subtest2
 script=`testbus_new_script foobar`
-cat >$script <<EOF
+cat >$script <<"EOF"
 #!/bin/bash
 
 echo 42
 exit 0
 EOF
 
-response=`testbus_run_command --host $TESTBUS_HOST --send-script $script`
-if [ "$response" != "42" ]; then
-	echo "expected answer 42; instead I got \"$response\""
-	testbus_fail_test
-fi >&2
+do_run $script
+
+##################################################################
+# Run script and reference environment variable
+##################################################################
+testbus_init_test subtest3
+# Note: we first set answer to a different value, but expect the
+# second setenv to override the first one.
+testbus_setenv answer=17
+testbus_setenv answer=42
+script=`testbus_new_script foobar`
+cat >$script <<"EOF"
+#!/bin/bash
+
+echo $testbus_answer
+exit 0
+EOF
+
+do_run $script
+
+##################################################################
+# Run script and reference environment variable.
+# There are two environment variables at different nodes
+##################################################################
+# This setenv goes to the testgroup context
+testbus_setenv answer=17
+
+testbus_init_test subtest4
+
+# Now that we've created subtest4, the setenv should go to that context
+testbus_setenv answer=42
+
+script=`testbus_new_script foobar`
+cat >$script <<"EOF"
+#!/bin/bash
+
+echo $testbus_answer
+exit 0
+EOF
+
+do_run $script
+
+##################################################################
+# Run script and reference environment variable.
+# The environment contains a lot of noise
+##################################################################
+# This setenv goes to the testgroup context
+echo -n "Setting 100 environment vars" >&2
+for n in `seq 1 100`; do
+	echo -n "."
+	testbus_setenv answer$n=$n 2>/dev/null
+done
+echo >&2
+
+testbus_init_test subtest5
+
+# Now that we've created another subtest, the setenv should go to that context
+echo -n "Setting another 100 environment vars" >&2
+for n in `seq 1 100`; do
+	echo -n "."
+	testbus_setenv answer$n="x$n" 2>/dev/null
+done
+echo >&2
+
+testbus_setenv answer=42
+
+script=`testbus_new_script foobar`
+cat >$script <<"EOF"
+#!/bin/bash
+
+echo $testbus_answer
+exit 0
+EOF
+
+do_run $script
 
 testbus_exit

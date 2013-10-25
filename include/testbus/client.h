@@ -19,6 +19,7 @@ extern ni_bool_t		ni_testbus_call_delete(ni_dbus_object_t *);
 extern ni_dbus_object_t *	ni_testbus_call_claim_host_by_name(const char *, ni_dbus_object_t *, const char *);
 extern ni_dbus_object_t *	ni_testbus_call_claim_host_by_capability(const char *, ni_dbus_object_t *, const char *);
 extern ni_dbus_object_t *	ni_testbus_call_get_agent(const char *);
+extern ni_bool_t		ni_testbus_call_setenv(ni_dbus_object_t *, const char *name, const char *value);
 extern ni_buffer_t *		ni_testbus_agent_retrieve_file(ni_dbus_object_t *, const char *);
 extern ni_bool_t		ni_testbus_call_upload_file(ni_dbus_object_t *, const ni_buffer_t *);
 extern ni_buffer_t *		ni_testbus_call_download_file(ni_dbus_object_t *);
