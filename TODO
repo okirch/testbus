@@ -1,5 +1,7 @@
 
 Agent:
+	Agent should use well-known proxy socket?
+
 	testbus-client agent-add-capability foo bar baz
 
 	testbus-client agent-setenv foo=bar ...
@@ -11,10 +13,10 @@ Agent:
 	Monitor when the master goes away. Reconnect when that
 	happens.
 
+	Process handling: act on SIGCHLD rather than monitoring its I/O
+
 Server:
 	Fix /org/openSUSE/Testbus/Host/Host* naming
-
-	When a process object is destroyed, send a signal
 
 	When a host capability is added, send a signal
 	When a host comes back, send a signal
