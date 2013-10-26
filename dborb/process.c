@@ -164,7 +164,6 @@ ni_process_buffer_prepare_writer(struct ni_process_buffer *pb, int destfd)
 	if (pb->capture) {
 		ni_assert(pb->fdpair[1] >= 0);
 
-		ni_trace("prepare writer fd=%d", destfd);
 		if (dup2(pb->fdpair[1], destfd) < 0)
 			goto failed;
 	} else {
@@ -198,7 +197,6 @@ ni_process_buffer_prepare_reader(struct ni_process_buffer *pb, ni_process_t *pi)
 		ni_socket_activate(pb->socket);
 		close(pb->fdpair[1]);
 
-		ni_trace("%s: pb %p sock %p", __func__, pb, pb->socket);
 		pb->fdpair[0] = pb->fdpair[1] = -1;
 	}
 

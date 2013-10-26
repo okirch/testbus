@@ -220,7 +220,6 @@ __ni_Testbus_Tmpfile_retrieve(ni_dbus_object_t *object, const ni_dbus_method_t *
 		uint64_t size = ni_buffer_count(file->data);
 		unsigned char *data;
 
-		ni_trace("%s: req %u@%u, size=%u", file->name, count, (int) offset, (int) size);
 		if (offset < size) {
 			data = ni_buffer_head(file->data) + offset;
 			if (size - offset < count)

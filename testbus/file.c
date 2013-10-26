@@ -234,7 +234,6 @@ ni_testbus_file_deserialize(const ni_dbus_variant_t *dict, ni_testbus_file_array
 		ni_string_dup(&file->object_path, path);
 	}
 
-	ni_trace("file %s inum %u iseq %u path %s", file->name, file->inum, file->iseq, file->object_path);
 	return file;
 }
 

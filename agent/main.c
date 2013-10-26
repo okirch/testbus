@@ -376,7 +376,6 @@ __ni_testbus_process_read_notify(ni_process_t *pi, ni_process_buffer_t *pbf)
 	struct __ni_testbus_process_context *ctx = pi->user_data;
 	ni_buffer_chain_t **chain = NULL;
 
-	ni_trace("%s(%u, %u)", __func__, pi->pid, ni_buffer_count(pbf->wbuf));
 	if (pbf == &pi->stdout)
 		chain = &ctx->stdout.buffers;
 	else
