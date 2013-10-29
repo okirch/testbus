@@ -190,10 +190,12 @@ static void		io_endpoint_queue(io_endpoint_list_t *, io_endpoint_t *);
 
 static io_endpoint_t *	io_endpoint_pipe_new(int, int);
 static io_endpoint_t *	io_endpoint_socket_new(io_transport_t *xprt);
+static io_endpoint_t *	io_endpoint_serial_new(io_transport_t *xprt);
 static void		io_endpoint_shutdown_source(io_endpoint_t *sink, io_endpoint_t *source);
 static void		io_endpoint_free(io_endpoint_t *);
 
 static void		io_transport_unix_connector_init(io_transport_t *, const char *sockname);
+static void		io_transport_serial_connector_init(io_transport_t *, const char *sockname);
 static void		io_transport_multiplex_init(io_transport_t *, io_endpoint_t *, io_transport_t *);
 
 static io_mbuf_t *	proxy_channel_open_new(unsigned int channel_id);
@@ -320,6 +322,8 @@ main(int argc, char **argv)
 
 		if (!strncmp(opt_upstream, "unix:", 5)) {
 			io_transport_unix_connector_init(&proxy.upstream, opt_upstream + 5);
+		} else if (!strncmp(opt_upstream, "serial:", 7)) {
+			io_transport_serial_connector_init(&proxy.upstream, opt_upstream + 7);
 		} else {
 			ni_fatal("don't know how to handle upstream \"%s\"", opt_upstream);
 		}
@@ -433,6 +437,42 @@ io_endpoint_list_purge(io_endpoint_list_t *list)
 }
 
 void
+io_hexdump(const io_endpoint_t *sink, const io_mbuf_t *mbuf)
+{
+	ni_buffer_t *bp = mbuf->buffer;
+	unsigned int written, total;
+
+	if (bp == NULL)
+		return;
+
+	total =  ni_buffer_count(bp);
+
+	ni_trace(">> Writing %u bytes to socket %d", total, sink->wfd);
+
+	for (written = 0; written < total; ) {
+		const unsigned char *p = ni_buffer_head(bp) + written;
+		char printed[33];
+		unsigned int i, n;
+
+		if ((n = total - written) > 16)
+			n = 16;
+
+		for (i = 0; i < n; ++i) {
+			unsigned char cc = p[i];
+
+			if (cc < 0x20 || 0x7e < cc)
+				cc = '.';
+
+			printed[i] = cc;
+		}
+		printed[i] = '\0';
+
+		ni_trace("%48s    %s", ni_print_hex(p, n), printed);
+		written += n;
+	}
+}
+
+void
 io_endpoint_queue_write(io_endpoint_t *sink, io_mbuf_t *mbuf)
 {
 	io_endpoint_t *source;
@@ -450,6 +490,8 @@ io_endpoint_queue_write(io_endpoint_t *sink, io_mbuf_t *mbuf)
 		}
 		sink->connected = TRUE;
 	}
+
+	io_hexdump(sink, mbuf);
 
 	if ((source = mbuf->source) != NULL) {
 		ni_assert(mbuf->credit <= source->rx_credit);
@@ -609,6 +651,27 @@ io_endpoint_socket_new(io_transport_t *xprt)
 	return ep;
 }
 
+/*
+ * Handle serial device as endpoint
+ */
+io_endpoint_t *
+io_endpoint_serial_new(io_transport_t *xprt)
+{
+	io_endpoint_t *ep;
+	int fd;
+
+	fd = open(xprt->address, O_RDWR);
+	if (fd < 0)
+		ni_fatal("cannot open serial device %s: %m", xprt->address);
+
+	fcntl(fd, F_SETFD, FD_CLOEXEC);
+
+	/* FIXME: set up in raw mode, etc */
+
+	ep = __io_endpoint_new(fd, fd, TRUE);
+	return ep;
+}
+
 void
 io_endpoint_free(io_endpoint_t *ep)
 {
@@ -641,7 +704,14 @@ io_transport_unix_connector_init(io_transport_t *xprt, const char *sockname)
 {
 	xprt->connector = io_endpoint_socket_new;
 	xprt->delayed_connector = io_endpoint_socket_delayed_connect;
-	xprt->address = opt_upstream + 5;
+	xprt->address = sockname;
+}
+
+void
+io_transport_serial_connector_init(io_transport_t *xprt, const char *devname)
+{
+	xprt->connector = io_endpoint_serial_new;
+	xprt->address = devname;
 }
 
 static void
