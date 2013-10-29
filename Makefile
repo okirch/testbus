@@ -102,10 +102,28 @@ AGNTOBJS= $(addprefix obj/,$(AGNTSRCS:.c=.o))
 PROXY	= dbus-proxy
 PROXOBJS= $(addprefix obj/,$(PROXSRCS:.c=.o))
 
-ALL	= $(LIBDBORB) $(LIBTESTBUS) $(MASTER) $(CLIENT) $(AGENT) $(PROXY)
+BINTGTS	= $(MASTER) $(CLIENT) $(AGENT) $(PROXY)
+LIBTGTS	= $(LIBDBORB) $(LIBTESTBUS)
+ALL	= $(LIBTGTS) $(BINTGTS)
 LIBDEPS	= $(LIBDBORB) $(LIBTESTBUS)
 
 all:	$(ALL)
+
+install: install-bin install-data
+
+install-bin: $(ALL)
+	install -m755 -d $(DESTDIR)/usr/bin
+	install -m555 -s $(BINTGTS) $(DESTDIR)/usr/bin
+
+install-data: etc/org.opensuse.Testbus.conf
+	install -m755 -d $(DESTDIR)/etc
+	install -m755 -d $(DESTDIR)/etc/testbus
+	install -m644 etc/config.xml $(DESTDIR)/etc/testbus/config.xml
+	install -m755 -d $(DESTDIR)/etc/testbus/schema
+	install -m644 schema/*.xml $(DESTDIR)/etc/testbus/schema
+	install -m755 -d $(DESTDIR)/etc/dbus-1/system.d/
+	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/
+	install -m755 -d $(DESTDIR)/var/run/testbus
 
 distclean clean::
 	rm -rf obj core vgcore.*
