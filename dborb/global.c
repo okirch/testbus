@@ -8,6 +8,7 @@
 #endif
 
 #include <signal.h>
+#include <limits.h>
 
 #include <dborb/netinfo.h>
 #include "appconfig.h"
@@ -69,6 +70,21 @@ ni_set_global_config_path(const char *pathname)
 }
 
 const char *
+ni_config_piddir(void)
+{
+	ni_config_fslocation_t *fsloc = &ni_global.config->piddir;
+	static ni_bool_t firsttime = TRUE;
+
+	if (firsttime) {
+		if (ni_mkdir_maybe(fsloc->path, fsloc->mode) < 0)
+			ni_fatal("Cannot create pid file directory \"%s\": %m", fsloc->path);
+		firsttime = FALSE;
+	}
+
+	return fsloc->path;
+}
+
+const char *
 ni_config_statedir(void)
 {
 	ni_config_fslocation_t *fsloc = &ni_global.config->statedir;
@@ -88,3 +104,18 @@ ni_server_listen_other_events(void (*event_handler)(ni_event_t))
 {
 	ni_global.other_event = event_handler;
 }
+
+/*
+ * Utility functions for starting/stopping a daemon.
+ */
+int
+ni_server_background(const char *appname)
+{
+	const char *piddir = ni_config_piddir();
+	char pidfilepath[PATH_MAX];
+
+	ni_assert(appname != NULL);
+	snprintf(pidfilepath, sizeof(pidfilepath), "%s/%s.pid", piddir, appname);
+	return ni_daemonize(pidfilepath, 0644);
+}
+

@@ -67,6 +67,7 @@ enum {
 	OPT_LOG_LEVEL,
 	OPT_LOG_TARGET,
 
+	OPT_FOREGROUND,
 	OPT_UPSTREAM,
 	OPT_DOWNSTREAM,
 	OPT_EXECUTE,
@@ -81,6 +82,7 @@ static struct option	options[] = {
 	{ "log-level",		required_argument,	NULL,	OPT_LOG_LEVEL },
 	{ "log-target",		required_argument,	NULL,	OPT_LOG_TARGET },
 
+	{ "foreground",		no_argument,		NULL,	OPT_FOREGROUND },
 	{ "upstream",		required_argument,	NULL,	OPT_UPSTREAM },
 	{ "downstream",		required_argument,	NULL,	OPT_DOWNSTREAM },
 
@@ -202,6 +204,7 @@ main(int argc, char **argv)
 		usage:
 		case OPT_HELP:
 			fprintf(stderr,
+				"%s [options] --downstream <streamspec>\n"
 				"%s [options] -- session-cmd [session-options ...]\n"
 				"This command understands the following options\n"
 				"  --help\n"
@@ -217,6 +220,7 @@ main(int argc, char **argv)
 				"        Set log destination to <stderr|syslog>.\n"
 				"  --foreground\n"
 				"        Tell the daemon to not background itself at startup.\n"
+				, program_name
 				, program_name);
 			return (c == OPT_HELP ? 0 : 1);
 
@@ -258,6 +262,10 @@ main(int argc, char **argv)
 		case OPT_DOWNSTREAM:
 			opt_downstream = optarg;
 			break;
+
+		case OPT_FOREGROUND:
+			opt_foreground = 1;
+			break;
 		}
 	}
 
@@ -281,7 +289,11 @@ main(int argc, char **argv)
 			return 1;
 		}
 	} else if (opt_foreground && getppid() != 1) {
-		ni_log_destination(program_name, "syslog:perror");
+		if (ni_debug) {
+			ni_log_destination(program_name, "perror");
+		} else {
+			ni_log_destination(program_name, "syslog:perror");
+		}
 	} else {
 		ni_log_destination(program_name, "syslog");
 	}
@@ -1099,6 +1111,11 @@ do_proxy(proxy_t *proxy)
 	struct pollfd pfd[MAXCONN + 1];
 
 	//signal(SIGPIPE, SIG_IGN);
+
+	if (!opt_foreground) {
+		if (ni_server_background(program_name) < 0)
+			ni_fatal("unable to background server");
+	}
 
 	while (!proxy_done) {
 		io_endpoint_t *ep;
