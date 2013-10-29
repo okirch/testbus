@@ -111,9 +111,13 @@ struct io_endpoint {
 	io_endpoint_t *	next;
 
 	int		type;
+	io_transport_t *transport;
 
 	io_endpoint_t *	sink;
-	io_transport_t *sink_transport;
+
+	struct {
+		io_transport_t *transport;
+	} mux;
 
 	/* Channel ID 0 means this is a multiplexing end point.
 	 * Everything else indicates the ID of this channel */
@@ -127,7 +131,10 @@ struct io_endpoint {
 
 	io_mbuf_t *	wqueue;
 
-	unsigned int	shutdown_write : 1;
+	unsigned int	shutdown_write : 1,
+			connected      : 1;
+
+	char *		socket_name;
 };
 
 #define DEFAULT_CREDIT_SIMPLEX		8192
@@ -144,11 +151,13 @@ struct io_transport {
 	io_endpoint_t *	multiplex;
 	io_endpoint_list_t ep_list;
 
-	io_endpoint_t *	(*connector)(const char *);
+	io_endpoint_t *	(*connector)(io_transport_t *);
 	const char *	address;
 
-	io_endpoint_t *	(*acceptor)(int fd);
+	io_endpoint_t *	(*acceptor)(io_transport_t *, int fd);
 	int		listen_fd;
+
+	int		(*delayed_connector)(io_transport_t *, io_endpoint_t *);
 };
 
 typedef struct proxy	proxy_t;
@@ -167,7 +176,7 @@ static char *		opt_downstream;
 
 static void		proxy_init(proxy_t *);
 static int		proxy_connect(const char *);
-static io_endpoint_t *	proxy_accept(int fd);
+static io_endpoint_t *	proxy_accept(io_transport_t *xprt, int fd);
 static int		proxy_listen(const char *);
 static int		do_exec(char **);
 static void		do_proxy(proxy_t *);
@@ -180,10 +189,11 @@ static void		io_endpoint_queue_write(io_endpoint_t *, io_mbuf_t *);
 static void		io_endpoint_queue(io_endpoint_list_t *, io_endpoint_t *);
 
 static io_endpoint_t *	io_endpoint_pipe_new(int, int);
-static io_endpoint_t *	io_endpoint_socket_new(const char *);
+static io_endpoint_t *	io_endpoint_socket_new(io_transport_t *xprt);
 static void		io_endpoint_shutdown_source(io_endpoint_t *sink, io_endpoint_t *source);
 static void		io_endpoint_free(io_endpoint_t *);
 
+static void		io_transport_unix_connector_init(io_transport_t *, const char *sockname);
 static void		io_transport_multiplex_init(io_transport_t *, io_endpoint_t *, io_transport_t *);
 
 static io_mbuf_t *	proxy_channel_open_new(unsigned int channel_id);
@@ -309,8 +319,7 @@ main(int argc, char **argv)
 			opt_upstream = "unix:/var/run/dbus/system_bus_socket";
 
 		if (!strncmp(opt_upstream, "unix:", 5)) {
-			proxy.upstream.connector = io_endpoint_socket_new;
-			proxy.upstream.address = opt_upstream + 5;
+			io_transport_unix_connector_init(&proxy.upstream, opt_upstream + 5);
 		} else {
 			ni_fatal("don't know how to handle upstream \"%s\"", opt_upstream);
 		}
@@ -429,6 +438,19 @@ io_endpoint_queue_write(io_endpoint_t *sink, io_mbuf_t *mbuf)
 	io_endpoint_t *source;
 	io_mbuf_t **pos, *cur;
 
+	if (!sink->connected) {
+		io_transport_t *xprt = sink->transport;
+
+		ni_debug_socket("sink not yet connected");
+		ni_assert(xprt);
+		if (xprt->delayed_connector) {
+			if (xprt->delayed_connector(xprt, sink) < 0) {
+				ni_fatal("endpoint: delayed connect failed");
+			}
+		}
+		sink->connected = TRUE;
+	}
+
 	if ((source = mbuf->source) != NULL) {
 		ni_assert(mbuf->credit <= source->rx_credit);
 		source->rx_credit -= mbuf->credit;
@@ -533,43 +555,57 @@ io_endpoint_shutdown_source(io_endpoint_t *sink, io_endpoint_t *source)
 }
 
 static io_endpoint_t *
-__io_endpoint_new(int rfd, int wfd)
+__io_endpoint_new(int rfd, int wfd, ni_bool_t connected)
 {
 	io_endpoint_t *ep;
 
 	ep = ni_malloc(sizeof(*ep));
+	ep->connected = connected;
 	ep->rfd = rfd;
 	ep->wfd = wfd;
+
 	return ep;
 }
 
 io_endpoint_t *
 io_endpoint_pipe_new(int rfd, int wfd)
 {
-	return __io_endpoint_new(rfd, wfd);
+	return __io_endpoint_new(rfd, wfd, TRUE);
+}
+
+int
+io_endpoint_socket_delayed_connect(io_transport_t *xprt, io_endpoint_t *ep)
+{
+	struct sockaddr_un sun;
+
+	ni_debug_socket("socket %d: connect to %s", ep->wfd, xprt->address);
+
+	memset(&sun, 0, sizeof(sun));
+	sun.sun_family = AF_LOCAL;
+	strcpy(sun.sun_path, xprt->address);
+	if (connect(ep->wfd, (struct sockaddr *) &sun, SUN_LEN(&sun)) < 0)
+		ni_fatal("cannot connect PF_LOCAL socket to %s: %m", xprt->address);
+
+	fcntl(ep->wfd, F_SETFL, O_NONBLOCK);
+	return 0;
 }
 
 io_endpoint_t *
-io_endpoint_socket_new(const char *sockname)
+io_endpoint_socket_new(io_transport_t *xprt)
 {
 	io_endpoint_t *ep;
-	struct sockaddr_un sun;
 	int fd;
 
 	fd = socket(PF_LOCAL, SOCK_STREAM, 0);
 	if (fd < 0)
 		ni_fatal("cannot create PF_LOCAL socket: %m");
 
-	memset(&sun, 0, sizeof(sun));
-	sun.sun_family = AF_LOCAL;
-	strcpy(sun.sun_path, sockname);
-	if (connect(fd, (struct sockaddr *) &sun, SUN_LEN(&sun)) < 0)
-		ni_fatal("cannot connect PF_LOCAL socket to %s: %m", sockname);
-
 	fcntl(fd, F_SETFD, FD_CLOEXEC);
-	fcntl(fd, F_SETFL, O_NONBLOCK);
 
-	ep = __io_endpoint_new(fd, fd);
+	/* Explicitly mark the new endpoint as not yet connected */
+	ep = __io_endpoint_new(fd, fd, FALSE);
+	ep->transport = xprt;
+
 	return ep;
 }
 
@@ -600,12 +636,20 @@ io_endpoint_free(io_endpoint_t *ep)
 	free(ep);
 }
 
+void
+io_transport_unix_connector_init(io_transport_t *xprt, const char *sockname)
+{
+	xprt->connector = io_endpoint_socket_new;
+	xprt->delayed_connector = io_endpoint_socket_delayed_connect;
+	xprt->address = opt_upstream + 5;
+}
+
 static void
-io_transport_multiplex_init(io_transport_t *xprt, io_endpoint_t *ep, io_transport_t *sink_transport)
+io_transport_multiplex_init(io_transport_t *xprt, io_endpoint_t *ep, io_transport_t *mux_transport)
 {
 	xprt->multiplex = ep;
 	ep->type = IO_ENDPOINT_TYPE_MULTIPLEX;
-	ep->sink_transport = sink_transport;
+	ep->mux.transport = mux_transport;
 }
 
 void
@@ -643,7 +687,7 @@ proxy_listen(const char *sockname)
 }
 
 io_endpoint_t *
-proxy_accept(int listen_fd)
+proxy_accept(io_transport_t *xprt, int listen_fd)
 {
 	io_endpoint_t *ep;
 	static int nfails = 0;
@@ -657,9 +701,7 @@ proxy_accept(int listen_fd)
 	}
 	nfails = 0;
 
-	ep = ni_malloc(sizeof(*ep));
-	ep->rfd = fd;
-	ep->wfd = fd;
+	ep = __io_endpoint_new(fd, fd, TRUE);
 
 	fcntl(fd, F_SETFL, O_NONBLOCK);
 	return ep;
@@ -740,12 +782,12 @@ proxy_channel_close_new(unsigned int channel_id)
 static void
 proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 {
-	io_transport_t *xprt = source->sink_transport;
+	io_transport_t *xprt = source->mux.transport;
 	struct data_header *hdr;
 	io_endpoint_t *sink;
 	unsigned int channel_id;
 
-	ni_assert(source->sink_transport);
+	ni_assert(source->mux.transport);
 
 	hdr = ni_buffer_pull_head(bp, DATA_HEADER_SIZE);
 	channel_id = ntohl(hdr->channel);
@@ -754,11 +796,11 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 			__proxy_cmdname(ntohl(hdr->cmd)), channel_id, ntohl(hdr->count));
 
 	if (hdr->cmd == htonl(CHANNEL_OPEN)) {
-		sink = __proxy_channel_by_id(source->sink_transport, channel_id);
+		sink = __proxy_channel_by_id(xprt, channel_id);
 		if (sink)
 			ni_fatal("duplicate open for channel %u", channel_id);
 
-		sink = xprt->connector(xprt->address);
+		sink = xprt->connector(xprt);
 		if (sink == NULL)
 			ni_fatal("unable to open channel %u: cannot connect to %s", channel_id, xprt->address);
 
@@ -770,7 +812,7 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 		return;
 	}
 
-	sink = __proxy_channel_by_id(source->sink_transport, channel_id);
+	sink = __proxy_channel_by_id(xprt, channel_id);
 	if (sink == NULL) {
 		ni_debug_dbus("proxy_demux: dropping packet for channel %u", channel_id);
 		ni_buffer_free(bp);
@@ -1069,7 +1111,7 @@ proxy_downstream_accept(proxy_t *proxy, io_endpoint_t *dummy, const struct pollf
 	if (pfd->revents & POLLIN) {
 		io_endpoint_t *ep, *upstream;
 
-		ep = proxy->downstream.acceptor(pfd->fd);
+		ep = proxy->downstream.acceptor(&proxy->downstream, pfd->fd);
 		if (ep == NULL)
 			return 0;
 
@@ -1082,7 +1124,7 @@ proxy_downstream_accept(proxy_t *proxy, io_endpoint_t *dummy, const struct pollf
 			/* Send a CHANNEL_OPEN command to upstream */
 			io_endpoint_queue_write(upstream, proxy_channel_open_new(ep->channel_id));
 		} else {
-			upstream = proxy->upstream.connector(proxy->upstream.address);
+			upstream = proxy->upstream.connector(&proxy->upstream);
 			if (upstream == NULL) {
 				io_endpoint_free(ep);
 				return 0;
