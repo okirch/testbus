@@ -82,6 +82,7 @@ __ni_Testbus_Hostlist_createHost(ni_dbus_object_t *object, const ni_dbus_method_
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
 	if ((host = ni_testbus_host_new(context, name, &rc)) == NULL) {
+		ni_error("unable to create host \"%s\": error %d", name, rc);
 		ni_dbus_set_error_from_code(error, rc, "unable to create new host \"%s\"", name);
 		return FALSE;
 	}
