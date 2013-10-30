@@ -176,7 +176,7 @@ static char *		opt_downstream;
 
 static void		proxy_init(proxy_t *);
 static int		proxy_connect(const char *);
-static io_endpoint_t *	proxy_accept(io_transport_t *xprt, int fd);
+static io_endpoint_t *	io_endpoint_socket_accept(io_transport_t *xprt, int fd);
 static int		proxy_listen(const char *);
 static int		do_exec(char **);
 static void		do_proxy(proxy_t *);
@@ -331,11 +331,11 @@ main(int argc, char **argv)
 
 	if (opt_downstream == NULL) {
 		proxy.downstream.listen_fd = do_exec(opt_argv);
-		proxy.downstream.acceptor = proxy_accept;
+		proxy.downstream.acceptor = io_endpoint_socket_accept;
 	} else
 	if (!strncmp(opt_downstream, "unix:", 5)) {
 		proxy.downstream.listen_fd = proxy_listen(opt_downstream + 5);
-		proxy.downstream.acceptor = proxy_accept;
+		proxy.downstream.acceptor = io_endpoint_socket_accept;
 	} else {
 		ni_fatal("don't know how to handle downstream \"%s\"", opt_downstream);
 	}
@@ -651,6 +651,28 @@ io_endpoint_socket_new(io_transport_t *xprt)
 	return ep;
 }
 
+io_endpoint_t *
+io_endpoint_socket_accept(io_transport_t *xprt, int listen_fd)
+{
+	io_endpoint_t *ep;
+	static int nfails = 0;
+	int fd;
+
+	ni_assert(xprt->listen_fd == listen_fd);
+	if ((fd = accept(listen_fd, NULL, NULL)) < 0) {
+		ni_error("accept: %m");
+		if (nfails > 20)
+			ni_fatal("Giving up");
+		return NULL;
+	}
+	nfails = 0;
+
+	ep = __io_endpoint_new(fd, fd, TRUE);
+
+	fcntl(fd, F_SETFL, O_NONBLOCK);
+	return ep;
+}
+
 /*
  * Handle serial device as endpoint
  */
@@ -754,27 +776,6 @@ proxy_listen(const char *sockname)
 
 	fcntl(fd, F_SETFD, FD_CLOEXEC);
 	return fd;
-}
-
-io_endpoint_t *
-proxy_accept(io_transport_t *xprt, int listen_fd)
-{
-	io_endpoint_t *ep;
-	static int nfails = 0;
-	int fd;
-
-	if ((fd = accept(listen_fd, NULL, NULL)) < 0) {
-		ni_error("accept: %m");
-		if (nfails > 20)
-			ni_fatal("Giving up");
-		return NULL;
-	}
-	nfails = 0;
-
-	ep = __io_endpoint_new(fd, fd, TRUE);
-
-	fcntl(fd, F_SETFL, O_NONBLOCK);
-	return ep;
 }
 
 /*
