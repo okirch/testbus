@@ -203,7 +203,9 @@ static void		io_endpoint_free(io_endpoint_t *);
 
 static ni_bool_t	io_transport_init(io_transport_t *xprt, const char *param_string);
 static ni_bool_t	io_transport_listen(io_transport_t *xprt);
-static io_endpoint_t *	io_transport_connect(io_transport_t *xprt);
+static io_endpoint_t *	io_transport_accept(io_transport_t *xprt, int fd);
+static io_endpoint_t *	io_transport_connect(io_transport_t *xprt, ni_bool_t full);
+static ni_bool_t	io_transport_connect_finish(io_transport_t *xprt, io_endpoint_t *ep);
 
 static io_mbuf_t *	proxy_channel_open_new(unsigned int channel_id);
 static io_mbuf_t *	proxy_channel_close_new(unsigned int channel_id);
@@ -486,12 +488,8 @@ io_endpoint_queue_write(io_endpoint_t *sink, io_mbuf_t *mbuf)
 
 		ni_debug_socket("sink not yet connected");
 		ni_assert(xprt);
-		if (xprt->ops->delayed_connector) {
-			if (!xprt->ops->delayed_connector(xprt, sink)) {
-				ni_fatal("endpoint: delayed connect failed");
-			}
-		}
-		sink->connected = TRUE;
+		if (!io_transport_connect_finish(xprt, sink))
+			ni_fatal("endpoint: delayed connect failed");
 	}
 
 	io_hexdump(sink, mbuf);
@@ -670,6 +668,8 @@ io_endpoint_socket_new(io_transport_t *xprt)
 	ep = __io_endpoint_new(fd, fd, FALSE);
 	ep->transport = xprt;
 
+	/* Note, we do not connect yet - we delay this until later */
+
 	return ep;
 }
 
@@ -681,6 +681,7 @@ io_endpoint_socket_listen(io_transport_t *xprt)
 	ni_assert(sockname);
 	ni_assert(xprt->listen_fd < 0);
 
+	ni_debug_socket("%s: listening on socket %s", xprt->name, sockname);
 	xprt->listen_fd = io_socket_listen(sockname);
 	if (xprt->listen_fd < 0)
 		return FALSE;
@@ -785,10 +786,10 @@ __io_transport_init(io_transport_t *xprt, const io_transport_ops_t *ops, const c
 }
 
 void
-io_transport_unix_init(io_transport_t *xprt, const char *sockname)
+io_transport_unix_init(io_transport_t *xprt, const char *sockname, io_endpoint_type_t type)
 {
 	ni_debug_socket("%s(%s)", __func__, sockname);
-	__io_transport_init(xprt, &io_unix_transport_ops, sockname, IO_ENDPOINT_TYPE_SIMPLEX);
+	__io_transport_init(xprt, &io_unix_transport_ops, sockname, type);
 }
 
 void
@@ -818,7 +819,7 @@ io_transport_init(io_transport_t *xprt, const char *param_string)
 		io_transport_stdio_init(xprt);
 	} else
 	if (!strcmp(type, "unix")) {
-		io_transport_unix_init(xprt, options);
+		io_transport_unix_init(xprt, options, IO_ENDPOINT_TYPE_SIMPLEX);
 	} else
 	if (!strcmp(type, "serial")) {
 		io_transport_serial_init(xprt, options);
@@ -835,7 +836,8 @@ io_transport_init(io_transport_t *xprt, const char *param_string)
 	if (xprt->type == IO_ENDPOINT_TYPE_MULTIPLEX) {
 		io_endpoint_t *ep;
 
-		if (!(ep = io_transport_connect(xprt))) {
+		ni_debug_socket("%s: opening multiplexed endpoint now", xprt->name);
+		if (!(ep = io_transport_connect(xprt, TRUE))) {
 			ni_error("unable to set up %s transport for multiplexing", xprt->name);
 			return FALSE;
 		}
@@ -847,7 +849,7 @@ io_transport_init(io_transport_t *xprt, const char *param_string)
 }
 
 static io_endpoint_t *
-io_transport_connect(io_transport_t *xprt)
+io_transport_connect(io_transport_t *xprt, ni_bool_t now)
 {
 	io_endpoint_t *ep;
 
@@ -857,7 +859,31 @@ io_transport_connect(io_transport_t *xprt)
 		return NULL;
 
 	ep->type = xprt->type;
+
+	if (!ep->connected && now && !io_transport_connect_finish(xprt, ep)) {
+		io_endpoint_free(ep);
+		return NULL;
+	}
+
 	return ep;
+}
+
+static ni_bool_t
+io_transport_connect_finish(io_transport_t *xprt, io_endpoint_t *ep)
+{
+	if (ep->connected) {
+		ni_error("%s: %s endpoint already connected", __func__, xprt->name);
+		return FALSE;
+	}
+
+	ni_assert(xprt->ops->delayed_connector);
+	if (!xprt->ops->delayed_connector(xprt, ep)) {
+		ni_error("%s: delayed connect of socket failed", xprt->name);
+		return FALSE;
+	}
+
+	ep->connected = TRUE;
+	return TRUE;
 }
 
 static ni_bool_t
@@ -867,10 +893,19 @@ io_transport_listen(io_transport_t *xprt)
 		return TRUE;
 
 	return xprt->ops->listen(xprt);
-	if (xprt->listen_fd < 0)
-		return FALSE;
+}
 
-	return TRUE;
+static io_endpoint_t *
+io_transport_accept(io_transport_t *xprt, int fd)
+{
+	io_endpoint_t *ep;
+
+	ep = xprt->ops->acceptor(xprt, fd);
+	if (ep == NULL)
+		return NULL;
+
+	ep->type = xprt->type;
+	return ep;
 }
 
 void
@@ -1008,7 +1043,7 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 		if (sink)
 			ni_fatal("demux: duplicate open for %s channel %u", xprt->name, channel_id);
 
-		sink = io_transport_connect(xprt);
+		sink = io_transport_connect(xprt, TRUE);
 		if (sink == NULL)
 			ni_fatal("demux: unable to open %s channel %u: cannot connect to %s",
 					xprt->name, channel_id, xprt->address);
@@ -1320,11 +1355,10 @@ proxy_downstream_accept(proxy_t *proxy, io_endpoint_t *dummy, const struct pollf
 	if (pfd->revents & POLLIN) {
 		io_endpoint_t *ep, *upstream;
 
-		ep = proxy->downstream.ops->acceptor(&proxy->downstream, pfd->fd);
+		ep = io_transport_accept(&proxy->downstream, pfd->fd);
 		if (ep == NULL)
 			return 0;
 
-		ep->type = IO_ENDPOINT_TYPE_SIMPLEX;
 		ep->channel_id = proxy->channel_id++;
 		ep->rx_credit = DEFAULT_CREDIT_SIMPLEX;
 		ni_assert(ep->channel_id);
@@ -1333,12 +1367,16 @@ proxy_downstream_accept(proxy_t *proxy, io_endpoint_t *dummy, const struct pollf
 			/* Send a CHANNEL_OPEN command to upstream */
 			io_endpoint_queue_write(upstream, proxy_channel_open_new(ep->channel_id));
 		} else {
-			upstream = proxy->upstream.ops->connector(&proxy->upstream);
+			/* We create an upstream end point, but do not connect it immediately.
+			 * With KVM, for instance, we may get a connection from KVM, but data
+			 * from the agent running in the guest will not arrive for a long time.
+			 * This is usually too long for dbus-daemon, which will simply disconnect
+			 * us after 5 seconds. */
+			upstream = io_transport_connect(&proxy->upstream, FALSE);
 			if (upstream == NULL) {
 				io_endpoint_free(ep);
 				return 0;
 			}
-			upstream->type = IO_ENDPOINT_TYPE_SIMPLEX;
 			upstream->channel_id = proxy->channel_id++;
 			upstream->rx_credit = DEFAULT_CREDIT_SIMPLEX;
 			upstream->sink = ep;
@@ -1374,6 +1412,7 @@ do_proxy(proxy_t *proxy)
 		int n;
 
 		if (proxy->downstream.listen_fd >= 0) {
+			/* FIXME: could use io_endpoint_poll as well */
 			__set_poll_info(info + nfds, proxy_downstream_accept, NULL);
 			pfd[nfds].fd = proxy->downstream.listen_fd;
 			pfd[nfds].events = POLLIN;
