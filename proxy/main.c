@@ -116,10 +116,6 @@ struct io_endpoint {
 
 	io_endpoint_t *	sink;
 
-	struct {
-		io_transport_t *transport;
-	} mux;
-
 	/* Channel ID 0 means this is a multiplexing end point.
 	 * Everything else indicates the ID of this channel */
 	uint32_t	channel_id;
@@ -156,6 +152,7 @@ struct io_transport_ops {
 };
 
 struct io_transport {
+	const char *	name;
 	const io_transport_ops_t *ops;
 
 	io_endpoint_type_t type;
@@ -840,7 +837,6 @@ io_transport_multiplex_init(io_transport_t *xprt)
 	if (!(ep = io_transport_connect(xprt)))
 		return FALSE;
 
-	ep->mux.transport = xprt->other;
 	xprt->multiplex = ep;
 	return TRUE;
 }
@@ -878,7 +874,10 @@ proxy_init(struct proxy *proxy)
 	memset(proxy, 0, sizeof(*proxy));
 	proxy->channel_id = 1;
 
+	proxy->upstream.name = "upstream";
 	proxy->upstream.other = &proxy->downstream;
+
+	proxy->downstream.name = "downstream";
 	proxy->downstream.other = &proxy->upstream;
 }
 
@@ -984,12 +983,14 @@ proxy_channel_close_new(unsigned int channel_id)
 static void
 proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 {
-	io_transport_t *xprt = source->mux.transport;
+	const char *myname = source->transport->name;
+	io_transport_t *xprt = source->transport->other;
 	struct data_header *hdr;
 	io_endpoint_t *sink;
 	unsigned int channel_id;
 
-	ni_assert(source->mux.transport);
+	ni_assert(xprt);
+	ni_assert(xprt->other == source->transport);
 
 	hdr = ni_buffer_pull_head(bp, DATA_HEADER_SIZE);
 	channel_id = ntohl(hdr->channel);
@@ -1000,11 +1001,12 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 	if (hdr->cmd == htonl(CHANNEL_OPEN)) {
 		sink = __proxy_channel_by_id(xprt, channel_id);
 		if (sink)
-			ni_fatal("duplicate open for channel %u", channel_id);
+			ni_fatal("demux: duplicate open for %s channel %u", xprt->name, channel_id);
 
 		sink = io_transport_connect(xprt);
 		if (sink == NULL)
-			ni_fatal("unable to open channel %u: cannot connect to %s", channel_id, xprt->address);
+			ni_fatal("demux: unable to open %s channel %u: cannot connect to %s",
+					xprt->name, channel_id, xprt->address);
 
 		sink->channel_id = channel_id;
 		sink->sink = source;
@@ -1016,7 +1018,7 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 
 	sink = __proxy_channel_by_id(xprt, channel_id);
 	if (sink == NULL) {
-		ni_debug_dbus("proxy_demux: dropping packet for channel %u", channel_id);
+		ni_debug_dbus("demux: dropping %s packet for %s channel %u", myname, xprt->name, channel_id);
 		ni_buffer_free(bp);
 		return;
 	}
