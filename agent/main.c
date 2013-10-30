@@ -606,12 +606,10 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	if (!ni_testbus_agent_add_capabilities(host_object, &state->capabilities))
 		ni_fatal("failed to register agent capabilities");
 
-#if 0
 	if (!opt_foreground) {
 		if (ni_server_background(program_name) < 0)
 			ni_fatal("unable to background server");
 	}
-#endif
 
 	while (!ni_caught_terminal_signal()) {
 		long timeout;
