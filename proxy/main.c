@@ -201,14 +201,9 @@ static io_endpoint_t *	io_endpoint_socket_accept(io_transport_t *xprt, int fd);
 static void		io_endpoint_shutdown_source(io_endpoint_t *sink, io_endpoint_t *source);
 static void		io_endpoint_free(io_endpoint_t *);
 
+static ni_bool_t	io_transport_init(io_transport_t *xprt, const char *param_string);
 static ni_bool_t	io_transport_listen(io_transport_t *xprt);
 static io_endpoint_t *	io_transport_connect(io_transport_t *xprt);
-
-static void		io_transport_stdio_init(io_transport_t *xprt);
-static void		io_transport_pipe_init(io_transport_t *xprt, const char *sockname);
-static void		io_transport_unix_init(io_transport_t *xprt, const char *sockname);
-static void		io_transport_serial_init(io_transport_t *, const char *sockname);
-static ni_bool_t	io_transport_multiplex_init(io_transport_t *);
 
 static io_mbuf_t *	proxy_channel_open_new(unsigned int channel_id);
 static io_mbuf_t *	proxy_channel_close_new(unsigned int channel_id);
@@ -326,24 +321,11 @@ main(int argc, char **argv)
 		return 1;
 
 	proxy_init(&proxy);
-	if (!strcmp(opt_upstream, "stdio")) {
-		io_transport_stdio_init(&proxy.upstream);
-	} else {
-		if (opt_upstream == NULL)
-			opt_upstream = "unix:/var/run/dbus/system_bus_socket";
 
-		if (!strncmp(opt_upstream, "unix:", 5)) {
-			io_transport_unix_init(&proxy.upstream, opt_upstream + 5);
-		} else if (!strncmp(opt_upstream, "serial:", 7)) {
-			io_transport_serial_init(&proxy.upstream, opt_upstream + 7);
-		} else {
-			ni_fatal("don't know how to handle upstream \"%s\"", opt_upstream);
-		}
-	}
+	if (opt_upstream == NULL)
+		opt_upstream = "unix:/var/run/dbus/system_bus_socket";
 
-	/* If this is a multiplex transport, open the endpoint right away */
-	if (proxy.upstream.type == IO_ENDPOINT_TYPE_MULTIPLEX
-	 && io_transport_multiplex_init(&proxy.upstream))
+	if (!io_transport_init(&proxy.upstream, opt_upstream))
 		ni_fatal("Unable to set up upstream transport");
 
 	if (opt_downstream == NULL) {
@@ -353,16 +335,10 @@ main(int argc, char **argv)
 #else
 		ni_trace("exec not supported right now");
 #endif
-	} else
-	if (!strncmp(opt_downstream, "unix:", 5)) {
-		io_transport_unix_init(&proxy.downstream, opt_downstream + 5);
 	} else {
-		ni_fatal("don't know how to handle downstream \"%s\"", opt_downstream);
+		if (!io_transport_init(&proxy.downstream, opt_downstream))
+			ni_fatal("Unable to set up downstream transport");
 	}
-
-	if (proxy.downstream.type == IO_ENDPOINT_TYPE_MULTIPLEX
-	 && !io_transport_multiplex_init(&proxy.downstream))
-		ni_fatal("Unable to set up downstream transport");
 
 	if (!io_transport_listen(&proxy.downstream))
 		ni_fatal("failed to open downstream endpoint for listening");
@@ -804,7 +780,7 @@ __io_transport_init(io_transport_t *xprt, const io_transport_ops_t *ops, const c
 {
 	xprt->ops = ops;
 	xprt->type = type;
-	xprt->address = address;
+	xprt->address = address? ni_strdup(address) : NULL;
 	xprt->listen_fd = -1;
 }
 
@@ -830,14 +806,43 @@ io_transport_stdio_init(io_transport_t *xprt)
 }
 
 static ni_bool_t
-io_transport_multiplex_init(io_transport_t *xprt)
+io_transport_init(io_transport_t *xprt, const char *param_string)
 {
-	io_endpoint_t *ep;
+	char *copy, *type, *options;
 
-	if (!(ep = io_transport_connect(xprt)))
+	type = copy = ni_strdup(param_string);
+	if ((options = strchr(type, ':')) != NULL)
+		*options++ = '\0';
+
+	if (!strcmp(type, "stdio")) {
+		io_transport_stdio_init(xprt);
+	} else
+	if (!strcmp(type, "unix")) {
+		io_transport_unix_init(xprt, options);
+	} else
+	if (!strcmp(type, "serial")) {
+		io_transport_serial_init(xprt, options);
+	} else {
+		ni_error("%s: cannot parse param string \"%s\"", __func__, param_string);
+		ni_error("don't know how to configure %s transport", xprt->name);
+		free(copy);
 		return FALSE;
+	}
 
-	xprt->multiplex = ep;
+	free(copy);
+
+	/* If this is a multiplex transport, open the endpoint right away */
+	if (xprt->type == IO_ENDPOINT_TYPE_MULTIPLEX) {
+		io_endpoint_t *ep;
+
+		if (!(ep = io_transport_connect(xprt))) {
+			ni_error("unable to set up %s transport for multiplexing", xprt->name);
+			return FALSE;
+		}
+
+		xprt->multiplex = ep;
+	}
+
 	return TRUE;
 }
 
