@@ -24,6 +24,7 @@
 
 unsigned int		ni_debug;
 unsigned int		ni_log_level = NI_LOG_NOTICE;
+static FILE *		ni_log_file = NULL;
 static unsigned int	ni_log_syslog;
 static const char *	ni_log_ident;
 static unsigned int	ni_log_opts;
@@ -274,25 +275,91 @@ ni_log_reopen(void)
 }
 
 ni_bool_t
+__ni_file_parse_args(const char *oargs, unsigned int *options)
+{
+	unsigned int _options  = 0;
+	const char *filename = NULL, *_omode = "w";
+	char *args = NULL;
+
+	if (oargs) {
+		char *s, *next;
+
+		args = ni_strdup(oargs);
+
+		/*
+		 * [option[,option]]
+		 */
+		for (s = args; s; s = next) {
+			if ((next = strchr(s, ',')) != NULL)
+				*next++ = '\0';
+
+			if (!strcasecmp(s, "pid")) {
+				_options |= LOG_PID;
+			} else
+			if (!strcasecmp(s, "append")) {
+				_omode = "a";
+			} else
+			if (!strncasecmp(s, "path=", 5)) {
+				filename = s + 5;
+			} else
+			if (s[0] == '/') {
+				filename = s;
+			} else {
+				ni_error("unknown option to log destination file: \"%s\" (arg string=\"%s\")", s, oargs);
+				goto failed;
+			}
+		}
+	}
+
+	if (filename == NULL) {
+		ni_error("log destination file - no filename specified");
+		goto failed;
+	}
+
+	if (ni_log_file)
+		fclose(ni_log_file);
+	ni_log_file = fopen(filename, _omode);
+	if (ni_log_file == NULL) {
+		ni_error("unable to open log file \"%s\": %m", filename);
+		goto failed;
+	}
+	setlinebuf(ni_log_file);
+
+	if (options)
+		*options = _options;
+	if (args)
+		free(args);
+	return TRUE;
+
+failed:
+	if (args)
+		free(args);
+	return FALSE;
+}
+
+ni_bool_t
 __ni_stderr_parse_args(const char *args, unsigned int *options)
 {
 	unsigned int _options  = 0;
-	size_t beg, end, len;
 
-	/*
-	 * [option[,option]]
-	 */
-	beg = 0;
-	end = strcspn(args, ",:");
-	while (end > beg) {
-		len = end - beg;
-		if (!strncasecmp("pid", args+beg, len)) {
-			_options |= LOG_PID;
-		} else {
-			return FALSE;
+	if (args) {
+		size_t beg, end, len;
+
+		/*
+		 * [option[,option]]
+		 */
+		beg = 0;
+		end = strcspn(args, ",:");
+		while (end > beg) {
+			len = end - beg;
+			if (!strncasecmp("pid", args+beg, len)) {
+				_options |= LOG_PID;
+			} else {
+				return FALSE;
+			}
+			beg = end + strspn(args+end, ",");
+			end = beg + strcspn(args+beg, ",:");
 		}
-		beg = end + strspn(args+end, ",");
-		end = beg + strcspn(args+beg, ",:");
 	}
 
 	if (options)
@@ -305,31 +372,34 @@ __ni_syslog_parse_args(const char *args, unsigned int *options, unsigned int *fa
 {
 	unsigned int _options  = LOG_NDELAY | LOG_PID;
 	unsigned int _facility = LOG_DAEMON;
-	size_t beg, end, len;
 
-	/*
-	 * [option[,option]][:facility]
-	 */
-	end = strcspn(args, ":");
-	if (args[end] == ':' && args[end + 1]) {
-		if (ni_parse_uint_mapped(args + end + 1,
-					__syslog_facility_names,
-					&_facility) < 0)
-			return FALSE;
-	}
+	if (args) {
+		size_t beg, end, len;
 
-	beg = 0;
-	end = strcspn(args, ",:");
-	while (end > beg) {
-		len = end - beg;
-		if (!strncasecmp("perror", args+beg, len) ||
-		    !strncasecmp("stderr", args+beg, len)) {
-			_options |= LOG_PERROR;
-		} else {
-			return FALSE;
+		/*
+		 * [option[,option]][:facility]
+		 */
+		end = strcspn(args, ":");
+		if (args[end] == ':' && args[end + 1]) {
+			if (ni_parse_uint_mapped(args + end + 1,
+						__syslog_facility_names,
+						&_facility) < 0)
+				return FALSE;
 		}
-		beg = end + strspn(args+end, ",");
-		end = beg + strcspn(args+beg, ",:");
+
+		beg = 0;
+		end = strcspn(args, ",:");
+		while (end > beg) {
+			len = end - beg;
+			if (!strncasecmp("perror", args+beg, len) ||
+			    !strncasecmp("stderr", args+beg, len)) {
+				_options |= LOG_PERROR;
+			} else {
+				return FALSE;
+			}
+			beg = end + strspn(args+end, ",");
+			end = beg + strcspn(args+beg, ",:");
+		}
 	}
 
 	if (options)
@@ -359,7 +429,18 @@ ni_log_destination_stderr(const char *progname, const char *args)
 	ni_log_close();
 
 	(void)progname;
-	if (!__ni_stderr_parse_args(args ? args : "", &ni_log_opts))
+	if (!__ni_stderr_parse_args(args, &ni_log_opts))
+		return FALSE;
+	return TRUE;
+}
+
+static ni_bool_t
+ni_log_destination_file(const char *progname, const char *args)
+{
+	ni_log_close();
+
+	(void)progname;
+	if (!__ni_file_parse_args(args, &ni_log_opts))
 		return FALSE;
 	return TRUE;
 }
@@ -367,7 +448,7 @@ ni_log_destination_stderr(const char *progname, const char *args)
 ni_bool_t
 ni_log_destination(const char *progname, const char *destination)
 {
-	const char *options = "";
+	const char *options = NULL;
 	size_t len;
 
 	if (!destination)
@@ -383,12 +464,13 @@ ni_log_destination(const char *progname, const char *destination)
 	}
 
 	if (!strncasecmp("stderr", destination, len)) {
-		if (ni_log_destination_stderr(progname, options))
-			return TRUE;
+		return ni_log_destination_stderr(progname, options);
 	} else
 	if (!strncasecmp("syslog", destination, len)) {
-		if (ni_log_destination_syslog(progname, options))
-			return TRUE;
+		return ni_log_destination_syslog(progname, options);
+	} else
+	if (!strncasecmp("file", destination, len)) {
+		return ni_log_destination_file(progname, options);
 	}
 	return FALSE;
 }
@@ -396,11 +478,15 @@ ni_log_destination(const char *progname, const char *destination)
 static inline void
 __ni_log_stderr(const char *tag, const char *fmt, va_list ap, const char *end)
 {
+	FILE *lfp;
+
+	lfp = ni_log_file? ni_log_file : stderr;
+
 	if (ni_log_opts & LOG_PID)
-		fprintf(stderr, "[%d] ", getpid());
-	fprintf(stderr, "%s", tag);
-	vfprintf(stderr, fmt, ap);
-	fprintf(stderr, "%s\n", end);
+		fprintf(lfp, "[%d] ", getpid());
+	fprintf(lfp, "%s", tag);
+	vfprintf(lfp, fmt, ap);
+	fprintf(lfp, "%s\n", end);
 }
 
 void
