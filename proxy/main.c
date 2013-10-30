@@ -152,16 +152,16 @@ struct io_transport_ops {
 	io_endpoint_t *	(*connector)(io_transport_t *);
 	io_endpoint_t *	(*acceptor)(io_transport_t *, int fd);
 	ni_bool_t	(*delayed_connector)(io_transport_t *, io_endpoint_t *);
+	ni_bool_t	(*listen)(io_transport_t *);
 };
 
 struct io_transport {
-	io_transport_ops_t *ops;
+	const io_transport_ops_t *ops;
 
 	io_endpoint_t *	multiplex;
 	io_endpoint_list_t ep_list;
 
 	const char *	address;
-
 	int		listen_fd;
 };
 
@@ -181,7 +181,6 @@ static char *		opt_downstream;
 
 static void		proxy_init(proxy_t *);
 static int		proxy_connect(const char *);
-static int		proxy_listen(const char *);
 static int		do_exec(char **);
 static void		do_proxy(proxy_t *);
 
@@ -189,19 +188,23 @@ static io_mbuf_t *	io_mbuf_wrap(ni_buffer_t *, io_endpoint_t *);
 static void		io_mbuf_free(io_mbuf_t *);
 static ni_buffer_t *	io_mbuf_take_buffer(io_mbuf_t *);
 
+static int		io_socket_listen(const char *);
+
 static void		io_endpoint_queue_write(io_endpoint_t *, io_mbuf_t *);
 static void		io_endpoint_queue(io_endpoint_list_t *, io_endpoint_t *);
 
 static io_endpoint_t *	io_endpoint_pipe_new(int, int);
 static io_endpoint_t *	io_endpoint_socket_new(io_transport_t *xprt);
 static io_endpoint_t *	io_endpoint_serial_new(io_transport_t *xprt);
+static ni_bool_t	io_endpoint_socket_listen(io_transport_t *xprt);
 static io_endpoint_t *	io_endpoint_socket_accept(io_transport_t *xprt, int fd);
 static void		io_endpoint_shutdown_source(io_endpoint_t *sink, io_endpoint_t *source);
 static void		io_endpoint_free(io_endpoint_t *);
 
-static void		io_transport_unix_connector_init(io_transport_t *, const char *sockname);
-static void		io_transport_unix_server_init(io_transport_t *xprt, const char *sockname);
-static void		io_transport_serial_connector_init(io_transport_t *, const char *sockname);
+static ni_bool_t	io_transport_listen(io_transport_t *xprt);
+
+static void		io_transport_unix_init(io_transport_t *xprt, const char *sockname);
+static void		io_transport_serial_init(io_transport_t *, const char *sockname);
 static void		io_transport_multiplex_init(io_transport_t *, io_endpoint_t *, io_transport_t *);
 
 static io_mbuf_t *	proxy_channel_open_new(unsigned int channel_id);
@@ -327,9 +330,9 @@ main(int argc, char **argv)
 			opt_upstream = "unix:/var/run/dbus/system_bus_socket";
 
 		if (!strncmp(opt_upstream, "unix:", 5)) {
-			io_transport_unix_connector_init(&proxy.upstream, opt_upstream + 5);
+			io_transport_unix_init(&proxy.upstream, opt_upstream + 5);
 		} else if (!strncmp(opt_upstream, "serial:", 7)) {
-			io_transport_serial_connector_init(&proxy.upstream, opt_upstream + 7);
+			io_transport_serial_init(&proxy.upstream, opt_upstream + 7);
 		} else {
 			ni_fatal("don't know how to handle upstream \"%s\"", opt_upstream);
 		}
@@ -344,10 +347,13 @@ main(int argc, char **argv)
 #endif
 	} else
 	if (!strncmp(opt_downstream, "unix:", 5)) {
-		io_transport_unix_server_init(&proxy.downstream, opt_downstream + 5);
+		io_transport_unix_init(&proxy.downstream, opt_downstream + 5);
 	} else {
 		ni_fatal("don't know how to handle downstream \"%s\"", opt_downstream);
 	}
+
+	if (!io_transport_listen(&proxy.downstream))
+		ni_fatal("failed to open downstream endpoint for listening");
 
 	do_proxy(&proxy);
 	return 0;
@@ -662,6 +668,22 @@ io_endpoint_socket_new(io_transport_t *xprt)
 	return ep;
 }
 
+ni_bool_t
+io_endpoint_socket_listen(io_transport_t *xprt)
+{
+	const char *sockname = xprt->address;
+
+	ni_assert(sockname);
+	ni_assert(xprt->listen_fd < 0);
+
+	xprt->listen_fd = io_socket_listen(sockname);
+	if (xprt->listen_fd < 0)
+		return FALSE;
+
+	ni_debug_socket("opened unix listening socket %d", xprt->listen_fd);
+	return TRUE;
+}
+
 io_endpoint_t *
 io_endpoint_socket_accept(io_transport_t *xprt, int listen_fd)
 {
@@ -744,29 +766,26 @@ static io_transport_ops_t	io_serial_transport_ops = {
 	.connector		= io_endpoint_serial_new,
 };
 
-void
-io_transport_unix_connector_init(io_transport_t *xprt, const char *sockname)
+static void
+__io_transport_init(io_transport_t *xprt, const io_transport_ops_t *ops, const char *address)
 {
-	ni_debug_socket("%s(%s)", __func__, sockname);
-	xprt->ops = &io_unix_transport_ops;
-	xprt->address = sockname;
+	xprt->ops = ops;
+	xprt->address = address;
+	xprt->listen_fd = -1;
 }
 
 void
-io_transport_unix_server_init(io_transport_t *xprt, const char *sockname)
+io_transport_unix_init(io_transport_t *xprt, const char *sockname)
 {
 	ni_debug_socket("%s(%s)", __func__, sockname);
-	xprt->ops = &io_unix_transport_ops;
-
-	xprt->listen_fd = proxy_listen(sockname);
+	__io_transport_init(xprt, &io_unix_transport_ops, sockname);
 }
 
 void
-io_transport_serial_connector_init(io_transport_t *xprt, const char *devname)
+io_transport_serial_init(io_transport_t *xprt, const char *devname)
 {
 	ni_debug_socket("%s(%s)", __func__, devname);
-	xprt->ops = &io_unix_transport_ops;
-	xprt->address = devname;
+	__io_transport_init(xprt, &io_unix_transport_ops, devname);
 }
 
 static void
@@ -777,6 +796,19 @@ io_transport_multiplex_init(io_transport_t *xprt, io_endpoint_t *ep, io_transpor
 	ep->mux.transport = mux_transport;
 }
 
+static ni_bool_t
+io_transport_listen(io_transport_t *xprt)
+{
+	if (xprt->ops->listen == NULL)
+		return TRUE;
+
+	return xprt->ops->listen(xprt);
+	if (xprt->listen_fd < 0)
+		return FALSE;
+
+	return TRUE;
+}
+
 void
 proxy_init(struct proxy *proxy)
 {
@@ -785,7 +817,7 @@ proxy_init(struct proxy *proxy)
 }
 
 int
-proxy_listen(const char *sockname)
+io_socket_listen(const char *sockname)
 {
 	struct sockaddr_un sun;
 	socklen_t alen;
@@ -1175,7 +1207,7 @@ do_exec(char **argv)
 	pid_t pid;
 
 	snprintf(sockname, sizeof(sockname), "/tmp/dbus-proxy.%d", getpid());
-	if ((listen_fd = proxy_listen(sockname)) < 0)
+	if ((listen_fd = io_socket_listen(sockname)) < 0)
 		return -1;
 
 	proxy_sockname = sockname;
