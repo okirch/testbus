@@ -558,12 +558,18 @@ io_endpoint_shutdown(io_endpoint_t *ep, int how)
 			close(ep->wfd);
 		ep->wfd = -1;
 	}
+
+	if (ep->rfd < 0 && ep->wfd < 0)
+		ni_debug_socket("%s: socket is dead, should be purged soon", ep->name);
 }
 
 static int
 io_endpoint_poll(io_endpoint_t *ep, struct pollfd *pfd, struct pollinfo *pi, io_handler_fn_t handler)
 {
 	int nfds = 0;
+
+	if (ep->rfd < 0 && ep->wfd < 0)
+		return 0;
 
 	if (!ep->connected) {
 		ni_debug_socket("%s: not yet connected, no POLL", ep->name);
@@ -1128,8 +1134,18 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 
 	switch (ntohl(hdr->cmd)) {
 	case CHANNEL_CLOSE:
-		/* Mark the channel for drain and subsequent SHUT_WR */
 		ni_buffer_free(bp);
+
+		/* We no longer accept incoming data on the sink socket */
+		io_endpoint_shutdown(sink, SHUT_RD);
+
+		/* Mark the channel for drain and subsequent SHUT_WR */
+		sink->shutdown_write = 1;
+
+		/* FIXME: we should now look through source->wqueue to see
+		 * if we have any packets for this channel in the outgoing
+		 * queue; and discard them.
+		 */
 		break;
 
 	case CHANNEL_DATA:
@@ -1286,6 +1302,15 @@ proxy_recv_demux(io_endpoint_t *ep)
 		if (ret == 0) {
 			if (read_some)
 				break;
+
+			ni_debug_socket("%s: connection closed, should close all endpoints", ep->name);
+			{
+				io_endpoint_t *other;
+
+				foreach_io_endpoint(other, &ep->transport->ep_list) {
+				}
+
+			}
 			//io_endpoint_shutdown_source(ep->sink, ep);
 
 			/* Shutdown read side of this socket */
@@ -1329,9 +1354,11 @@ proxy_endpoint_doio(proxy_t *proxy, io_endpoint_t *ep, const struct pollfd *pfd)
 	if (pfd->revents == 0)
 		return 0;
 
+#if 0
 	ni_debug_socket("%s: doio%s%s", ep->name,
 				(pfd->revents & POLLIN)? " POLLIN" : "",
 				(pfd->revents & POLLOUT)? " POLLOUT" : "");
+#endif
 
 	if ((ep->rfd == pfd->fd) && (pfd->revents & POLLIN)) {
 		proxy_recv(ep);
@@ -1516,40 +1543,6 @@ do_proxy(proxy_t *proxy)
 
 		io_endpoint_list_purge(&proxy->upstream.ep_list);
 		io_endpoint_list_purge(&proxy->downstream.ep_list);
-
-#if 0
-		if (proxy->upstream.multiplex && io_endpoint_can_send(proxy->upstream.ep_list)) {
-			io_endpoint_t *ep;
-
-			/* Select next work item.
-			 * a) If downstream opened a new connection, open a new channel with upstream
-			 * b) Pick the next downstream socket with data that wants to be sent.
-			 */
-			if ((ep = io_endpoint_dequeue(&proxy->upstream.ep_list_embryonic)) != NULL) {
-				ni_buffer_t *cmd;
-
-				cmd = proxy_command_new(PROXY_OPEN, ep->channel_id);
-				io_endpoint_send(proxy->upstream.ep_list, cmd);
-				io_endpoint_queue(&proxy->downstream.ep_list, ep);
-			} else {
-				io_endpoint_t *head, *ep;
-
-				head = proxy->downstream.next_sender;
-				if (head == NULL)
-					head = proxy->downstream.ep_list;
-
-				ep = head;
-				do {
-					if (ep->rbuf && ni_buffer_count(ep->rbuf)) {
-						proxy->downstream.next_sender = ep->next;
-						break;
-					}
-					ep = ep->next;
-				} while (ep != head);
-			}
-
-		}
-#endif
 	}
 
 	ni_trace("Child exited, proxy done");
