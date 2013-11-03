@@ -161,17 +161,18 @@ struct io_transport {
 	io_endpoint_type_t type;
 	io_endpoint_t *	multiplex;
 	io_endpoint_list_t ep_list;
+	io_endpoint_list_t garbage_list;
 
 	const char *	address;
 	int		listen_fd;
 
 	io_transport_t *other;
+
+	uint32_t	next_channel_id;
 };
 
 typedef struct proxy	proxy_t;
 struct proxy {
-	unsigned int	channel_id;
-
 	io_transport_t	upstream;
 	io_transport_t	downstream;
 };
@@ -195,6 +196,7 @@ static int		io_socket_listen(const char *);
 
 static void		io_endpoint_queue_write(io_endpoint_t *, io_mbuf_t *);
 static void		io_endpoint_queue(io_endpoint_list_t *, io_endpoint_t *);
+static void		io_endpoint_unlink(io_endpoint_t *);
 
 static ni_bool_t	io_endpoint_socket_listen(io_transport_t *xprt);
 static io_endpoint_t *	io_endpoint_socket_accept(io_transport_t *xprt, unsigned int channel_id, int fd);
@@ -204,8 +206,8 @@ static const char *	io_endpoint_type_name(io_endpoint_type_t);
 
 static ni_bool_t	io_transport_init(io_transport_t *xprt, const char *param_string, ni_bool_t active);
 static ni_bool_t	io_transport_listen(io_transport_t *xprt);
-static io_endpoint_t *	io_transport_accept(io_transport_t *xprt, unsigned int channel_id, int fd);
-static io_endpoint_t *	io_transport_connect(io_transport_t *xprt, unsigned int channel_id, ni_bool_t full);
+static io_endpoint_t *	io_transport_accept(io_transport_t *xprt, int fd);
+static io_endpoint_t *	io_transport_connect(io_transport_t *xprt, ni_bool_t full);
 static ni_bool_t	io_transport_connect_finish(io_transport_t *xprt, io_endpoint_t *ep);
 
 static io_mbuf_t *	proxy_channel_open_new(unsigned int channel_id);
@@ -380,10 +382,6 @@ __set_poll_info(struct pollinfo *pi, io_handler_fn_t handler, io_endpoint_t *ep)
 static inline void
 io_set_poll_info(struct pollfd *pfd, int fd, int events, struct pollinfo *pi, io_handler_fn_t handler, io_endpoint_t *ep)
 {
-	ni_debug_socket("%s poll%s%s",
-				ep->name,
-				(events & POLLIN)? " POLLIN" : "",
-				(events & POLLOUT)? " POLLOUT" : "");
 	pfd->events = events;
 	pfd->fd = fd;
 
@@ -438,19 +436,52 @@ io_endpoint_queue(io_endpoint_list_t *list, io_endpoint_t *ep)
 	*pos = ep;
 }
 
-static void
-io_endpoint_list_purge(io_endpoint_list_t *list)
+void
+io_endpoint_unlink(io_endpoint_t *ep)
 {
-	io_endpoint_t **pos, *cur;
+	io_transport_t *xprt = ep->transport;
+	io_endpoint_t **pos, *rover;
 
-	for (pos = &list->head; (cur = *pos) != NULL; ) {
+	/* FIXME: using a prev pointer would help. */
+	if (xprt->multiplex == ep) {
+		xprt->multiplex = NULL;
+		return;
+	}
+	
+	for (pos = &xprt->ep_list.head; (rover = *pos) != NULL; pos = &rover->next) {
+		if (rover == ep) {
+			*pos = ep->next;
+			return;
+		}
+	}
+
+	ni_fatal("%s: cannot find %s on endpoint list of transport %s",
+			__func__, ep->name, xprt->name);
+}
+
+static unsigned int
+__io_endpoint_list_purge(io_endpoint_t **pos)
+{
+	io_endpoint_t *cur;
+	unsigned int freed = 0;
+
+	while ((cur = *pos) != NULL) {
 		if (cur->rfd < 0 && cur->wfd < 0) {
 			*pos = cur->next;
 			io_endpoint_free(cur);
+			freed++;
 		} else {
 			pos = &cur->next;
 		}
 	}
+
+	return freed;
+}
+
+static unsigned int
+io_endpoint_list_purge(io_endpoint_list_t *list)
+{
+	return __io_endpoint_list_purge(&list->head);
 }
 
 void
@@ -548,19 +579,46 @@ io_endpoint_shutdown(io_endpoint_t *ep, int how)
 			);
 	if (ep->rfd >= 0 && (how == SHUT_RD || how == SHUT_RDWR)) {
 		shutdown(ep->rfd, SHUT_RD);
-		if (ep->rfd != ep->wfd)
+		if (ep->rfd != ep->wfd) {
+			ni_debug_socket("%s: closing fd %d", ep->name, ep->rfd);
 			close(ep->rfd);
+		}
 		ep->rfd = -1;
 	}
 	if (ep->wfd >= 0 && (how == SHUT_WR || how == SHUT_RDWR)) {
 		shutdown(ep->wfd, SHUT_WR);
-		if (ep->rfd != ep->wfd)
+		if (ep->rfd != ep->wfd) {
+			ni_debug_socket("%s: closing fd %d", ep->name, ep->wfd);
 			close(ep->wfd);
+		}
 		ep->wfd = -1;
 	}
 
-	if (ep->rfd < 0 && ep->wfd < 0)
-		ni_debug_socket("%s: socket is dead, should be purged soon", ep->name);
+	if (ep->rfd < 0 && ep->wfd < 0) {
+		io_transport_t *xprt = ep->transport;
+
+		ni_debug_socket("%s: socket is dead, moving to gargabe list", ep->name);
+		io_endpoint_unlink(ep);
+		io_endpoint_queue(&xprt->garbage_list, ep);
+	}
+}
+
+static void
+io_endpoint_poll_prepare(io_endpoint_t *ep)
+{
+	if (ep->wfd >= 0 && ep->wbuf == NULL) {
+		io_mbuf_t *mbuf = ep->wqueue;
+
+		if (mbuf != NULL) {
+			ep->wbuf = io_mbuf_take_buffer(mbuf);
+			ep->wqueue = mbuf->next;
+			io_mbuf_free(mbuf);
+			ni_trace("%s: grabbed next buffer from wqueue", ep->name);
+		}
+
+		if (ep->wbuf == NULL && ep->shutdown_write)
+			io_endpoint_shutdown(ep, SHUT_WR);
+	}
 }
 
 static int
@@ -578,20 +636,6 @@ io_endpoint_poll(io_endpoint_t *ep, struct pollfd *pfd, struct pollinfo *pi, io_
 
 	if (ep->wbuf)
 		ni_assert(ni_buffer_count(ep->wbuf) != 0);
-
-	if (ep->wfd >= 0 && ep->wbuf == NULL) {
-		io_mbuf_t *mbuf = ep->wqueue;
-
-		if (mbuf != NULL) {
-			ep->wbuf = io_mbuf_take_buffer(mbuf);
-			ep->wqueue = mbuf->next;
-			io_mbuf_free(mbuf);
-			ni_trace("%s: grabbed next buffer from wqueue", ep->name);
-		}
-
-		if (ep->wbuf == NULL && ep->shutdown_write)
-			io_endpoint_shutdown(ep, SHUT_WR);
-	}
 
 	if (ep->rfd >= 0 && !ep->rx_credit)
 		ni_trace("%s: no rx credits", ep->name);
@@ -661,6 +705,10 @@ __io_endpoint_new(io_transport_t *xprt, unsigned int channel_id, int rfd, int wf
 	else
 		ep->rx_credit = DEFAULT_CREDIT_MULTIPLEX;
 
+	/* This should never be an issue, but better be safe than sorry */
+	if (channel_id > xprt->next_channel_id)
+		xprt->next_channel_id = channel_id + 1;
+
 	snprintf(namebuf, sizeof(namebuf), "%s%u", xprt->name, channel_id);
 	ep->name = ni_strdup(namebuf);
 
@@ -695,7 +743,7 @@ io_endpoint_socket_delayed_connect(io_transport_t *xprt, io_endpoint_t *ep)
 {
 	struct sockaddr_un sun;
 
-	ni_debug_socket("%s: connecting socket fd %d to %s", xprt->name, ep->wfd, xprt->address);
+	ni_debug_socket("%s: connecting socket fd %d to %s", ep->name, ep->wfd, xprt->address);
 
 	memset(&sun, 0, sizeof(sun));
 	sun.sun_family = AF_LOCAL;
@@ -905,7 +953,7 @@ io_transport_init(io_transport_t *xprt, const char *param_string, ni_bool_t acti
 		io_endpoint_t *ep;
 
 		ni_debug_socket("%s: opening multiplexed endpoint now", xprt->name);
-		if (!(ep = io_transport_connect(xprt, CHANNEL_ID_NONE, TRUE))) {
+		if (!(ep = io_transport_connect(xprt, TRUE))) {
 			ni_error("unable to set up %s transport for multiplexing", xprt->name);
 			return FALSE;
 		}
@@ -917,12 +965,11 @@ io_transport_init(io_transport_t *xprt, const char *param_string, ni_bool_t acti
 }
 
 static io_endpoint_t *
-io_transport_connect(io_transport_t *xprt, unsigned int channel_id, ni_bool_t now)
+__io_transport_connect(io_transport_t *xprt, unsigned int channel_id, ni_bool_t now)
 {
 	io_endpoint_t *ep;
 
 	ni_assert(xprt->ops && xprt->ops->connector);
-
 	if (!(ep = xprt->ops->connector(xprt, channel_id)))
 		return NULL;
 
@@ -934,6 +981,14 @@ io_transport_connect(io_transport_t *xprt, unsigned int channel_id, ni_bool_t no
 	}
 
 	return ep;
+}
+
+static io_endpoint_t *
+io_transport_connect(io_transport_t *xprt, ni_bool_t now)
+{
+	uint32_t channel_id = CHANNEL_ID_NONE;
+
+	return __io_transport_connect(xprt, channel_id, now);
 }
 
 static ni_bool_t
@@ -964,9 +1019,13 @@ io_transport_listen(io_transport_t *xprt)
 }
 
 static io_endpoint_t *
-io_transport_accept(io_transport_t *xprt, unsigned int channel_id, int fd)
+io_transport_accept(io_transport_t *xprt, int fd)
 {
+	uint32_t channel_id = CHANNEL_ID_NONE;
 	io_endpoint_t *ep;
+
+	if (xprt->type == IO_ENDPOINT_TYPE_SIMPLEX)
+		channel_id = xprt->next_channel_id++;
 
 	ep = xprt->ops->acceptor(xprt, channel_id, fd);
 	if (ep == NULL)
@@ -977,17 +1036,69 @@ io_transport_accept(io_transport_t *xprt, unsigned int channel_id, int fd)
 	return ep;
 }
 
+unsigned int
+ni_transport_purge(io_transport_t *xprt)
+{
+	return io_endpoint_list_purge(&xprt->ep_list)
+	     + io_endpoint_list_purge(&xprt->garbage_list)
+	     + __io_endpoint_list_purge(&xprt->multiplex);
+}
+
+/*
+ * Before polling, loop over all endpoints.
+ *  1.	If there's data on the write queue, make sure we always have
+ *	a buffer in ep->wbuf.
+ *	If the socket has been marked for write shutdown and the
+ *	write queue is empty, shut it down now.
+ *	If the socket's read side has already been shut down, it
+ *	will be closed completely.
+ *
+ *  2.	Purge dead sockets.
+ */
+static void
+io_transport_poll_prepare(io_transport_t *xprt)
+{
+	io_endpoint_t *ep;
+
+	if ((ep = xprt->multiplex) != NULL) {
+		io_endpoint_poll_prepare(ep);
+		__io_endpoint_list_purge(&xprt->multiplex);
+	}
+
+	foreach_io_endpoint(ep, &xprt->ep_list)
+		io_endpoint_poll_prepare(ep);
+	io_endpoint_list_purge(&xprt->ep_list);
+}
+
+static unsigned int
+io_transport_poll(io_transport_t *xprt, struct pollfd *pfd, struct pollinfo *pi, io_handler_fn_t handler)
+{
+	unsigned int nfds = 0;
+	io_endpoint_t *ep;
+
+	io_transport_poll_prepare(xprt);
+
+	if ((ep = xprt->multiplex) != NULL)
+		nfds += io_endpoint_poll(ep, pfd + nfds, pi + nfds, handler);
+
+	foreach_io_endpoint(ep, &xprt->ep_list)
+		nfds += io_endpoint_poll(ep, pfd + nfds, pi + nfds, handler);
+
+	return nfds;
+}
+
 void
 proxy_init(struct proxy *proxy)
 {
 	memset(proxy, 0, sizeof(*proxy));
-	proxy->channel_id = 1;
 
 	proxy->upstream.name = "upstream";
 	proxy->upstream.other = &proxy->downstream;
+	proxy->upstream.next_channel_id = 1;
 
 	proxy->downstream.name = "downstream";
 	proxy->downstream.other = &proxy->upstream;
+	proxy->downstream.next_channel_id = 1;
 }
 
 int
@@ -1109,10 +1220,11 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 
 	if (hdr->cmd == htonl(CHANNEL_OPEN)) {
 		sink = __proxy_channel_by_id(xprt, channel_id);
-		if (sink)
-			ni_fatal("demux: duplicate open for %s channel %u", xprt->name, channel_id);
+		if (sink) {
+			ni_error("demux: duplicate open for %s channel %u", xprt->name, channel_id);
+		}
 
-		sink = io_transport_connect(xprt, channel_id, TRUE);
+		sink = __io_transport_connect(xprt, channel_id, TRUE);
 		if (sink == NULL)
 			ni_fatal("demux: unable to open %s channel %u: cannot connect to %s",
 					xprt->name, channel_id, xprt->address);
@@ -1454,38 +1566,49 @@ do_exec(char **argv)
 static int
 proxy_downstream_accept(proxy_t *proxy, io_endpoint_t *dummy, const struct pollfd *pfd)
 {
+	io_transport_t *xprt = &proxy->downstream;
+
 	if (pfd->revents & POLLIN) {
 		io_endpoint_t *ep, *upstream;
 
-		ep = io_transport_accept(&proxy->downstream, proxy->channel_id++, pfd->fd);
+		ep = io_transport_accept(xprt, pfd->fd);
 		if (ep == NULL)
 			return 0;
 
-		ep->rx_credit = DEFAULT_CREDIT_SIMPLEX;
-		ni_assert(ep->channel_id);
+		if (ep->type == IO_ENDPOINT_TYPE_MULTIPLEX) {
+			/* We accepted a multiplex connection. */
+			if (xprt->multiplex != NULL)
+				ni_fatal("Currently not supported: more than one multiplex connection");
 
-		if ((upstream = proxy->upstream.multiplex) != NULL) {
-			/* Send a CHANNEL_OPEN command to upstream */
-			io_endpoint_queue_write(upstream, proxy_channel_open_new(ep->channel_id));
+			xprt->multiplex = ep;
 		} else {
-			/* We create an upstream end point, but do not connect it immediately.
-			 * With KVM, for instance, we may get a connection from KVM, but data
-			 * from the agent running in the guest will not arrive for a long time.
-			 * This is usually too long for dbus-daemon, which will simply disconnect
-			 * us after 5 seconds. */
-			upstream = io_transport_connect(&proxy->upstream, proxy->channel_id++, FALSE);
-			if (upstream == NULL) {
-				io_endpoint_free(ep);
-				return 0;
-			}
-			upstream->rx_credit = DEFAULT_CREDIT_SIMPLEX;
-			upstream->sink = ep;
+			io_transport_t *other = xprt->other;
 
-			io_endpoint_queue(&proxy->upstream.ep_list, upstream);
+			if ((upstream = other->multiplex) != NULL) {
+				/* Send a CHANNEL_OPEN command to upstream */
+				io_endpoint_queue_write(upstream, proxy_channel_open_new(ep->channel_id));
+			} else {
+				/* We create an upstream end point, but do not connect it immediately.
+				 * With KVM, for instance, we may get a connection from KVM, but data
+				 * from the agent running in the guest will not arrive for a long time.
+				 * This is usually too long for dbus-daemon, which will simply disconnect
+				 * us after 5 seconds. */
+				upstream = io_transport_connect(other, FALSE);
+				if (upstream == NULL) {
+					io_endpoint_free(ep);
+					return 0;
+				}
+				upstream->sink = ep;
+
+				/* TBD: set up upstream->recv handler */
+				io_endpoint_queue(&other->ep_list, upstream);
+			}
+
+			io_endpoint_queue(&xprt->ep_list, ep);
+			ep->sink = upstream;
 		}
 
-		io_endpoint_queue(&proxy->downstream.ep_list, ep);
-		ep->sink = upstream;
+		/* TBD: set up ep->recv handler */
 	}
 
 	return 0;
@@ -1519,17 +1642,25 @@ do_proxy(proxy_t *proxy)
 			nfds++;
 		}
 
-		if ((ep = proxy->upstream.multiplex) != NULL)
-			nfds += io_endpoint_poll(ep, pfd + nfds, info + nfds, proxy_endpoint_doio);
+		nfds += io_transport_poll(&proxy->upstream, pfd + nfds, info + nfds, proxy_endpoint_doio);
+		nfds += io_transport_poll(&proxy->downstream, pfd + nfds, info + nfds, proxy_endpoint_doio);
 
-		foreach_io_endpoint(ep, &proxy->upstream.ep_list)
-			nfds += io_endpoint_poll(ep, pfd + nfds, info + nfds, proxy_endpoint_doio);
+#if 1
+		{
+			unsigned int i;
 
-		if ((ep = proxy->downstream.multiplex) != NULL)
-			nfds += io_endpoint_poll(ep, pfd + nfds, info + nfds, proxy_endpoint_doio);
+			ni_debug_socket("polling %u sockets", nfds);
+			for (i = 0; i < nfds; ++i) {
+				io_endpoint_t *ep = info[i].ep;
+				unsigned int events = pfd[i].events;
 
-		foreach_io_endpoint(ep, &proxy->downstream.ep_list)
-			nfds += io_endpoint_poll(ep, pfd + nfds, info + nfds, proxy_endpoint_doio);
+				ni_debug_socket("%-12s %s%s",
+							ep? ep->name : "nil",
+							(events & POLLIN)? " POLLIN" : "",
+							(events & POLLOUT)? " POLLOUT" : "");
+			}
+		}
+#endif
 
 		n = poll(pfd, nfds, 100000);
 		if (n < 0) {
@@ -1541,8 +1672,8 @@ do_proxy(proxy_t *proxy)
 		for (n = 0; n < nfds; ++n)
 			info[n].handler(proxy, info[n].ep, pfd + n);
 
-		io_endpoint_list_purge(&proxy->upstream.ep_list);
-		io_endpoint_list_purge(&proxy->downstream.ep_list);
+		ni_transport_purge(&proxy->upstream);
+		ni_transport_purge(&proxy->downstream);
 	}
 
 	ni_trace("Child exited, proxy done");
