@@ -109,6 +109,7 @@ typedef enum {
 } io_endpoint_type_t;
 
 struct io_endpoint {
+	io_endpoint_t **prevp;
 	io_endpoint_t *	next;
 
 	io_endpoint_type_t type;
@@ -195,7 +196,7 @@ static ni_buffer_t *	io_mbuf_take_buffer(io_mbuf_t *);
 static int		io_socket_listen(const char *);
 
 static void		io_endpoint_queue_write(io_endpoint_t *, io_mbuf_t *);
-static void		io_endpoint_queue(io_endpoint_list_t *, io_endpoint_t *);
+static void		io_endpoint_link(io_endpoint_t *, io_endpoint_list_t *);
 static void		io_endpoint_unlink(io_endpoint_t *);
 
 static ni_bool_t	io_endpoint_socket_listen(io_transport_t *xprt);
@@ -427,13 +428,14 @@ io_mbuf_take_buffer(io_mbuf_t *mbuf)
 }
 
 void
-io_endpoint_queue(io_endpoint_list_t *list, io_endpoint_t *ep)
+io_endpoint_link(io_endpoint_t *ep, io_endpoint_list_t *list)
 {
 	io_endpoint_t **pos, *cur;
 
 	for (pos = &list->head; (cur = *pos) != NULL; pos = &cur->next)
 		;
 	*pos = ep;
+	ep->prevp = pos;
 }
 
 void
@@ -442,21 +444,20 @@ io_endpoint_unlink(io_endpoint_t *ep)
 	io_transport_t *xprt = ep->transport;
 	io_endpoint_t **pos, *rover;
 
-	/* FIXME: using a prev pointer would help. */
+	/* FIXME: when setting an endpoint up as a multiplexing connnecting,
+	 * ep->prevp should point back to xprt->multiplex, too */
 	if (xprt->multiplex == ep) {
 		xprt->multiplex = NULL;
 		return;
 	}
-	
-	for (pos = &xprt->ep_list.head; (rover = *pos) != NULL; pos = &rover->next) {
-		if (rover == ep) {
-			*pos = ep->next;
-			return;
-		}
-	}
 
-	ni_fatal("%s: cannot find %s on endpoint list of transport %s",
-			__func__, ep->name, xprt->name);
+	ni_assert(ep->prevp);
+	pos = ep->prevp;
+	*pos = ep->next;
+	if (ep->next)
+		ep->next->prevp = pos;
+	ep->prevp = NULL;
+	ep->next = NULL;
 }
 
 static unsigned int
@@ -599,7 +600,7 @@ io_endpoint_shutdown(io_endpoint_t *ep, int how)
 
 		ni_debug_socket("%s: socket is dead, moving to gargabe list", ep->name);
 		io_endpoint_unlink(ep);
-		io_endpoint_queue(&xprt->garbage_list, ep);
+		io_endpoint_link(ep, &xprt->garbage_list);
 	}
 }
 
@@ -1232,7 +1233,7 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 		sink->channel_id = channel_id;
 		sink->sink = source;
 		sink->rx_credit = DEFAULT_CREDIT_SIMPLEX;
-		io_endpoint_queue(&xprt->ep_list, sink);
+		io_endpoint_link(sink, &xprt->ep_list);
 
 		return;
 	}
@@ -1253,11 +1254,6 @@ proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
 
 		/* Mark the channel for drain and subsequent SHUT_WR */
 		sink->shutdown_write = 1;
-
-		/* FIXME: we should now look through source->wqueue to see
-		 * if we have any packets for this channel in the outgoing
-		 * queue; and discard them.
-		 */
 		break;
 
 	case CHANNEL_DATA:
@@ -1601,10 +1597,10 @@ proxy_downstream_accept(proxy_t *proxy, io_endpoint_t *dummy, const struct pollf
 				upstream->sink = ep;
 
 				/* TBD: set up upstream->recv handler */
-				io_endpoint_queue(&other->ep_list, upstream);
+				io_endpoint_link(upstream, &other->ep_list);
 			}
 
-			io_endpoint_queue(&xprt->ep_list, ep);
+			io_endpoint_link(ep, &xprt->ep_list);
 			ep->sink = upstream;
 		}
 
