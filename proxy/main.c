@@ -159,6 +159,8 @@ struct io_transport {
 	const char *	name;
 	const io_transport_ops_t *ops;
 
+	void		(*data_available)(io_endpoint_t *);
+
 	io_endpoint_type_t type;
 	io_endpoint_t *	multiplex;
 	io_endpoint_list_t ep_list;
@@ -185,7 +187,7 @@ static char *		opt_upstream = "unix:/var/run/dbus/system_bus_socket";
 static char *		opt_downstream;
 
 static void		proxy_init(proxy_t *);
-static int		proxy_connect(const char *);	/* FIXME: rename io_socket_connect() */
+static void		proxy_recv(io_endpoint_t *ep);
 static int		do_exec(char **);
 static void		do_proxy(proxy_t *);
 
@@ -602,6 +604,50 @@ io_endpoint_shutdown(io_endpoint_t *ep, int how)
 		io_endpoint_unlink(ep);
 		io_endpoint_link(ep, &xprt->garbage_list);
 	}
+}
+
+static int
+io_endpoint_doio(proxy_t *proxy, io_endpoint_t *ep, const struct pollfd *pfd)
+{
+	int ret;
+
+	if (pfd->revents == 0)
+		return 0;
+
+#if 0
+	ni_debug_socket("%s: doio%s%s", ep->name,
+				(pfd->revents & POLLIN)? " POLLIN" : "",
+				(pfd->revents & POLLOUT)? " POLLOUT" : "");
+#endif
+
+	if ((ep->rfd == pfd->fd) && (pfd->revents & POLLIN)) {
+		ep->transport->data_available(ep);
+	}
+
+	if ((ep->wfd == pfd->fd) && pfd->revents & POLLOUT) {
+		ni_buffer_t *bp = ep->wbuf;
+
+		ret = write(ep->wfd, ni_buffer_head(bp), ni_buffer_count(bp));
+		if (ret > 0) {
+			ni_debug_socket("%s: transmitted %u bytes", ep->name, ret);
+			ni_buffer_pull_head(bp, ret);
+			if (ni_buffer_count(bp) == 0) {
+				ni_buffer_free(bp);
+				ep->wbuf = NULL;
+			}
+		} else if (ret < 0) {
+			switch (errno) {
+			case EPIPE:
+				io_endpoint_shutdown(ep, SHUT_WR);
+				break;
+			default:
+				ni_error("%s: write error: %m", ep->name);
+				break;
+			}
+		}
+	}
+
+	return 0;
 }
 
 static void
@@ -1072,7 +1118,7 @@ io_transport_poll_prepare(io_transport_t *xprt)
 }
 
 static unsigned int
-io_transport_poll(io_transport_t *xprt, struct pollfd *pfd, struct pollinfo *pi, io_handler_fn_t handler)
+io_transport_poll(io_transport_t *xprt, struct pollfd *pfd, struct pollinfo *pi)
 {
 	unsigned int nfds = 0;
 	io_endpoint_t *ep;
@@ -1080,10 +1126,10 @@ io_transport_poll(io_transport_t *xprt, struct pollfd *pfd, struct pollinfo *pi,
 	io_transport_poll_prepare(xprt);
 
 	if ((ep = xprt->multiplex) != NULL)
-		nfds += io_endpoint_poll(ep, pfd + nfds, pi + nfds, handler);
+		nfds += io_endpoint_poll(ep, pfd + nfds, pi + nfds, io_endpoint_doio);
 
 	foreach_io_endpoint(ep, &xprt->ep_list)
-		nfds += io_endpoint_poll(ep, pfd + nfds, pi + nfds, handler);
+		nfds += io_endpoint_poll(ep, pfd + nfds, pi + nfds, io_endpoint_doio);
 
 	return nfds;
 }
@@ -1096,10 +1142,12 @@ proxy_init(struct proxy *proxy)
 	proxy->upstream.name = "upstream";
 	proxy->upstream.other = &proxy->downstream;
 	proxy->upstream.next_channel_id = 1;
+	proxy->upstream.data_available = proxy_recv;
 
 	proxy->downstream.name = "downstream";
 	proxy->downstream.other = &proxy->upstream;
 	proxy->downstream.next_channel_id = 1;
+	proxy->downstream.data_available = proxy_recv;
 }
 
 int
@@ -1454,50 +1502,6 @@ proxy_recv(io_endpoint_t *ep)
 	}
 }
 
-static int
-proxy_endpoint_doio(proxy_t *proxy, io_endpoint_t *ep, const struct pollfd *pfd)
-{
-	int ret;
-
-	if (pfd->revents == 0)
-		return 0;
-
-#if 0
-	ni_debug_socket("%s: doio%s%s", ep->name,
-				(pfd->revents & POLLIN)? " POLLIN" : "",
-				(pfd->revents & POLLOUT)? " POLLOUT" : "");
-#endif
-
-	if ((ep->rfd == pfd->fd) && (pfd->revents & POLLIN)) {
-		proxy_recv(ep);
-	}
-
-	if ((ep->wfd == pfd->fd) && pfd->revents & POLLOUT) {
-		ni_buffer_t *bp = ep->wbuf;
-
-		ret = write(ep->wfd, ni_buffer_head(bp), ni_buffer_count(bp));
-		if (ret > 0) {
-			ni_debug_socket("%s: transmitted %u bytes", ep->name, ret);
-			ni_buffer_pull_head(bp, ret);
-			if (ni_buffer_count(bp) == 0) {
-				ni_buffer_free(bp);
-				ep->wbuf = NULL;
-			}
-		} else if (ret < 0) {
-			switch (errno) {
-			case EPIPE:
-				io_endpoint_shutdown(ep, SHUT_WR);
-				break;
-			default:
-				ni_error("%s: write error: %m", ep->name);
-				break;
-			}
-		}
-	}
-
-	return 0;
-}
-
 static char *	proxy_sockname = NULL;
 static int	proxy_done = 0;
 
@@ -1638,8 +1642,8 @@ do_proxy(proxy_t *proxy)
 			nfds++;
 		}
 
-		nfds += io_transport_poll(&proxy->upstream, pfd + nfds, info + nfds, proxy_endpoint_doio);
-		nfds += io_transport_poll(&proxy->downstream, pfd + nfds, info + nfds, proxy_endpoint_doio);
+		nfds += io_transport_poll(&proxy->upstream, pfd + nfds, info + nfds);
+		nfds += io_transport_poll(&proxy->downstream, pfd + nfds, info + nfds);
 
 #if 1
 		{
