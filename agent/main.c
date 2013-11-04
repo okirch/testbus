@@ -206,10 +206,13 @@ main(int argc, char **argv)
 		snprintf(dirname, sizeof(dirname), "%s/state.xml", ni_config_statedir());
 		opt_state_file = dirname;
 
-		ni_debug_wicked("State file is %s", opt_state_file);
-		if (ni_file_exists(opt_state_file))
-			ni_testbus_agent_read_state(opt_state_file, &ni_testbus_agent_global_state);
 	}
+
+	ni_debug_wicked("State file is %s", opt_state_file);
+	if (ni_file_exists(opt_state_file))
+		ni_testbus_agent_read_state(opt_state_file, &ni_testbus_agent_global_state);
+	else
+		ni_trace("State file does not exist");
 
 	ni_testbus_agent(&ni_testbus_agent_global_state);
 	return 0;
@@ -245,6 +248,9 @@ ni_testbus_agent_read_state(const char *state_file, ni_testbus_agent_state_t *st
 	}
 
 	xml_document_free(doc);
+
+	ni_debug_wicked("Successfully read state from %s; hostname=%s uuid=%s",
+			state_file, state->hostname, ni_uuid_print(&state->uuid));
 }
 
 void
@@ -595,7 +601,6 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 				ni_dbus_object_get_service(host_object, NI_TESTBUS_HOST_INTERFACE));
 		if (var == NULL || !ni_dbus_variant_get_uuid(var, &state->uuid)) {
 			ni_warn("could not get host registration uuid");
-			ni_trace("var=%p", var);
 		} else {
 			ni_testbus_agent_write_state(opt_state_file, state);
 		}

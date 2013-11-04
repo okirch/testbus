@@ -1,5 +1,5 @@
 <config>
-  <statedir path="/var/run/testbus" mode="0755"/>
+  <statedir path="/var/state/testbus" mode="0755"/>
 
   <schema name="/etc/testbus/schema/testbus.xml"/>
 </config>

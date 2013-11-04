@@ -30,13 +30,12 @@ Client:
 	in separate steps?
 
 Proxy:
-	Write serial line support
+	Complete serial line support
 
 General:
 	Support file monitors
-
-	A monitor specifies how a system file should be watched as part
-	of the test execution. For instance, you may want to take a
-	snapshot of a specific /sys or /proc file before and after the
-	test run. Or you may want to grab any syslog messages that were
-	generated during the execution.
+		A monitor specifies how a system file should be watched as part
+		of the test execution. For instance, you may want to take a
+		snapshot of a specific /sys or /proc file before and after the
+		test run. Or you may want to grab any syslog messages that were
+		generated during the execution.
