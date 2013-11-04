@@ -20,6 +20,7 @@ extern int		ni_init(const char *appname);
 typedef ni_bool_t	ni_init_appdata_callback_t(void *, const xml_node_t *);
 extern int		ni_init_ex(const char *appname, ni_init_appdata_callback_t *, void *);
 
+extern ni_bool_t	ni_server_is_running(const char *);
 extern int		ni_server_background(const char *);
 extern void		ni_server_listen_other_events(void (*handler)(ni_event_t));
 extern ni_xs_scope_t *	ni_server_dbus_xml_schema(void);

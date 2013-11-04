@@ -108,6 +108,21 @@ ni_server_listen_other_events(void (*event_handler)(ni_event_t))
 /*
  * Utility functions for starting/stopping a daemon.
  */
+ni_bool_t
+ni_server_is_running(const char *appname)
+{
+	const char *piddir = ni_config_piddir();
+	char pidfilepath[PATH_MAX];
+
+	ni_assert(appname != NULL);
+	snprintf(pidfilepath, sizeof(pidfilepath), "%s/%s.pid", piddir, appname);
+
+	if (ni_pidfile_check(pidfilepath) > 0)
+		return TRUE;
+
+	return FALSE;
+}
+
 int
 ni_server_background(const char *appname)
 {
