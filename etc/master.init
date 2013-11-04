@@ -13,8 +13,8 @@
 #
 ### BEGIN INIT INFO
 # Provides:       testbus
-# Required-Start: dbus
-# Required-Stop:  dbus
+# Required-Start: dbus $remote_fs
+# Required-Stop:  dbus $remote_fs
 # Should-Stop:	  testbus-agent
 # Default-Start:  2 3 5
 # Default-Stop:   0 1 6
