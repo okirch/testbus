@@ -350,8 +350,8 @@ main(int argc, char **argv)
 	}
 
 	/* Now set up transport.data_available for copy/mux/demux on both
-	 * transports, so that we do not have to make the same comparisons in
-	 * proxy_recv each time.
+	 * transports, so that we do not have to make the same comparisons
+	 * each time we have a POLLIN event.
 	 */
 	proxy_setup_recv(&proxy);
 
@@ -1149,12 +1149,10 @@ proxy_init(struct proxy *proxy)
 	proxy->upstream.name = "upstream";
 	proxy->upstream.other = &proxy->downstream;
 	proxy->upstream.next_channel_id = 1;
-	proxy->upstream.data_available = proxy_recv;
 
 	proxy->downstream.name = "downstream";
 	proxy->downstream.other = &proxy->upstream;
 	proxy->downstream.next_channel_id = 1;
-	proxy->downstream.data_available = proxy_recv;
 }
 
 int
@@ -1257,7 +1255,7 @@ proxy_channel_close_new(unsigned int channel_id)
 }
 
 static void
-proxy_demux(io_endpoint_t *source, ni_buffer_t *bp)
+proxy_demux_packet(io_endpoint_t *source, ni_buffer_t *bp)
 {
 	const char *myname = source->transport->name;
 	io_transport_t *xprt = source->transport->other;
@@ -1443,7 +1441,7 @@ proxy_recv_demux(io_endpoint_t *ep)
 			if (avail == pktsize) {
 				/* We have a full packet */
 				ni_debug_socket("%s: received packet of %u bytes", ep->name, avail);
-				proxy_demux(ep, bp);
+				proxy_demux_packet(ep, bp);
 				ep->rbuf = NULL;
 				break;
 			}
@@ -1513,29 +1511,6 @@ proxy_setup_recv(proxy_t *proxy)
 		ni_fatal("cannot set up proxy: unknown transport combination - upstram %s, downstream %s",
 				io_endpoint_type_name(upstream->type),
 				io_endpoint_type_name(downstream->type));
-	}
-}
-
-static void
-proxy_recv(io_endpoint_t *ep)
-{
-	ni_trace("%s: proxy_recv, type=%s, sink=%s/%s",
-			ep->name, io_endpoint_type_name(ep->type),
-			ep->sink? ep->sink->name : "null",
-			ep->sink? io_endpoint_type_name(ep->sink->type) : "none");
-
-	if (ep->sink && ep->type == ep->sink->type) {
-		/* For sockets of the same type, we just copy data as-is */
-		proxy_recv_copy(ep);
-		return;
-	}
-
-	if (ep->type == IO_ENDPOINT_TYPE_SIMPLEX) {
-		if (ep->sink == NULL)
-			ni_fatal("simplex socket, no peer - seems we shut down already");
-		proxy_recv_mux(ep);
-	} else {
-		proxy_recv_demux(ep);
 	}
 }
 
