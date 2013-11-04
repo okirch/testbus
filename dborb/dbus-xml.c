@@ -1419,7 +1419,7 @@ __ni_notation_external_file_parse(const char *string_value, unsigned char **retb
 	} else {
 		*retbuf = buffer->base;
 		*retlen = ni_buffer_count(buffer);
-		memset(buffer, 0, sizeof(buffer));
+		memset(buffer, 0, sizeof(*buffer));
 	}
 
 	ni_buffer_free(buffer);
