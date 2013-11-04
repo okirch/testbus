@@ -595,7 +595,7 @@ ni_dbus_objectmodel_bind_properties(const ni_dbus_objectmodel_properties_binding
 
 		property = ni_dbus_service_get_property(service, bp->name);
 		if (property == NULL) {
-			ni_trace("register property %s.%s", service->name, bp->name);
+			ni_debug_dbus("register property %s.%s", service->name, bp->name);
 			property = ni_objectmodel_service_register_property((ni_dbus_service_t *) service,
 							bp->name, bp->signature);
 		}
