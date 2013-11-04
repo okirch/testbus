@@ -96,6 +96,7 @@ enum {
 	OPT_UPSTREAM,
 	OPT_DOWNSTREAM,
 	OPT_EXECUTE,
+	OPT_IDENTITY,
 };
 
 static struct option	options[] = {
@@ -110,6 +111,7 @@ static struct option	options[] = {
 	{ "foreground",		no_argument,		NULL,	OPT_FOREGROUND },
 	{ "upstream",		required_argument,	NULL,	OPT_UPSTREAM },
 	{ "downstream",		required_argument,	NULL,	OPT_DOWNSTREAM },
+	{ "identity",		required_argument,	NULL,	OPT_IDENTITY },
 
 	{ NULL }
 };
@@ -206,6 +208,7 @@ struct proxy {
 };
 
 static const char *	program_name;
+static const char *	opt_identity;
 static const char *	opt_log_target;
 static int		opt_foreground;
 static char *		opt_upstream = "unix:/var/run/dbus/system_bus_socket";
@@ -319,6 +322,10 @@ main(int argc, char **argv)
 
 		case OPT_FOREGROUND:
 			opt_foreground = 1;
+			break;
+
+		case OPT_IDENTITY:
+			opt_identity = optarg;
 			break;
 		}
 	}
@@ -1717,7 +1724,7 @@ do_proxy(proxy_t *proxy)
 	//signal(SIGPIPE, SIG_IGN);
 
 	if (!opt_foreground) {
-		if (ni_server_background(program_name) < 0)
+		if (ni_server_background(opt_identity? opt_identity : program_name) < 0)
 			ni_fatal("unable to background server");
 	}
 
