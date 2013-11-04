@@ -196,6 +196,41 @@ function testbus_new_script {
 	echo "$script"
 }
 
+function testbus_start_kvm {
+
+	tag=$1; shift
+	if [ -z "$tag" ]; then
+		echo "testbus_start_kvm: no tag argument provided" >&2
+		testbus_exit_fail
+	fi
+
+	image=$1; shift
+	if [ -z "$image" ]; then
+		echo "testbus_start_kvm: no image argument provided" >&2
+		testbus_exit_fail
+	fi
+
+	mkdir -p /var/run/testbus/guestfs
+
+	socket=/var/run/testbus-$tag.sock
+
+	dbus-proxy \
+		--identity "testbus-$tag" \
+		--downstream unix-mux:$socket
+
+	qemu-kvm \
+		-name $tag \
+		-pidfile /var/run/testbus/kvm-$tag.pid \
+		-display vnc=:2 \
+		-device virtio-serial \
+		-device virtserialport,chardev=testbus-serial,name=org.opensuse.Testbus.0 \
+		-chardev socket,id=testbus-serial,path=$socket \
+		-virtfs local,path=/var/run/testbus/guestfs,security_model=passthrough,mount_tag=testbus \
+		$image &
+}
+
+
+
 trap "testbus_exit_fail" 0 1 2
 testbus_trace "Succesfully sourced testbus functions"
 set -e
