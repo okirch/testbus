@@ -31,6 +31,8 @@
 #include "dbus-filesystem.h"
 #include "files.h"
 
+#define APP_IDENTITY		"agent"
+
 enum {
 	OPT_HELP,
 	OPT_VERSION,
@@ -181,8 +183,13 @@ main(int argc, char **argv)
 	if (optind < argc)
 		goto usage;
 
-	if (ni_init("agent") < 0)
+	if (ni_init(APP_IDENTITY) < 0)
 		return 1;
+
+	if (ni_server_is_running(APP_IDENTITY)) {
+		ni_error("another testbus %s seems to be running already - refusing to start", APP_IDENTITY);
+		return 1;
+	}
 
 	if (opt_log_target == NULL) {
 		ni_log_destination_default(program_name, opt_foreground);
@@ -607,10 +614,8 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	if (!ni_testbus_agent_add_capabilities(host_object, &state->capabilities))
 		ni_fatal("failed to register agent capabilities");
 
-	if (!opt_foreground) {
-		if (ni_server_background(program_name) < 0)
-			ni_fatal("unable to background server");
-	}
+	if (!opt_foreground && ni_server_background(APP_IDENTITY) < 0)
+		ni_fatal("unable to background testbus agent");
 
 	while (!ni_caught_terminal_signal()) {
 		long timeout;

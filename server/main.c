@@ -27,6 +27,8 @@
 #include "model.h"
 #include "container.h"
 
+#define APP_IDENTITY		"master"
+
 extern ni_dbus_objectmodel_t	ni_testbus_objectmodel;
 
 enum {
@@ -139,8 +141,13 @@ main(int argc, char **argv)
 	if (optind != argc)
 		goto usage;
 
-	if (ni_init("server") < 0)
+	if (ni_init(APP_IDENTITY) < 0)
 		return 1;
+
+	if (ni_server_is_running(APP_IDENTITY)) {
+		ni_error("another testbus %s seems to be running already - refusing to start", APP_IDENTITY);
+		return 1;
+	}
 
 	if (opt_log_target == NULL) {
 		ni_log_destination_default(program_name, opt_foreground);
@@ -206,7 +213,7 @@ ni_testbus_master(void)
 			__ni_testbus_dbus_bus_signal_handler, NULL);
 		
 
-	if (!opt_foreground && ni_server_background("master") < 0)
+	if (!opt_foreground && ni_server_background(APP_IDENTITY) < 0)
 		ni_fatal("unable to background testbus master");
 
 	while (!ni_caught_terminal_signal()) {
