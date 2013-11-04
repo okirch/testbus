@@ -119,6 +119,8 @@ install-bin: $(ALL)
 	install -m755 -d $(DESTDIR)/etc/init.d
 	install -m555 etc/master.init $(DESTDIR)/etc/init.d/testbus-master
 	ln -s ../../etc/init.d/testbus-master $(DESTDIR)/usr/sbin/rctestbus-master
+	install -m555 etc/agent-kvm.init $(DESTDIR)/etc/init.d/testbus-agent-kvm
+	ln -s ../../etc/init.d/testbus-agent-kvm $(DESTDIR)/usr/sbin/rctestbus-agent-kvm
 
 install-data: etc/org.opensuse.Testbus.conf
 	install -m755 -d $(DESTDIR)/etc
@@ -130,6 +132,7 @@ install-data: etc/org.opensuse.Testbus.conf
 	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/
 	install -m755 -d $(DESTDIR)/var/run/testbus
 	install -m755 -d $(DESTDIR)/var/lib/testbus
+	install -m755 -d $(DESTDIR)/etc/testbus/agent.d
 
 distclean clean::
 	rm -rf obj core vgcore.*

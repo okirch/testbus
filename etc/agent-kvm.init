@@ -1,0 +1,152 @@
+#! /bin/sh
+# Copyright (c) 2013 SUSE Linux Products GmbH, Nuremberg
+#
+# Author: Olaf Kirch <okir@suse.de>
+#
+# /etc/init.d/testbus-agent-kvm
+#
+#   and symbolic its link
+#
+# /usr/sbin/rctestbus-agent-kvm
+#
+# System startup script for the cron daemon
+#
+### BEGIN INIT INFO
+# Provides:       testbus
+# Required-Start: dbus $remote_fs
+# Required-Stop:  dbus $remote_fs
+# Should-Stop:	  testbus-agent
+# Default-Start:  2 3 5
+# Default-Stop:   0 1 6
+# Short-Description: Testbus agent service for KVM guests
+# Description:    Testbus agent service for KVM guests
+### END INIT INFO
+
+PROXY_BIN=/usr/bin/dbus-proxy
+PROXY_PIDFILE=/var/run/testbus/proxy.pid
+AGENT_BIN=/usr/bin/testbus-agent
+AGENT_PIDFILE=/var/run/testbus/agent.pid
+
+test -x $AGENT_BIN || exit 5
+
+# Shell functions sourced from /etc/rc.status:
+#      rc_check         check and set local and overall rc status
+#      rc_status        check and set local and overall rc status
+#      rc_status -v     ditto but be verbose in local rc status
+#      rc_status -v -r  ditto and clear the local rc status
+#      rc_failed        set local and overall rc status to failed
+#      rc_failed <num>  set local and overall rc status to <num><num>
+#      rc_reset         clear local rc status (overall remains)
+#      rc_exit          exit appropriate to overall rc status
+. /etc/rc.status
+
+# First reset status of this service
+rc_reset
+
+# Return values acc. to LSB for all commands but status:
+# 0 - success
+# 1 - generic or unspecified error
+# 2 - invalid or excess argument(s)
+# 3 - unimplemented feature (e.g. "reload")
+# 4 - insufficient privilege
+# 5 - program is not installed
+# 6 - program is not configured
+# 7 - program is not running
+# 
+# Note that starting an already running service, stopping
+# or restarting a not-running service as well as the restart
+# with force-reload (in case signalling is not supported) are
+# considered a success.
+
+case "$1" in
+    start)
+	echo -n "Starting dbus-proxy daemon"
+	$PROXY_BIN \
+		--upstream serial:/dev/virtio-ports/org.opensuse.Testbus.0 \
+		--downstream unix:/var/run/dbus-proxy.sock
+	rc_status -v
+
+	# TBD: At this point, we need to pick up capabilities
+	# of installed testbus providers, and any environment
+	# variables we're supposed to publish.
+
+	# FIXME: we may also want to mount the 9p guestfs here
+	# mkdir -p /mnt/testbus
+	# mount -t 9p testbus /mnt/testbus -o trans=virtio
+
+	echo -n "Starting testbus-agent daemon"
+	$AGENT_BIN \
+		--dbus-socket unix:/var/run/dbus-proxy.sock
+
+	# Remember status and be verbose
+	rc_status -v
+	;;
+    stop)
+	echo -n "Shutting down testbus-agent daemon"
+	killproc -TERM -p $AGENT_PIDFILE $AGENT_BIN 
+	rc_status -v
+
+	echo -n "Shutting down dbus-proxy daemon"
+	killproc -TERM -p $PROXY_PIDFILE $PROXY_BIN 
+	rc_status -v
+	;;
+    try-restart)
+	## Stop the service and if this succeeds (i.e. the 
+	## service was running before), start it again.
+	## Note: try-restart is not (yet) part of LSB (as of 0.7.5)
+	$0 status >/dev/null &&  $0 restart
+
+	# Remember status and be quiet
+	rc_status
+	;;
+    restart)
+	## Stop the service and regardless of whether it was
+	## running or not, start it again.
+	$0 stop
+	$0 start
+
+	# Remember status and be quiet
+	rc_status
+	;;
+    force-reload)
+	## This actually doesn't do anything, as there's no configuration to
+	## reload.
+	## FIXME: not quite right; we may want to re-announce all capabilities
+	## and environment variables defined for this instance.
+	echo -n "Reload service testbus-agent"
+
+	checkproc $AGENT_BIN
+	rc_status -v
+	;;
+    reload)
+	## Like force-reload, useless for testbus agent
+	echo -n "Reload service testbus-agent"
+	rc_status -v
+	;;
+    status)
+	echo -n "Checking for testbus-agent: "
+	## Check status with checkproc(8), if process is running
+	## checkproc will return with exit status 0.
+
+	# Status codes are slightly different for the status command:
+	# 0 - service running
+	# 1 - service dead, but /var/run/  pid  file exists
+	# 2 - service dead, but /var/lock/ lock file exists
+	# 3 - service not running
+
+	# NOTE: checkproc returns LSB compliant status values.
+	checkproc $AGENT_BIN
+	rc_status
+
+	checkproc $PROXY_BIN
+	rc_status -v
+	;;
+    probe)
+	;;
+    *)
+	echo "Usage: $0 {start|stop|status|try-restart|restart|force-reload|reload|probe}"
+	exit 1
+	;;
+esac
+rc_exit
+
