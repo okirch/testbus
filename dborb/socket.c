@@ -131,6 +131,34 @@ __ni_default_hangup_handler(ni_socket_t *sock)
 {
 }
 
+/*
+ * Return time left to wait, in msec
+ */
+static long
+__ni_left_to_wait(const struct timeval *until)
+{
+	struct timeval now, delta;
+	int rv;
+
+	gettimeofday(&now, NULL);
+	if (timercmp(until, &now, <=))
+		return 0;
+
+	timersub(until, &now, &delta);
+	return 1000 * delta.tv_sec + delta.tv_usec / 1000;
+}
+
+static inline long
+__ni_timeout_min(long a, long b)
+{
+	if (a < 0)
+		return b;
+	if (b < 0)
+		return a;
+	if (a < b)
+		return a;
+	return b;
+}
 
 /*
  * Wait for incoming data on any of the sockets.
@@ -166,20 +194,10 @@ ni_socket_wait(long timeout)
 	}
 	socket_count = __ni_socket_count;
 
-	gettimeofday(&now, NULL);
-	if (timerisset(&expires)) {
-		struct timeval delta;
-		long delta_ms;
+	if (timerisset(&expires))
+		timeout = __ni_timeout_min(timeout, __ni_left_to_wait(&expires));
 
-		if (timercmp(&expires, &now, <)) {
-			timeout = 0;
-		} else {
-			timersub(&expires, &now, &delta);
-			delta_ms = 1000 * delta.tv_sec + delta.tv_usec / 1000;
-			if (timeout < 0 || delta_ms < timeout)
-				timeout = delta_ms;
-		}
-	}
+	timeout = __ni_timeout_min(timeout, ni_timer_next_timeout());
 
 	if (socket_count == 0 && timeout < 0) {
 		ni_error("no sockets left to watch");
@@ -243,6 +261,9 @@ done_with_this_socket:
 		if (sock && sock->check_timeout)
 			sock->check_timeout(sock, &now);
 	}
+
+	/* Fire all pending timers */
+	ni_timer_next_timeout();
 
 	return 0;
 }
