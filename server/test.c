@@ -55,6 +55,7 @@ ni_testbus_testcase_destroy(ni_testbus_container_t *container)
 {
 	ni_testbus_testcase_t *test = ni_testbus_testcase_cast(container);
 
+	(void) test;
 }
 
 void

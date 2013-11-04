@@ -43,8 +43,6 @@ ni_testbus_command_array_init(ni_testbus_command_array_t *array)
 void
 ni_testbus_command_array_destroy(ni_testbus_command_array_t *array)
 {
-	unsigned int i;
-
 	while (array->count) {
 		ni_testbus_command_t *cmd = array->data[--(array->count)];
 
@@ -252,6 +250,7 @@ ni_testbus_process_apply_context(ni_testbus_process_t *proc, ni_testbus_containe
 /*
  * Prior to starting the process, set up all the output files etc.
  */
+#ifdef notused
 static ni_bool_t
 __ni_testbus_process_attach_stdio(ni_testbus_process_t *proc, const char *name)
 {
@@ -266,6 +265,7 @@ __ni_testbus_process_attach_stdio(ni_testbus_process_t *proc, const char *name)
 
 	return TRUE;
 }
+#endif
 
 ni_bool_t
 ni_testbus_process_finalize(ni_testbus_process_t *proc)
@@ -331,7 +331,6 @@ void
 ni_testbus_process_array_destroy(ni_testbus_process_array_t *array)
 {
 	ni_testbus_process_array_t temp;
-	unsigned int i;
 
 	temp = *array;
 	memset(array, 0, sizeof(*array));

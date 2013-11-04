@@ -555,7 +555,7 @@ do_delete_object(int argc, char **argv)
 		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ NULL }
 	};
-	ni_dbus_object_t *container_object = NULL, *test_object;
+	ni_dbus_object_t *container_object = NULL;
 	const char *opt_container = NULL;
 	int c, rv = 1;
 
@@ -609,7 +609,6 @@ do_delete_object(int argc, char **argv)
 		rv = failed? 1 : 0;
 	}
 
-out:
 	return rv;
 }
 

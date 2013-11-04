@@ -122,7 +122,7 @@ static ni_bool_t
 ni_testbus_agent_substitute(char **sp, const ni_string_array_t *env, const ni_testbus_file_array_t *files)
 {
 	ni_stringbuf_t buf = NI_STRINGBUF_INIT_DYNAMIC;
-	char *s = *sp, *pos, *perc;
+	char *s = *sp, *pos;
 
 	if (strchr(s, '%') == NULL)
 		return TRUE;

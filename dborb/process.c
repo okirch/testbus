@@ -709,7 +709,6 @@ __ni_process_flush_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
 static ni_process_buffer_t *
 __ni_process_buffer_for_socket(ni_socket_t *sock)
 {
-	struct ni_process_buffer *pb;
 	ni_process_t *pi = sock->user_data;
 
 	ni_assert(pi);

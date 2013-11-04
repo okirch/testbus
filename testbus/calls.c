@@ -282,7 +282,6 @@ __ni_testbus_container_add_host(ni_dbus_object_t *container, const char *host_pa
 		result = TRUE;
 	}
 
-failed:
 	ni_dbus_variant_vector_destroy(args, 2);
 	return result;
 }
@@ -332,7 +331,6 @@ ni_testbus_call_setenv(ni_dbus_object_t *container, const char *name, const char
 		result = TRUE;
 	}
 
-failed:
 	ni_dbus_variant_vector_destroy(args, 2);
 	return result;
 }
@@ -504,7 +502,6 @@ static ni_dbus_object_t *
 __ni_testbus_host_byname(const char *hostname)
 {
 	ni_dbus_object_t *host_base_object, *host;
-	const ni_dbus_service_t *service;
 
 	host_base_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
 	if (!host_base_object)
@@ -1132,7 +1129,7 @@ ni_testbus_call_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *
 	ni_testbus_wait_queue_t spurious_queue = { .head = NULL };
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
 	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
-	ni_dbus_object_t *result;
+	ni_dbus_object_t *result = NULL;
 
 	__ni_testbus_setup_process_handling();
 	ni_testbus_spurious_waitq = &spurious_queue;

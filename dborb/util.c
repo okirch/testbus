@@ -1847,7 +1847,7 @@ int
 ni_uuid_parse(ni_uuid_t *uuid, const char *string)
 {
 	unsigned int nibbles = 0;
-	uint8_t byte;
+	uint8_t byte = 0;
 
 	if (uuid == NULL || string == NULL)
 		return -1;

@@ -110,7 +110,6 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 	ni_testbus_file_t *file;
 	const char *name;
 	uint32_t mode = 0;
-	int rc;
 
 	if ((context = ni_testbus_container_unwrap(object, error)) == NULL)
 		return FALSE;
@@ -131,7 +130,7 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 
 	ni_debug_wicked("%s: creating file \"%s\"", object->path, name);
 	if ((file = ni_testbus_file_new(name, &context->files, mode)) == NULL) {
-		ni_dbus_set_error_from_code(error, rc, "unable to create new file \"%s\"", name);
+		dbus_set_error(error, DBUS_ERROR_FAILED, "unable to create new file \"%s\"", name);
 		return FALSE;
 	}
 

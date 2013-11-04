@@ -167,7 +167,6 @@ __ni_Testbus_Container_getChildByName(ni_dbus_object_t *object, const ni_dbus_me
 	ni_testbus_container_t *container;
 	const char *class_name, *child_name, *child_path = NULL;
 	const ni_dbus_class_t *class;
-	ni_dbus_object_t *child_object = NULL;
 
 	if (!(container = ni_testbus_container_unwrap(object, error)))
 		return FALSE;
@@ -210,7 +209,6 @@ __ni_Testbus_Container_delete(ni_dbus_object_t *object, const ni_dbus_method_t *
 		ni_dbus_message_t *reply, DBusError *error)
 {
 	ni_testbus_container_t *container;
-	ni_dbus_object_t *child_object = NULL;
 
 	if (!(container = ni_testbus_container_unwrap(object, error)))
 		return FALSE;

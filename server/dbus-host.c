@@ -350,10 +350,7 @@ __ni_Testbus_Host_addCapability(ni_dbus_object_t *object, const ni_dbus_method_t
 		ni_dbus_message_t *reply, DBusError *error)
 {
 	ni_testbus_host_t *host;
-	ni_dbus_object_t *root_object, *command_object = NULL;
 	const char *capability = "";
-	ni_testbus_command_t *cmd;
-	ni_testbus_process_t *proc;
 
 	if (!(host = ni_testbus_host_unwrap(object, error)))
 		return FALSE;

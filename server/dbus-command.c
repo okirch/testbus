@@ -26,7 +26,6 @@ ni_testbus_command_t *
 ni_testbus_command_unwrap(const ni_dbus_object_t *object, DBusError *error)
 {
 	ni_testbus_container_t *context;
-	ni_testbus_command_t *command;
 
 	if (!ni_dbus_object_get_handle_typecheck(object, ni_testbus_command_class(), error))
 		return NULL;
@@ -56,8 +55,6 @@ __ni_Testbus_CommandQueue_createCommand(ni_dbus_object_t *object, const ni_dbus_
 	ni_string_array_t cmd_argv = NI_STRING_ARRAY_INIT;
 	ni_dbus_object_t *command_object;
 	ni_testbus_command_t *command;
-	const char *name;
-	int rc;
 
 	if ((context = ni_testbus_container_unwrap(object, error)) == NULL)
 		return FALSE;
@@ -71,7 +68,7 @@ __ni_Testbus_CommandQueue_createCommand(ni_dbus_object_t *object, const ni_dbus_
 	ni_string_array_destroy(&cmd_argv);
 
 	if (command == NULL) {
-		ni_dbus_set_error_from_code(error, rc, "unable to create new command \"%s\"", name);
+		dbus_set_error(error, DBUS_ERROR_FAILED, "unable to create new command");
 		return FALSE;
 	}
 

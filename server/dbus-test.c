@@ -53,7 +53,6 @@ __ni_Testbus_Testset_createTest(ni_dbus_object_t *object, const ni_dbus_method_t
 	ni_dbus_object_t *test_object;
 	ni_testbus_testcase_t *test;
 	const char *name;
-	int rc;
 
 	if ((context = ni_testbus_container_unwrap(object, error)) == NULL)
 		return FALSE;
@@ -70,7 +69,7 @@ __ni_Testbus_Testset_createTest(ni_dbus_object_t *object, const ni_dbus_method_t
 	}
 
 	if ((test = ni_testbus_testcase_new(name, context)) == NULL) {
-		ni_dbus_set_error_from_code(error, rc, "unable to create new test \"%s\"", name);
+		dbus_set_error(error, DBUS_ERROR_FAILED, "unable to create new test \"%s\"", name);
 		return FALSE;
 	}
 

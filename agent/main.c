@@ -432,7 +432,6 @@ static void
 __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
 {
 	const char *signal_name = dbus_message_get_member(msg);
-	const char *object_path = dbus_message_get_path(msg);
 	ni_dbus_variant_t argv[2];
 	int argc;
 
@@ -465,7 +464,11 @@ __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus
 		ni_trace("received signal %s from %s", signal_name, object_path);
 
 		if (!__ni_testbus_process_run(pi, object_path, files)) {
+#ifdef notyet
 			ni_process_exit_info_t exit_info = { .how = NI_PROCESS_NONSTARTER };
+#else
+			ni_error("not yet implemented - process startup notification");
+#endif
 
 			/* FIXME: notify master that we failed to fork */
 			ni_testbus_file_array_free(files);

@@ -222,9 +222,7 @@ static char *		opt_upstream = "unix:/var/run/dbus/system_bus_socket";
 static char *		opt_downstream;
 
 static void		proxy_init(proxy_t *);
-static void		proxy_recv(io_endpoint_t *ep);
 static void		proxy_setup_recv(proxy_t *);
-static int		do_exec(char **);
 static void		do_proxy(proxy_t *);
 
 static io_mbuf_t *	io_mbuf_wrap(ni_buffer_t *, io_endpoint_t *);
@@ -240,7 +238,6 @@ static void		io_endpoint_unlink(io_endpoint_t *);
 
 static ni_bool_t	io_endpoint_socket_listen(io_transport_t *xprt);
 static io_endpoint_t *	io_endpoint_socket_accept(io_transport_t *xprt, unsigned int channel_id, int fd);
-static void		io_endpoint_shutdown_source(io_endpoint_t *sink, io_endpoint_t *source);
 static void		io_endpoint_free(io_endpoint_t *);
 static const char *	io_endpoint_type_name(io_endpoint_type_t);
 
@@ -483,7 +480,7 @@ void
 io_endpoint_unlink(io_endpoint_t *ep)
 {
 	io_transport_t *xprt = ep->transport;
-	io_endpoint_t **pos, *rover;
+	io_endpoint_t **pos;
 
 	/* FIXME: when setting an endpoint up as a multiplexing connnecting,
 	 * ep->prevp should point back to xprt->multiplex, too */
@@ -793,26 +790,6 @@ io_endpoint_poll(io_endpoint_t *ep, struct pollfd *pfd, struct pollinfo *pi, io_
 	}
 
 	return nfds;
-}
-
-void
-io_endpoint_shutdown_source(io_endpoint_t *sink, io_endpoint_t *source)
-{
-	io_mbuf_t *mbuf;
-
-	if (sink->sink != NULL) {
-		ni_assert(sink->sink == source);
-
-		sink->sink = NULL;
-		if (sink->wbuf == NULL && sink->wqueue == NULL) {
-			io_endpoint_shutdown(sink, SHUT_WR);
-		}
-	}
-
-	for (mbuf = sink->wqueue; mbuf; mbuf = mbuf->next) {
-		if (mbuf->source == source)
-			mbuf->source = NULL;
-	}
 }
 
 static io_endpoint_t *
@@ -1619,6 +1596,7 @@ proxy_cleanup(void)
 		unlink(proxy_sockname);
 }
 
+#ifdef currently_not_used
 int
 do_exec(char **argv)
 {
@@ -1660,6 +1638,7 @@ do_exec(char **argv)
 
 	return listen_fd;
 }
+#endif
 
 static int
 proxy_downstream_accept(proxy_t *proxy, io_endpoint_t *dummy, const struct pollfd *pfd)
@@ -1728,7 +1707,6 @@ do_proxy(proxy_t *proxy)
 	}
 
 	while (!proxy_done) {
-		io_endpoint_t *ep;
 		unsigned int nfds = 0;
 		int n;
 

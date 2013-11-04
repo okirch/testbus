@@ -138,7 +138,6 @@ static long
 __ni_left_to_wait(const struct timeval *until)
 {
 	struct timeval now, delta;
-	int rv;
 
 	gettimeofday(&now, NULL);
 	if (timercmp(until, &now, <=))

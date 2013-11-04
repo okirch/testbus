@@ -126,8 +126,6 @@ ni_testbus_host_array_init(ni_testbus_host_array_t *array)
 void
 ni_testbus_host_array_destroy(ni_testbus_host_array_t *array)
 {
-	unsigned int i;
-
 	while (array->count) {
 		ni_testbus_host_t *host = array->data[--(array->count)];
 
