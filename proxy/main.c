@@ -371,7 +371,8 @@ main(int argc, char **argv)
   		proxy.downstream.listen_fd = do_exec(opt_argv);
   		proxy.downstream.acceptor = proxy_accept;
 #else
-		ni_trace("exec not supported right now");
+		ni_fatal("exec not supported right now");
+		(void) opt_argv;
 #endif
 	} else {
 		if (!io_transport_init(&proxy.downstream, opt_downstream, FALSE))
