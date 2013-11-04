@@ -1,3 +1,4 @@
+
 /*
  * Handle global configuration for netinfo
  *
@@ -22,7 +23,7 @@
 #include "appconfig.h"
 
 #define DEFAULT_PIDDIR		"/var/run/testbus"
-#define DEFAULT_STATEDIR	"/var/run/testbus"
+#define DEFAULT_STATEDIR	"/var/lib/testbus"
 
 static void		ni_config_parse_fslocation(ni_config_fslocation_t *, xml_node_t *);
 static ni_bool_t	ni_config_parse_objectmodel_extension(ni_config_t *, xml_node_t *);

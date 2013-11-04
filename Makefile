@@ -124,7 +124,7 @@ install-data: etc/org.opensuse.Testbus.conf
 	install -m755 -d $(DESTDIR)/etc/dbus-1/system.d/
 	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/
 	install -m755 -d $(DESTDIR)/var/run/testbus
-	install -m755 -d $(DESTDIR)/var/state/testbus
+	install -m755 -d $(DESTDIR)/var/lib/testbus
 
 distclean clean::
 	rm -rf obj core vgcore.*
