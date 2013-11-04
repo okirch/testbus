@@ -585,6 +585,8 @@ do_delete_object(int argc, char **argv)
 
 	if (opt_container) {
 		container_object = ni_testbus_call_get_and_refresh_object(opt_container);
+		(void) container_object;
+		ni_fatal("not implemented yet");
 	} else {
 		int failed = 0;
 
@@ -835,6 +837,7 @@ do_upload_file(int argc, char **argv)
 			return 1;
 
 		ni_fatal("Upload to agent not yet implemented");
+		(void) remote_path;
 	} else {
 		const char *local_path, *identifier;
 		ni_dbus_object_t *context_object, *file_object;
@@ -1040,9 +1043,7 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 	 */
 	ni_testbus_call_create_tempfile("stdout", NI_TESTBUS_FILE_WRITE, cmd_object);
 	if (!__samefile(1, 2)) {
-		ni_dbus_object_t *file_object;
-
-		file_object = ni_testbus_call_create_tempfile("stderr", NI_TESTBUS_FILE_WRITE, cmd_object);
+		ni_testbus_call_create_tempfile("stderr", NI_TESTBUS_FILE_WRITE, cmd_object);
 	}
 
 	return cmd_object;
