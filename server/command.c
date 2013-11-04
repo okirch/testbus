@@ -286,10 +286,9 @@ ni_testbus_process_finalize(ni_testbus_process_t *proc)
 
 	for (i = 0; i < ofiles.count; ++i) {
 		ni_testbus_file_t *file = ofiles.data[i];
-		ni_testbus_file_t *nfile;
 
-		ni_trace("instantiating output file %s", file->name);
-		nfile = ni_testbus_file_new(file->name, &proc->context.files, file->mode);
+		ni_debug_wicked("instantiating output file %s", file->name);
+		(void) ni_testbus_file_new(file->name, &proc->context.files, file->mode);
 		ni_testbus_file_array_remove(array, file);
 	}
 
