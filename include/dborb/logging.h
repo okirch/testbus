@@ -35,6 +35,7 @@ extern ni_bool_t	ni_log_level_set(const char *);
 extern unsigned int	ni_log_level_get(void);
 
 extern ni_bool_t	ni_log_destination(const char *program, const char *destination);
+extern void		ni_log_destination_default(const char *progname, ni_bool_t foreground);
 extern void		ni_log_reopen(void);
 extern void		ni_log_close(void);
 

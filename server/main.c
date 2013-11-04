@@ -59,7 +59,6 @@ static const char *	program_name;
 static const char *	opt_log_level;
 static const char *	opt_log_target;
 static int		opt_foreground;
-static char *		opt_state_file;
 static ni_dbus_server_t *dbus_server;
 
 static void		ni_testbus_master(void);
@@ -140,30 +139,15 @@ main(int argc, char **argv)
 	if (optind != argc)
 		goto usage;
 
-	if (opt_log_target) {
-		if (!ni_log_destination(program_name, opt_log_target)) {
-			fprintf(stderr, "Bad log destination \%s\"\n",
-					opt_log_target);
-			return 1;
-		}
-	} else if (opt_foreground && getppid() != 1) {
-		if (ni_debug) {
-			ni_log_destination(program_name, "perror");
-		} else {
-			ni_log_destination(program_name, "syslog:perror");
-		}
-	} else {
-		ni_log_destination(program_name, "syslog");
-	}
-
 	if (ni_init("server") < 0)
 		return 1;
 
-	if (opt_state_file == NULL) {
-		static char dirname[PATH_MAX];
-
-		snprintf(dirname, sizeof(dirname), "%s/state.xml", ni_config_statedir());
-		opt_state_file = dirname;
+	if (opt_log_target == NULL) {
+		ni_log_destination_default(program_name, opt_foreground);
+	} else
+	if (!ni_log_destination(program_name, opt_log_target)) {
+		fprintf(stderr, "Bad log destination \%s\"\n", opt_log_target);
+		return 1;
 	}
 
 	ni_testbus_master();

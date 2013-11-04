@@ -119,6 +119,9 @@ __ni_config_parse(ni_config_t *conf, const char *filename, ni_init_appdata_callb
 			if (!ni_config_parse_objectmodel_extension(conf, child))
 				goto failed;
 		} else
+		if (strcmp(child->name, "debug") == 0) {
+			ni_enable_debug(child->cdata);
+		} else
 		if (cb != NULL) {
 			if (!cb(appdata, child))
 				goto failed;

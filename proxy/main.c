@@ -343,24 +343,16 @@ main(int argc, char **argv)
 		opt_argv = argv + optind;
 	}
 
-	if (opt_log_target) {
-		if (!ni_log_destination(program_name, opt_log_target)) {
-			fprintf(stderr, "Bad log destination \%s\"\n",
-					opt_log_target);
-			return 1;
-		}
-	} else if (opt_foreground && getppid() != 1) {
-		if (ni_debug) {
-			ni_log_destination(program_name, "perror");
-		} else {
-			ni_log_destination(program_name, "syslog:perror");
-		}
-	} else {
-		ni_log_destination(program_name, "syslog");
-	}
-
 	if (ni_init("proxy") < 0)
 		return 1;
+
+	if (opt_log_target == NULL) {
+		ni_log_destination_default(program_name, opt_foreground);
+	} else
+	if (!ni_log_destination(program_name, opt_log_target)) {
+		fprintf(stderr, "Bad log destination \%s\"\n", opt_log_target);
+		return 1;
+	}
 
 	proxy_init(&proxy);
 

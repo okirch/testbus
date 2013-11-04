@@ -1,5 +1,8 @@
 Packaging!
 
+dborb:
+	dbus socket name in config.xml
+
 Agent:
 	Agent should use well-known proxy socket?
 

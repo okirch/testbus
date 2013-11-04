@@ -164,9 +164,18 @@ ni_enable_debug(const char *fac)
 	int rv = 0;
 
 	copy = xstrdup(fac);
-	for (s = strtok(copy, ","); s; s = strtok(NULL, ",")) {
+	for (s = strtok(copy, ", "); s; s = strtok(NULL, ", ")) {
 		unsigned int flags = 0;
 		int not = 0;
+
+		if (ni_string_eq(s, "off")) {
+			_debug = 0;
+			continue;
+		}
+		/* "none" doesn't change anything. Allows you to specify
+		 * <debug>none</debug> in config file. */
+		if (ni_string_eq(s, "none"))
+			continue;
 
 		if (*s == '-') {
 			not = 1;
@@ -473,6 +482,20 @@ ni_log_destination(const char *progname, const char *destination)
 		return ni_log_destination_file(progname, options);
 	}
 	return FALSE;
+}
+
+void
+ni_log_destination_default(const char *progname, ni_bool_t foreground)
+{
+	if (foreground && getppid() != 1) {
+		if (ni_debug) {
+			ni_log_destination(progname, "stderr");
+		} else {
+			ni_log_destination(progname, "syslog:perror");
+		}
+	} else {
+		ni_log_destination(progname, "syslog");
+	}
 }
 
 static inline void

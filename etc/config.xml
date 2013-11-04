@@ -1,4 +1,9 @@
 <config>
+  <!-- Specify debug facilities for all testbus applications.
+    -- You can still override this on the command line.
+    -->
+  <debug>none</debug>
+
   <statedir path="/var/state/testbus" mode="0755"/>
 
   <schema name="/etc/testbus/schema/testbus.xml"/>

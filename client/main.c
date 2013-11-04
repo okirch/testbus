@@ -162,18 +162,16 @@ main(int argc, char **argv)
 		goto usage;
 	}
 
-	if (opt_log_target) {
-		if (!ni_log_destination(program_name, opt_log_target)) {
-			fprintf(stderr, "Bad log destination \%s\"\n",
-				opt_log_target);
-			return 1;
-		}
-	} else {
-		ni_log_destination(program_name, "perror:user");
-	}
-
 	if (ni_init("client") < 0)
 		return 1;
+
+	if (opt_log_target == NULL) {
+		ni_log_destination_default(program_name, TRUE);
+	} else
+	if (!ni_log_destination(program_name, opt_log_target)) {
+		fprintf(stderr, "Bad log destination \%s\"\n", opt_log_target);
+		return 1;
+	}
 
 	cmd = argv[optind];
 

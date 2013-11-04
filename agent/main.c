@@ -181,25 +181,18 @@ main(int argc, char **argv)
 	if (optind < argc)
 		goto usage;
 
-	if (opt_log_target) {
-		if (!ni_log_destination(program_name, opt_log_target)) {
-			fprintf(stderr, "Bad log destination \%s\"\n",
-				opt_log_target);
-			return 1;
-		}
-	} else if (getppid() != 1) {
-		if (ni_debug) {
-			ni_log_destination(program_name, "perror:user");
-		} else {
-			ni_log_destination(program_name, "syslog:perror:user");
-		}
-	} else {
-		ni_log_destination(program_name, "syslog::user");
-	}
-
 	if (ni_init("agent") < 0)
 		return 1;
 
+	if (opt_log_target == NULL) {
+		ni_log_destination_default(program_name, opt_foreground);
+	} else
+	if (!ni_log_destination(program_name, opt_log_target)) {
+		fprintf(stderr, "Bad log destination \%s\"\n", opt_log_target);
+		return 1;
+	}
+
+	/* FIXME: move to separate function ni_testbus_agent_init_state() */
 	if (opt_state_file == NULL) {
 		static char dirname[PATH_MAX];
 
@@ -212,7 +205,7 @@ main(int argc, char **argv)
 	if (ni_file_exists(opt_state_file))
 		ni_testbus_agent_read_state(opt_state_file, &ni_testbus_agent_global_state);
 	else
-		ni_trace("State file does not exist");
+		ni_debug_wicked("State file does not exist");
 
 	ni_testbus_agent(&ni_testbus_agent_global_state);
 	return 0;
