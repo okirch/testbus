@@ -116,9 +116,9 @@ function testbus_claim_host {
 	testbus_trace "claim host $*"
 
 	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
-		testbus_call claim-host $TESTBUS_TEST_HANDLE "$@"
+		testbus_call claim-host "$@" $TESTBUS_TEST_HANDLE
 	elif [ -n "$TESTBUS_GROUP_HANDLE" ]; then
-		testbus_call claim-host $TESTBUS_GROUP_HANDLE "$@"
+		testbus_call claim-host "$@" $TESTBUS_GROUP_HANDLE
 	else
 		echo "No context to claim host for" >&2
 		exit 1
