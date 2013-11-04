@@ -199,6 +199,7 @@ static ni_buffer_t *	io_mbuf_take_buffer(io_mbuf_t *);
 static int		io_socket_listen(const char *);
 
 static void		io_endpoint_queue_write(io_endpoint_t *, io_mbuf_t *);
+static void		io_endpoint_write_queue_discard(io_endpoint_t *);
 static void		io_endpoint_link(io_endpoint_t *, io_endpoint_list_t *);
 static void		io_endpoint_unlink(io_endpoint_t *);
 
@@ -392,7 +393,7 @@ __set_poll_info(struct pollinfo *pi, io_handler_fn_t handler, io_endpoint_t *ep)
 static inline void
 io_set_poll_info(struct pollfd *pfd, int fd, int events, struct pollinfo *pi, io_handler_fn_t handler, io_endpoint_t *ep)
 {
-	pfd->events = events;
+	pfd->events = events | POLLHUP;
 	pfd->fd = fd;
 
 	pi->handler= handler;
@@ -505,7 +506,7 @@ io_hexdump(const io_endpoint_t *sink, const io_mbuf_t *mbuf)
 
 	total =  ni_buffer_count(bp);
 
-	ni_trace("%s: queuing %u bytes", sink->name, total);
+	ni_debug_socket("%s: queuing %u bytes", sink->name, total);
 
 	for (written = 0; written < total; ) {
 		const unsigned char *p = ni_buffer_head(bp) + written;
@@ -557,6 +558,29 @@ io_endpoint_queue_write(io_endpoint_t *sink, io_mbuf_t *mbuf)
 	*pos = mbuf;
 }
 
+ni_buffer_t *
+io_endpoint_pullup(io_endpoint_t *ep)
+{
+	if (ep->wbuf != NULL) {
+		ni_assert(ni_buffer_count(ep->wbuf));
+		return ep->wbuf;
+	}
+
+	if (ep->wbuf == NULL) {
+		io_mbuf_t *mbuf = ep->wqueue;
+
+		if (mbuf != NULL) {
+			ep->wbuf = io_mbuf_take_buffer(mbuf);
+			ep->wqueue = mbuf->next;
+			io_mbuf_free(mbuf);
+			ni_debug_socket("%s: grabbed next buffer from wqueue", ep->name);
+			return ep->wbuf;
+		}
+	}
+
+	return NULL;
+}
+
 static const char *
 io_endpoint_type_name(io_endpoint_type_t t)
 {
@@ -596,6 +620,11 @@ io_endpoint_shutdown(io_endpoint_t *ep, int how)
 		ep->rfd = -1;
 	}
 	if (ep->wfd >= 0 && (how == SHUT_WR || how == SHUT_RDWR)) {
+		if (io_endpoint_pullup(ep)) {
+			ni_debug_socket("%s: write shutdown, discard pending writes", ep->name);
+			io_endpoint_write_queue_discard(ep);
+		}
+
 		shutdown(ep->wfd, SHUT_WR);
 		if (ep->rfd != ep->wfd) {
 			ni_debug_socket("%s: closing fd %d", ep->name, ep->wfd);
@@ -607,10 +636,30 @@ io_endpoint_shutdown(io_endpoint_t *ep, int how)
 	if (ep->rfd < 0 && ep->wfd < 0) {
 		io_transport_t *xprt = ep->transport;
 
-		ni_debug_socket("%s: socket is dead, moving to gargabe list", ep->name);
+		ni_debug_socket("%s: socket is dead, moving to garbage list", ep->name);
 		io_endpoint_unlink(ep);
 		io_endpoint_link(ep, &xprt->garbage_list);
 	}
+}
+
+/*
+ * Half-close an endpoint.
+ * This is called when detect an EOF on the corresponding channel or endpoint
+ * (e.g. after recv returns 0 bytes, or when we receive a CHANNEL_CLOSE on a
+ * multiplexed connection).
+ * In this case, the end point can no longer recv anything, and should be marked
+ * for future shutdown after draining all pending writes.
+ */
+static void
+io_endpoint_halfclose(io_endpoint_t *ep)
+{
+	int how = SHUT_RD;
+
+	ep->shutdown_write = TRUE;
+	if (!io_endpoint_pullup(ep))
+		how = SHUT_RDWR;
+
+	io_endpoint_shutdown(ep, how);
 }
 
 static int
@@ -654,23 +703,18 @@ io_endpoint_doio(proxy_t *proxy, io_endpoint_t *ep, const struct pollfd *pfd)
 		}
 	}
 
+	if ((ep->wfd == pfd->fd) && pfd->revents & POLLHUP) {
+		io_endpoint_shutdown(ep, SHUT_WR);
+	}
+
 	return 0;
 }
 
 static void
 io_endpoint_poll_prepare(io_endpoint_t *ep)
 {
-	if (ep->wfd >= 0 && ep->wbuf == NULL) {
-		io_mbuf_t *mbuf = ep->wqueue;
-
-		if (mbuf != NULL) {
-			ep->wbuf = io_mbuf_take_buffer(mbuf);
-			ep->wqueue = mbuf->next;
-			io_mbuf_free(mbuf);
-			ni_trace("%s: grabbed next buffer from wqueue", ep->name);
-		}
-
-		if (ep->wbuf == NULL && ep->shutdown_write)
+	if (ep->wfd >= 0 && !io_endpoint_pullup(ep)) {
+		if (ep->shutdown_write)
 			io_endpoint_shutdown(ep, SHUT_WR);
 	}
 }
@@ -896,22 +940,37 @@ io_endpoint_serial_new(io_transport_t *xprt, unsigned int channel_id)
 	return ep;
 }
 
+/*
+ * Socket destruction functions
+ */
 void
-io_endpoint_free(io_endpoint_t *ep)
+io_endpoint_write_queue_discard(io_endpoint_t *ep)
 {
-	io_endpoint_t *sink;
-
-	ni_debug_dbus("%s(%s)", __func__, ep->name);
-	if (ep->wbuf)
+	if (ep->wbuf) {
 		ni_buffer_free(ep->wbuf);
-	if (ep->rbuf)
-		ni_buffer_free(ep->rbuf);
+		ep->wbuf = NULL;
+	}
+
 	while (ep->wqueue != NULL) {
 		io_mbuf_t *mbuf = ep->wqueue;
 
 		ep->wqueue = mbuf->next;
 		io_mbuf_free(mbuf);
 	}
+}
+
+void
+io_endpoint_free(io_endpoint_t *ep)
+{
+	io_endpoint_t *sink;
+
+	ni_debug_dbus("%s(%s)", __func__, ep->name);
+	if (ep->rbuf) {
+		ni_buffer_free(ep->rbuf);
+		ep->rbuf = NULL;
+	}
+
+	io_endpoint_write_queue_discard(ep);
 
 	if ((sink = ep->sink) && sink->sink == ep) {
 		/* This is a pair of sockets of the same type. */
@@ -1091,7 +1150,7 @@ io_transport_accept(io_transport_t *xprt, int fd)
 }
 
 unsigned int
-ni_transport_purge(io_transport_t *xprt)
+io_transport_purge(io_transport_t *xprt)
 {
 	return io_endpoint_list_purge(&xprt->ep_list)
 	     + io_endpoint_list_purge(&xprt->garbage_list)
@@ -1131,6 +1190,7 @@ io_transport_poll(io_transport_t *xprt, struct pollfd *pfd, struct pollinfo *pi)
 	io_endpoint_t *ep;
 
 	io_transport_poll_prepare(xprt);
+	io_transport_purge(xprt);
 
 	if ((ep = xprt->multiplex) != NULL)
 		nfds += io_endpoint_poll(ep, pfd + nfds, pi + nfds, io_endpoint_doio);
@@ -1302,11 +1362,8 @@ proxy_demux_packet(io_endpoint_t *source, ni_buffer_t *bp)
 	case CHANNEL_CLOSE:
 		ni_buffer_free(bp);
 
-		/* We no longer accept incoming data on the sink socket */
-		io_endpoint_shutdown(sink, SHUT_RD);
-
-		/* Mark the channel for drain and subsequent SHUT_WR */
-		sink->shutdown_write = 1;
+		/* After draining all pending output, we should close this socket */
+		io_endpoint_halfclose(sink);
 		break;
 
 	case CHANNEL_DATA:
@@ -1401,9 +1458,6 @@ proxy_recv_mux(io_endpoint_t *ep)
 		 * the remote that it can start to tear down this connection */
 		io_endpoint_queue_write(ep->sink, proxy_channel_close_new(ep->channel_id));
 
-		/* Inform the sink that we've shut down. */
-		//io_endpoint_shutdown_source(ep->sink, ep);
-
 		/* Shutdown read side of this socket */
 		io_endpoint_shutdown(ep, SHUT_RD);
 	} else {
@@ -1470,13 +1524,14 @@ proxy_recv_demux(io_endpoint_t *ep)
 
 			ni_debug_socket("%s: connection closed, should close all endpoints", ep->name);
 			{
+				io_transport_t *xprt = ep->transport->other;
 				io_endpoint_t *other;
 
-				foreach_io_endpoint(other, &ep->transport->ep_list) {
+				foreach_io_endpoint(other, &xprt->ep_list) {
+					io_endpoint_halfclose(other);
 				}
 
 			}
-			//io_endpoint_shutdown_source(ep->sink, ep);
 
 			/* Shutdown read side of this socket */
 			io_endpoint_shutdown(ep, SHUT_RD);
@@ -1681,12 +1736,12 @@ do_proxy(proxy_t *proxy)
 			continue;
 		}
 
+		if (n != 0)
+			ni_debug_socket("%u poll events", n);
+
 		for (n = 0; n < nfds; ++n)
 			info[n].handler(proxy, info[n].ep, pfd + n);
-
-		ni_transport_purge(&proxy->upstream);
-		ni_transport_purge(&proxy->downstream);
 	}
 
-	ni_trace("Child exited, proxy done");
+	ni_debug_socket("Child exited, proxy done");
 }
