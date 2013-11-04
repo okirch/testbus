@@ -1066,7 +1066,7 @@ out:
 static ni_testbus_waitq_t *
 __ni_testbus_process_wait(const char *object_path)
 {
-	ni_testbus_waitq_t *wq;
+	ni_testbus_waitq_t *wq = NULL;
 
 	if (object_path == NULL)
 		return NULL;
