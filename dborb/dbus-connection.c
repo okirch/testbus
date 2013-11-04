@@ -374,7 +374,7 @@ ni_dbus_connection_call(ni_dbus_connection_t *connection,
 
 	reply = dbus_pending_call_steal_reply(pending);
 
-	if (call == NULL) {
+	if (reply == NULL) {
 		dbus_set_error(error, DBUS_ERROR_FAILED, "dbus: no reply");
 		return NULL;
 	}
