@@ -188,6 +188,7 @@ static char *		opt_downstream;
 
 static void		proxy_init(proxy_t *);
 static void		proxy_recv(io_endpoint_t *ep);
+static void		proxy_setup_recv(proxy_t *);
 static int		do_exec(char **);
 static void		do_proxy(proxy_t *);
 
@@ -347,6 +348,12 @@ main(int argc, char **argv)
 		if (!io_transport_init(&proxy.downstream, opt_downstream, FALSE))
 			ni_fatal("Unable to set up downstream transport");
 	}
+
+	/* Now set up transport.data_available for copy/mux/demux on both
+	 * transports, so that we do not have to make the same comparisons in
+	 * proxy_recv each time.
+	 */
+	proxy_setup_recv(&proxy);
 
 	do_proxy(&proxy);
 	return 0;
@@ -1370,8 +1377,8 @@ proxy_recv_mux(io_endpoint_t *ep)
 	ni_buffer_reserve_head(bp, DATA_HEADER_SIZE);
 
 	ret = read(ep->rfd, ni_buffer_tail(bp), ni_buffer_tailroom(bp));
-	ni_debug_dbus("%s: read() returns %d", __func__, ret);
 	if (ret > 0) {
+		ni_debug_socket("%s: read %d bytes", ep->name, ret);
 		ni_buffer_push_tail(bp, ret);
 
 		mbuf = io_mbuf_wrap(bp, ep);
@@ -1390,6 +1397,8 @@ proxy_recv_mux(io_endpoint_t *ep)
 		io_endpoint_queue_write(ep->sink, mbuf);
 	} else
 	if (ret == 0) {
+		ni_debug_socket("%s: read 0 bytes, starting to shut down channel %u", ep->name, ep->channel_id);
+
 		/* Queue a CLOSE command to the multiplexing connection, to inform
 		 * the remote that it can start to tear down this connection */
 		io_endpoint_queue_write(ep->sink, proxy_channel_close_new(ep->channel_id));
@@ -1400,7 +1409,7 @@ proxy_recv_mux(io_endpoint_t *ep)
 		/* Shutdown read side of this socket */
 		io_endpoint_shutdown(ep, SHUT_RD);
 	} else {
-		ni_error("read error on socket: %m");
+		ni_error("%s: read error on socket: %m", ep->name);
 	}
 }
 
@@ -1433,6 +1442,7 @@ proxy_recv_demux(io_endpoint_t *ep)
 
 			if (avail == pktsize) {
 				/* We have a full packet */
+				ni_debug_socket("%s: received packet of %u bytes", ep->name, avail);
 				proxy_demux(ep, bp);
 				ep->rbuf = NULL;
 				break;
@@ -1448,7 +1458,6 @@ proxy_recv_demux(io_endpoint_t *ep)
 		ni_buffer_ensure_tailroom(bp, rnext);
 
 		ret = read(ep->rfd, ni_buffer_tail(bp), rnext);
-		ni_debug_dbus("%s: read() returns %d", __func__, ret);
 		if (ret > 0) {
 			read_some = TRUE;
 			rcount -= ret;
@@ -1456,8 +1465,10 @@ proxy_recv_demux(io_endpoint_t *ep)
 			continue;
 		} else
 		if (ret == 0) {
-			if (read_some)
+			if (read_some) {
+				ni_debug_socket("%s: received partial packet (%u bytes)", ep->name, avail);
 				break;
+			}
 
 			ni_debug_socket("%s: connection closed, should close all endpoints", ep->name);
 			{
@@ -1473,9 +1484,35 @@ proxy_recv_demux(io_endpoint_t *ep)
 			io_endpoint_shutdown(ep, SHUT_RD);
 			break;
 		} else {
-			ni_error("read error on socket: %m");
+			ni_error("%s: read error on socket: %m", ep->name);
 			break;
 		}
+	}
+}
+
+void
+proxy_setup_recv(proxy_t *proxy)
+{
+	io_transport_t *upstream = &proxy->upstream;
+	io_transport_t *downstream = &proxy->downstream;
+
+	if (upstream->type == downstream->type) {
+		upstream->data_available = 
+		downstream->data_available = proxy_recv_copy;
+	} else
+	if (upstream->type == IO_ENDPOINT_TYPE_SIMPLEX
+	 && downstream->type == IO_ENDPOINT_TYPE_MULTIPLEX) {
+		upstream->data_available = proxy_recv_mux;
+		downstream->data_available = proxy_recv_demux;
+	} else
+	if (upstream->type == IO_ENDPOINT_TYPE_MULTIPLEX
+	 && downstream->type == IO_ENDPOINT_TYPE_SIMPLEX) {
+		upstream->data_available = proxy_recv_demux;
+		downstream->data_available = proxy_recv_mux;
+	} else {
+		ni_fatal("cannot set up proxy: unknown transport combination - upstram %s, downstream %s",
+				io_endpoint_type_name(upstream->type),
+				io_endpoint_type_name(downstream->type));
 	}
 }
 
