@@ -115,6 +115,10 @@ install: install-bin install-data
 install-bin: $(ALL)
 	install -m755 -d $(DESTDIR)/usr/bin
 	install -m555 -s $(BINTGTS) $(DESTDIR)/usr/bin
+	install -m755 -d $(DESTDIR)/usr/sbin
+	install -m755 -d $(DESTDIR)/etc/init.d
+	install -m555 -s etc/master.init $(DESTDIR)/etc/init.d/testbus-master
+	ln -s ../../etc/init.d/testbus-master $(DESTDIR)/usr/sbin/rctestbus-master
 
 install-data: etc/org.opensuse.Testbus.conf
 	install -m755 -d $(DESTDIR)/etc
