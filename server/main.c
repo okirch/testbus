@@ -206,12 +206,10 @@ ni_testbus_master(void)
 			__ni_testbus_dbus_bus_signal_handler, NULL);
 		
 
-#if 0
 	if (!opt_foreground) {
 		if (ni_server_background(program_name) < 0)
 			ni_fatal("unable to background server");
 	}
-#endif
 
 	while (!ni_caught_terminal_signal()) {
 		long timeout;
