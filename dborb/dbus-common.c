@@ -143,7 +143,7 @@ ni_dbus_variant_new(void)
 void
 ni_dbus_variant_init(ni_dbus_variant_t *var)
 {
-	memset(var, 0, sizeof(var));
+	memset(var, 0, sizeof(*var));
 	var->__magic = NI_DBUS_VARIANT_MAGIC;
 }
 
