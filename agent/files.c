@@ -1,5 +1,6 @@
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <dborb/process.h>
 #include <dborb/buffer.h>
 #include <testbus/client.h>
