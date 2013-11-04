@@ -197,6 +197,7 @@ ni_testbus_master(void)
 	if (!ni_objectmodel_register(&ni_testbus_objectmodel))
 		ni_fatal("Cannot initialize objectmodel, giving up.");
 	schema = ni_objectmodel_get_schema();
+	(void) schema; /* shut up */
 
 	dbus_server = ni_objectmodel_create_server();
 	if (!dbus_server)
