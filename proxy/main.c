@@ -52,10 +52,17 @@
  *		 --downstream unix:/var/run/dbus-proxy.sock
  *
  *	Now, the testbus client (or any other DBus Client) can connect to the host DBus
- *	daemon if you point it to the proxy socket:
+ *	daemon if you point it to the proxy socket, either by setting the environment
+ *	variable DBUS_SESSION_BUS_ADDRESS:
  *
  *	 export DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus-proxy.sock
- *	 ... start DBus client
+ *
+ *	OR by adding the following to /etc/testbus/config.xml (in the guest)
+ *
+ *	 <dbus socket="/var/run/dbus-proxy.sock" />
+ *
+ *	Following either of these, you can start the testbus agent and/or run
+ *	testbus client commands.
  *
  *  -	Run the agent in a KVM or XEN guest
  *

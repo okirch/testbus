@@ -19,6 +19,7 @@
 #include "dbus-connection.h"
 #include "dbus-dict.h"
 #include "debug.h"
+#include "appconfig.h"
 
 #undef DEBUG_WATCH_VERBOSE
 
@@ -114,10 +115,17 @@ __ni_dbus_connection_open(const char *bus_type_string, ni_bool_t private, const 
 			return NULL;
 		}
 	} else {
-		if (getenv("DBUS_SESSION_BUS_ADDRESS") != NULL)
+		const char *socket_path;
+
+		bus_type = DBUS_BUS_SYSTEM;
+
+		if (getenv("DBUS_SESSION_BUS_ADDRESS") != NULL) {
 			bus_type = DBUS_BUS_SESSION;
-		else
-			bus_type = DBUS_BUS_SYSTEM;
+		} else
+		if ((socket_path = ni_config_dbus_socket_path()) != NULL) {
+			setenv("DBUS_SESSION_BUS_ADDRESS", socket_path, 1);
+			bus_type = DBUS_BUS_SESSION;
+		}
 	}
 
 	connection = calloc(1, sizeof(*connection));

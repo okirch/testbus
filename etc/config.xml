@@ -4,6 +4,13 @@
     -->
   <debug>none</debug>
 
+  <!-- When running inside a guest, you can specify a
+    -- forwarding socket through which DBus clients can
+    -- speak to the DBus daemon on the master host.
+    --
+    -- <dbus socket="...." />
+    -->
+
   <statedir path="/var/state/testbus" mode="0755"/>
 
   <schema name="/etc/testbus/schema/testbus.xml"/>

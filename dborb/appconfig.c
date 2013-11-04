@@ -57,6 +57,7 @@ ni_config_free(ni_config_t *conf)
 {
 	ni_string_free(&conf->dbus_name);
 	ni_string_free(&conf->dbus_type);
+	ni_string_free(&conf->dbus_socket);
 	ni_config_fslocation_destroy(&conf->piddir);
 	ni_config_fslocation_destroy(&conf->statedir);
 	free(conf);
@@ -108,6 +109,8 @@ __ni_config_parse(ni_config_t *conf, const char *filename, ni_init_appdata_callb
 				ni_string_dup(&conf->dbus_name, attrval);
 			if ((attrval = xml_node_get_attr(child, "type")) != NULL)
 				ni_string_dup(&conf->dbus_type, attrval);
+			if ((attrval = xml_node_get_attr(child, "socket")) != NULL)
+				ni_string_dup(&conf->dbus_socket, attrval);
 		} else 
 		if (strcmp(child->name, "schema") == 0) {
 			const char *attrval;

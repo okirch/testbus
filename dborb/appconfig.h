@@ -66,6 +66,7 @@ typedef struct ni_config {
 
 	char *			dbus_name;
 	char *			dbus_type;
+	char *			dbus_socket;
 	char *			dbus_xml_schema_file;
 } ni_config_t;
 
@@ -107,6 +108,13 @@ ni_config_dbus_xml_schema_file()
 {
 	__ni_assert_initialized();
 	return ni_global.config->dbus_xml_schema_file;
+}
+
+static inline const char *
+ni_config_dbus_socket_path(void)
+{
+	__ni_assert_initialized();
+	return ni_global.config->dbus_socket;
 }
 
 #endif /* __NI_NETINFO_APPCONFIG_H__ */
