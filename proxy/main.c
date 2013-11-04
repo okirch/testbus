@@ -215,7 +215,7 @@ struct proxy {
 };
 
 static const char *	program_name;
-static const char *	opt_identity;
+static const char *	opt_identity = "proxy";
 static const char *	opt_log_target;
 static int		opt_foreground;
 static char *		opt_upstream = "unix:/var/run/dbus/system_bus_socket";
@@ -1701,10 +1701,8 @@ do_proxy(proxy_t *proxy)
 
 	//signal(SIGPIPE, SIG_IGN);
 
-	if (!opt_foreground) {
-		if (ni_server_background(opt_identity? opt_identity : program_name) < 0)
-			ni_fatal("unable to background server");
-	}
+	if (!opt_foreground && ni_server_background(opt_identity) < 0)
+		ni_fatal("unable to background server");
 
 	while (!proxy_done) {
 		unsigned int nfds = 0;
