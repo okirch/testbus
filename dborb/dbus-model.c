@@ -600,7 +600,7 @@ ni_dbus_objectmodel_bind_properties(const ni_dbus_objectmodel_properties_binding
 							bp->name, bp->signature);
 		}
 
-		ni_trace("binding property %s.%s", service->name, bp->name);
+		ni_debug_dbus("binding property %s.%s", service->name, bp->name);
 		if (!__ni_dbus_property_bind((ni_dbus_property_t *) property, bp)) {
 			ni_error("Unable to bind property %s.%s: signature mismatch",
 					b->service, bp->name);
