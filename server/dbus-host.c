@@ -64,6 +64,20 @@ __ni_testbus_host_set_agent(ni_testbus_host_t *host, const char *owner)
 }
 
 /*
+ * Send Host.connected() signal
+ */
+static void
+ni_testbus_host_signal_connected(ni_dbus_object_t *host_object)
+{
+	/* Send the signal */
+	ni_dbus_server_send_signal(ni_dbus_object_get_server(host_object), host_object,
+			NI_TESTBUS_HOST_INTERFACE,
+			"connected",
+			0, NULL);
+}
+
+
+/*
  * Hostlist.createHost(name)
  *
  */
@@ -94,6 +108,8 @@ __ni_Testbus_Hostlist_createHost(ni_dbus_object_t *object, const ni_dbus_method_
 	/* Register this object */
 	host_object = ni_testbus_host_wrap(object, host);
 	ni_dbus_message_append_string(reply, host_object->path);
+
+	ni_testbus_host_signal_connected(host_object);
 	return TRUE;
 }
 
@@ -176,6 +192,8 @@ __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t
 
 	ni_debug_wicked("reconnecting host \"%s\" - object path %s", name, host->context.dbus_object_path);
 	ni_dbus_message_append_string(reply, host->context.dbus_object_path);
+
+	ni_testbus_host_signal_connected(object);
 	return TRUE;
 }
 

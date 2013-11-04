@@ -25,6 +25,8 @@
     </arguments>
   </method>
 
+  <signal name="connected" />
+
   <signal name="processScheduled">
     <arguments>
       <process-info class="dict">
@@ -32,7 +34,6 @@
       </process-info>
     </arguments>
   </signal>
-
 </service>
 
 <service name="hostset" interface="org.opensuse.Testbus.Hostset">
