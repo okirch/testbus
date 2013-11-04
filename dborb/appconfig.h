@@ -117,4 +117,5 @@ ni_config_dbus_socket_path(void)
 	return ni_global.config->dbus_socket;
 }
 
+
 #endif /* __NI_NETINFO_APPCONFIG_H__ */

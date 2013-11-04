@@ -42,6 +42,7 @@ enum {
 	OPT_LOG_TARGET,
 
 	OPT_FOREGROUND,
+	OPT_DBUS_SOCKET,
 
 	OPT_DRYRUN,
 	OPT_ROOTDIR,
@@ -59,6 +60,7 @@ static struct option	options[] = {
 
 	/* daemon */
 	{ "foreground",		no_argument,		NULL,	OPT_FOREGROUND },
+	{ "dbus-socket",	required_argument,	NULL,	OPT_DBUS_SOCKET },
 
 	/* specific */
 	{ "dryrun",		no_argument,		NULL,	OPT_DRYRUN },
@@ -82,6 +84,7 @@ static int		opt_foreground;
 static const char *	opt_state_file;
 int			opt_global_dryrun;
 char *			opt_global_rootdir;
+char *			opt_dbus_socket;
 char *			opt_hostname;
 static int		opt_reconnect;
 
@@ -118,10 +121,13 @@ main(int argc, char **argv)
 				"  --debug facility\n"
 				"        Enable debugging for debug <facility>.\n"
 				"        Use '--debug help' for a list of facilities.\n"
-				"  --dry-run\n"
-				"        Do not change the system in any way.\n"
-				"  --root-directory\n"
-				"        Search all config files below this directory.\n"
+				"  --reconnect\n"
+				"        Rather than trying a fresh agent registration, use the information\n"
+				"        from the state file to attempt a reconnect.\n"
+				"  --foreground\n"
+				"        Do not background the service.\n"
+				"  --dbus-socket <path>\n"
+				"        Connect to the specified DBus socket rather than the default dbus system bus.\n"
 				"\n"
 				"Supported commands:\n"
 				"  ... tbd ...\n"
@@ -166,6 +172,10 @@ main(int argc, char **argv)
 			opt_foreground = 1;
 			break;
 
+		case OPT_DBUS_SOCKET:
+			opt_dbus_socket = optarg;
+			break;
+
 		case OPT_DRYRUN:
 			opt_global_dryrun = 1;
 			break;
@@ -185,6 +195,9 @@ main(int argc, char **argv)
 
 	if (ni_init(APP_IDENTITY) < 0)
 		return 1;
+
+	if (opt_dbus_socket)
+		ni_config_set_dbus_socket_path(opt_dbus_socket);
 
 	if (ni_server_is_running(APP_IDENTITY)) {
 		ni_error("another testbus %s seems to be running already - refusing to start", APP_IDENTITY);

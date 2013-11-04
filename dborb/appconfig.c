@@ -383,3 +383,13 @@ ni_config_fslocation_destroy(ni_config_fslocation_t *loc)
 	ni_string_free(&loc->path);
 	memset(loc, 0, sizeof(*loc));
 }
+
+/*
+ * Allow overriding the socket path specified in the config file
+ */
+void
+ni_config_set_dbus_socket_path(const char *path)
+{
+	__ni_assert_initialized();
+	ni_string_dup(&ni_global.config->dbus_socket, path);
+}
