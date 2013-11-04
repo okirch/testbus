@@ -32,9 +32,34 @@
  *	 export DBUS_SESSION_BUS_ADDRESS=unix:/var/run/dbus-proxy.socket
  *	 testbus-agent
  *
+ *  -	Run the agent in a KVM guest
+ *
+ *	On the host, run:
+ *	 dbus-proxy --downstream unix-mux:/var/run/testbus-guest.sock
+ *
+ *	Then, start KVM using a virtio-serial port connecting to the
+ *	downstream socket:
+ *
+ *	 kvm ... \
+ *	        -device virtio-serial \
+ *	        -device virtserialport,chardev=testbus-serial,name=org.opensuse.Testbus.0 \
+ *	        -chardev socket,id=testbus-serial,path=/var/run/testbus-guest.sock \
+ *		...
+ *
+ *	Finally, inside the guest, run another proxy, like this:
+ *
+ *	 dbus-proxy --upstream serial:/dev/virtio-ports/org.opensuse.Testbus.0 \
+ *		 --downstream unix:/var/run/dbus-proxy.sock
+ *
+ *	Now, the testbus client (or any other DBus Client) can connect to the host DBus
+ *	daemon if you point it to the proxy socket:
+ *
+ *	 export DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus-proxy.sock
+ *	 ... start DBus client
+ *
  *  -	Run the agent in a KVM or XEN guest
  *
- *	[To be fleshed out]
+ *	[To be fleshed out, probably very similar to KVM case]
  *
  *  -	Use a serial (null modem) line for communication; eg this would
  *	be used by the TAHI test suite.
