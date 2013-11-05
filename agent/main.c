@@ -90,8 +90,6 @@ static int		opt_reconnect;
 
 static ni_testbus_agent_state_t ni_testbus_agent_global_state;
 
-static void		ni_testbus_agent_read_state(const char *state_file, ni_testbus_agent_state_t *);
-static void		ni_testbus_agent_write_state(const char *state_file, const ni_testbus_agent_state_t *);
 static void		ni_testbus_agent(ni_testbus_agent_state_t *state);
 
 int
@@ -212,30 +210,37 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	/* FIXME: move to separate function ni_testbus_agent_init_state() */
-	if (opt_state_file == NULL) {
-		static char dirname[PATH_MAX];
-
-		snprintf(dirname, sizeof(dirname), "%s/state.xml", ni_config_statedir());
-		opt_state_file = dirname;
-
-	}
-
-	ni_debug_wicked("State file is %s", opt_state_file);
-	if (ni_file_exists(opt_state_file))
-		ni_testbus_agent_read_state(opt_state_file, &ni_testbus_agent_global_state);
-	else
-		ni_debug_wicked("State file does not exist");
-
 	ni_testbus_agent(&ni_testbus_agent_global_state);
 	return 0;
 }
 
-void
-ni_testbus_agent_read_state(const char *state_file, ni_testbus_agent_state_t *state)
+static const char *
+ni_testbus_agent_state_file_path(void)
 {
+	static char state_file_pathbuf[PATH_MAX];
+
+	if (opt_state_file == NULL) {
+		snprintf(state_file_pathbuf, sizeof(state_file_pathbuf),
+				"%s/state.xml", ni_config_statedir());
+		opt_state_file = state_file_pathbuf;
+	}
+
+	ni_debug_wicked("State file is %s", opt_state_file);
+	return opt_state_file;
+}
+
+void
+ni_testbus_agent_read_state(ni_testbus_agent_state_t *state)
+{
+	const char *state_file;
 	xml_document_t *doc;
 	xml_node_t *root, *node;
+
+	state_file = ni_testbus_agent_state_file_path();
+	if (!ni_file_exists(state_file)) {
+		ni_debug_wicked("State file does not exist");
+		return;
+	}
 
 	doc = xml_document_read(state_file);
 	if (doc == NULL)
@@ -267,8 +272,9 @@ ni_testbus_agent_read_state(const char *state_file, ni_testbus_agent_state_t *st
 }
 
 void
-ni_testbus_agent_write_state(const char *state_file, const ni_testbus_agent_state_t *state)
+ni_testbus_agent_write_state(const ni_testbus_agent_state_t *state)
 {
+	const char *state_file;
 	xml_document_t *doc;
 	xml_node_t *root, *node;
 
@@ -279,6 +285,7 @@ ni_testbus_agent_write_state(const char *state_file, const ni_testbus_agent_stat
 	xml_node_new_element("hostname", node, state->hostname);
 	xml_node_new_element("uuid", node, ni_uuid_print(&state->uuid));
 
+	state_file = ni_testbus_agent_state_file_path();
 	if (xml_document_write(doc, state_file) < 0)
 		ni_error("unable to write status file %s", state_file);
 	else
@@ -583,6 +590,8 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	ni_dbus_object_t *host_object;
 	ni_dbus_client_t *dbus_client;
 
+	ni_testbus_agent_read_state(&ni_testbus_agent_global_state);
+
 	if (!ni_objectmodel_register(&ni_testbus_agent_objectmodel))
 		ni_fatal("Cannot initialize objectmodel, giving up.");
 
@@ -618,7 +627,7 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 		if (var == NULL || !ni_dbus_variant_get_uuid(var, &state->uuid)) {
 			ni_warn("could not get host registration uuid");
 		} else {
-			ni_testbus_agent_write_state(opt_state_file, state);
+			ni_testbus_agent_write_state(state);
 		}
 	}
 
