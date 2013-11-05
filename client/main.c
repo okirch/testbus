@@ -167,7 +167,7 @@ main(int argc, char **argv)
 		return 1;
 
 	if (opt_log_target == NULL) {
-		ni_log_destination_default(program_name, TRUE);
+		ni_log_destination(program_name, "stderr");
 	} else
 	if (!ni_log_destination(program_name, opt_log_target)) {
 		fprintf(stderr, "Bad log destination \%s\"\n", opt_log_target);
