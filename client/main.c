@@ -31,11 +31,9 @@ enum {
 	OPT_VERSION,
 	OPT_CONFIGFILE,
 	OPT_DEBUG,
+	OPT_QUIET,
 	OPT_LOG_LEVEL,
 	OPT_LOG_TARGET,
-
-	OPT_DRYRUN,
-	OPT_ROOTDIR,
 };
 
 static struct option	options[] = {
@@ -47,20 +45,13 @@ static struct option	options[] = {
 	{ "log-level",		required_argument,	NULL,	OPT_LOG_LEVEL },
 	{ "log-target",		required_argument,	NULL,	OPT_LOG_TARGET },
 
-	/* specific */
-	{ "dryrun",		no_argument,		NULL,	OPT_DRYRUN },
-	{ "dry-run",		no_argument,		NULL,	OPT_DRYRUN },
-	{ "root-directory",	required_argument,	NULL,	OPT_ROOTDIR },
-
 	{ NULL }
 };
 
 static const char *	program_name;
 static const char *	opt_log_level;
 static const char *	opt_log_target;
-ni_bool_t		opt_quiet;
-int			opt_global_dryrun;
-char *			opt_global_rootdir;
+static ni_bool_t	opt_quiet;
 
 static int		do_show_xml(int, char **);
 static int		do_delete_object(int, char **);
@@ -104,10 +95,9 @@ main(int argc, char **argv)
 				"  --debug facility\n"
 				"        Enable debugging for debug <facility>.\n"
 				"        Use '--debug help' for a list of facilities.\n"
-				"  --dry-run\n"
-				"        Do not change the system in any way.\n"
-				"  --root-directory\n"
-				"        Search all config files below this directory.\n"
+				"  --quiet\n"
+				"        Suppress progress messages when waiting, and other output\n"
+				"        mainly useful for interactive use.\n"
 				"\n"
 				"Supported commands:\n"
 				"  ...\n"
@@ -136,6 +126,10 @@ main(int argc, char **argv)
 				ni_log_level_set("debug");
 			break;
 
+		case OPT_QUIET:
+			opt_quiet = TRUE;
+			break;
+
 		case OPT_LOG_TARGET:
 			opt_log_target = optarg;
 			break;
@@ -146,14 +140,6 @@ main(int argc, char **argv)
 				fprintf(stderr, "Bad log level \%s\"\n", optarg);
 				return 1;
 			}
-			break;
-
-		case OPT_DRYRUN:
-			opt_global_dryrun = 1;
-			break;
-
-		case OPT_ROOTDIR:
-			opt_global_rootdir = optarg;
 			break;
 		}
 	}
