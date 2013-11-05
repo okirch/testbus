@@ -104,6 +104,7 @@ enum {
 	OPT_DOWNSTREAM,
 	OPT_EXECUTE,
 	OPT_IDENTITY,
+	OPT_KILL,
 };
 
 static struct option	options[] = {
@@ -119,6 +120,7 @@ static struct option	options[] = {
 	{ "upstream",		required_argument,	NULL,	OPT_UPSTREAM },
 	{ "downstream",		required_argument,	NULL,	OPT_DOWNSTREAM },
 	{ "identity",		required_argument,	NULL,	OPT_IDENTITY },
+	{ "kill",		optional_argument,	NULL,	OPT_KILL },
 
 	{ NULL }
 };
@@ -220,6 +222,7 @@ static const char *	opt_log_target;
 static int		opt_foreground;
 static char *		opt_upstream = "unix:/var/run/dbus/system_bus_socket";
 static char *		opt_downstream;
+static char *		opt_kill;
 
 static void		proxy_init(proxy_t *);
 static void		proxy_setup_recv(proxy_t *);
@@ -281,6 +284,15 @@ main(int argc, char **argv)
 				"        Set log destination to <stderr|syslog>.\n"
 				"  --foreground\n"
 				"        Tell the daemon to not background itself at startup.\n"
+				"  --identity <name>\n"
+				"        By default, dbus-proxy will create a pid file named proxy.pid\n"
+				"        When running multiple proxies, you need different pid file names.\n"
+				"        When specifying a different identity \"foobar\", the pid file will be named \"foobar.pid\".\n"
+				"        In order to shut down a proxy process started with an alternate identity,\n"
+				"        invoke dbus-proxy with the option \"--kill foobar\"\n"
+				"  --kill [<name>]\n"
+				"        Terminate a dbus proxy process using the specified name to identify\n"
+				"        the appropriate pid file. The default name is \"proxy\".\n"
 				, program_name
 				, program_name);
 			return (c == OPT_HELP ? 0 : 1);
@@ -331,7 +343,21 @@ main(int argc, char **argv)
 		case OPT_IDENTITY:
 			opt_identity = optarg;
 			break;
+
+		case OPT_KILL:
+			opt_kill = optarg? optarg : "proxy";
+			break;
 		}
+	}
+
+	if (opt_kill) {
+		if (ni_init("proxy") < 0)
+			return 1;
+		if (ni_server_terminate(opt_kill) < 0) {
+			ni_error("unable to terminate testbus service %s", opt_kill);
+			return 1;
+		}
+		return 0;
 	}
 
 	if (opt_downstream != NULL) {

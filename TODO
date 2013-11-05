@@ -17,6 +17,7 @@ Agent:
 	Process handling: act on SIGCHLD rather than monitoring its I/O
 
 Server:
+	Remove pid file on exit
 	Fix /org/openSUSE/Testbus/Host/Host* naming
 
 	When a host capability is added, send a signal
@@ -30,6 +31,7 @@ Client:
 	in separate steps?
 
 Proxy:
+	Remove pid file on exit
 	Complete serial line support
 
 General:
