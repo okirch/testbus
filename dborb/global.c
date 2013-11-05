@@ -108,29 +108,50 @@ ni_server_listen_other_events(void (*event_handler)(ni_event_t))
 /*
  * Utility functions for starting/stopping a daemon.
  */
-ni_bool_t
-ni_server_is_running(const char *appname)
+static char *
+__ni_server_pidfile(const char *appname)
 {
 	const char *piddir = ni_config_piddir();
 	char pidfilepath[PATH_MAX];
 
 	ni_assert(appname != NULL);
 	snprintf(pidfilepath, sizeof(pidfilepath), "%s/%s.pid", piddir, appname);
+	return ni_strdup(pidfilepath);
+}
 
-	if (ni_pidfile_check(pidfilepath) > 0)
-		return TRUE;
+ni_bool_t
+ni_server_is_running(const char *appname)
+{
+	char *pidfilepath = __ni_server_pidfile(appname);
+	int rv;
 
-	return FALSE;
+	rv = ni_pidfile_check(pidfilepath);
+	free(pidfilepath);
+
+	return rv >= 0;
 }
 
 int
 ni_server_background(const char *appname)
 {
-	const char *piddir = ni_config_piddir();
-	char pidfilepath[PATH_MAX];
+	char *pidfilepath = __ni_server_pidfile(appname);
+	int rv;
 
-	ni_assert(appname != NULL);
-	snprintf(pidfilepath, sizeof(pidfilepath), "%s/%s.pid", piddir, appname);
-	return ni_daemonize(pidfilepath, 0644);
+	rv = ni_daemonize(pidfilepath, 0644);
+	free(pidfilepath);
+
+	return rv;
+}
+
+int
+ni_server_terminate(const char *appname)
+{
+	char *pidfilepath = __ni_server_pidfile(appname);
+	int rv;
+
+	rv = ni_pidfile_kill(pidfilepath, SIGTERM);
+	free(pidfilepath);
+
+	return rv;
 }
 

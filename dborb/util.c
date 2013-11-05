@@ -1447,13 +1447,10 @@ ni_pidfile_write(const char *pidfile, unsigned int permissions, pid_t pid)
 }
 
 /*
- * Check for presence of pidfile
- *  0:	no or stale pidfile
- *  >0:	pid of active process
- *  <0:	error occured
+ * Read pid from pidfile
  */
 pid_t
-ni_pidfile_check(const char *pidfile)
+ni_pidfile_read(const char *pidfile)
 {
 	char buffer[128];
 	FILE *fp;
@@ -1479,18 +1476,46 @@ ni_pidfile_check(const char *pidfile)
 	}
 
 	fclose(fp);
+	return pid;
+}
 
-	/* See if process is still around */
-	if (pid > 0 && kill(pid, 0) < 0) {
+/*
+ * Obtain a server process pid from its pidfile and send it a signal
+ */
+static pid_t
+__ni_pidfile_kill(const char *pidfile, int sig)
+{
+	pid_t pid;
+
+	pid = ni_pidfile_read(pidfile);
+	if (pid > 0 && kill(pid, sig) < 0) {
 		/* Stale pid file, process no longer running */
 		if (errno == ESRCH)
 			return 0;
-		ni_error("unexpected error when checking pidfile %s: kill returns: %m",
-				pidfile);
+
+		ni_error("%s(%s): kill(%d, %d): %m", __func__, pidfile, pid, sig);
 		return -1;
 	}
 
 	return pid;
+}
+
+/*
+ * Check for presence of pidfile
+ *  0:	no or stale pidfile
+ *  >0:	pid of active process
+ *  <0:	error occured
+ */
+pid_t
+ni_pidfile_check(const char *pidfile)
+{
+	return __ni_pidfile_kill(pidfile, 0);
+}
+
+int
+ni_pidfile_kill(const char *pidfile, int sig)
+{
+	return __ni_pidfile_kill(pidfile, sig);
 }
 
 /*

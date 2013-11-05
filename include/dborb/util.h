@@ -148,6 +148,7 @@ extern const char *	ni_sibling_path_printf(const char *path, const char *fmt, ..
 extern int		ni_scandir(const char *, const char *, ni_string_array_t *);
 extern int		ni_daemonize(const char *, unsigned int);
 extern pid_t		ni_pidfile_check(const char *);
+extern pid_t		ni_pidfile_kill(const char *, int);
 extern int		ni_pidfile_write(const char *, unsigned int, pid_t);
 
 extern FILE *		ni_mkstemp(char **namep);
