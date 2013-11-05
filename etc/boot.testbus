@@ -1,0 +1,38 @@
+#! /bin/sh
+#
+# Copyright (c) 2013 SuSE Linux Products GmbG Nuernberg, Germany.  All rights reserved.
+#
+# /etc/init.d/boot.testbus
+#
+# Add this script to your KVM Appliance - it will help you update your image
+# at the next reboot.
+#
+### BEGIN INIT INFO
+# Provides:          boot.testbus
+# Required-Start:    boot.localfs
+# Required-Stop:     $null
+# Should-Stop:       $null
+# Default-Start:     B
+# Default-Stop:
+# Short-Description: update testbus configuration
+# Description: Before starting a testbus agent, update
+#	local files, packages etc.
+### END INIT INFO
+
+mkdir -p /mnt/testbus
+if ! mount -t 9p testbus /mnt/testbus -o trans=virtio >/dev/null 2>&1; then
+	echo "testbus: no testbus file system found, skipping setup step" >&2
+	exit 0
+fi
+
+if ls /mnt/testbus | grep -qs '\.rpm$'; then
+	echo "testbus: installing/updating packages"
+	rpm -Uvh /mnt/testbus/*.rpm 2>&1|tee /mnt/testbus/update.log
+fi
+
+if [ -x /mnt/testbus/onboot.sh ]; then
+	echo "testbus: running onboot script"
+	/mnt/testbus/onboot.sh
+fi
+
+umount /mnt/testbus
