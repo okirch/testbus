@@ -45,5 +45,5 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -n "$ipaddr" ]; then
-	echo setenv primary-ip $ipaddr
+	echo setenv primary_ip $ipaddr
 fi
