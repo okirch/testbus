@@ -1,0 +1,49 @@
+#!/bin/bash
+# Detect the primary IP address.
+#
+# If a default route exist, we pick the primary IP of the device
+# to which this route points.
+#
+# If there is no default route, we just go for the first ethernet
+# device.
+
+if [ ! -x /sbin/ip ]; then
+	exit 0
+fi
+
+set -- `/sbin/ip -4 route show | grep ^default`
+
+netdev=
+while [ $# -gt 0 ]; do
+	arg=$1; shift
+	if [ "$arg" = "dev" ]; then
+		netdev=$1; shift
+		break
+	fi
+done
+
+if [ -z "$netdev" ]; then
+	set -- `/sbin/ip -o link show | grep link/ether | grep '<.*\<UP\>.*>'`
+	# The output should be one or more lines showing
+	# <ifindex>: <devname>: ...
+	netdev=${2%:}
+fi
+
+if [ -z "$netdev" ]; then
+	exit 0
+fi
+
+set -- `/sbin/ip -o -4 addr show dev $netdev | head -1`
+
+ipaddr=
+while [ $# -gt 0 ]; do
+	arg=$1; shift
+	if [ "$arg" = "inet" ]; then
+		ipaddr=${1%/*}; shift
+		break
+	fi
+done
+
+if [ -n "$ipaddr" ]; then
+	echo setenv primary-ip $ipaddr
+fi

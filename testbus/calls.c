@@ -697,6 +697,20 @@ ni_testbus_agent_add_capabilities(ni_dbus_object_t *host_object, const ni_string
 	return TRUE;
 }
 
+ni_bool_t
+ni_testbus_agent_add_environment(ni_dbus_object_t *host_object, const ni_var_array_t *array)
+{
+	unsigned int i;
+	ni_var_t *var;
+
+	for (i = 0, var = array->data; i < array->count; ++i, ++var) {
+		if (!ni_testbus_call_setenv(host_object, var->name, var->value))
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
 ni_buffer_t *
 ni_testbus_agent_retrieve_file(ni_dbus_object_t *agent, const char *path)
 {

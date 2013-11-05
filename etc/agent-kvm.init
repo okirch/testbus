@@ -58,6 +58,18 @@ rc_reset
 # with force-reload (in case signalling is not supported) are
 # considered a success.
 
+function get_agent_publish_args {
+
+	args=
+
+	for script in /etc/testbus/agent.d/*; do
+		test -x $script || continue
+		args="$args `$script`"
+	done
+
+	echo $args
+}
+
 case "$1" in
     start)
 	echo -n "Starting dbus-proxy daemon"
@@ -75,8 +87,10 @@ case "$1" in
 	# mount -t 9p testbus /mnt/testbus -o trans=virtio
 
 	echo -n "Starting testbus-agent daemon"
+	set -x
 	$AGENT_BIN \
-		--dbus-socket unix:/var/run/dbus-proxy.sock
+		--dbus-socket unix:path=/var/run/dbus-proxy.sock \
+		`get_agent_publish_args`
 
 	# Remember status and be verbose
 	rc_status -v

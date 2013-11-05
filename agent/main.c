@@ -14,6 +14,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <signal.h>
+#include <ctype.h>
 
 #include <dborb/netinfo.h>
 #include <dborb/logging.h>
@@ -47,6 +48,7 @@ enum {
 	OPT_DRYRUN,
 	OPT_ROOTDIR,
 	OPT_RECONNECT,
+	OPT_PUBLISH,
 };
 
 static struct option	options[] = {
@@ -67,6 +69,7 @@ static struct option	options[] = {
 	{ "dry-run",		no_argument,		NULL,	OPT_DRYRUN },
 	{ "root-directory",	required_argument,	NULL,	OPT_ROOTDIR },
 	{ "reconnect",		no_argument,		NULL,	OPT_RECONNECT },
+	{ "publish",		required_argument,	NULL,	OPT_PUBLISH },
 
 	{ NULL }
 };
@@ -75,6 +78,7 @@ typedef struct ni_testbus_agent_state {
 	char *			hostname;
 	ni_uuid_t		uuid;
 	ni_string_array_t	capabilities;
+	ni_var_array_t		environ;
 } ni_testbus_agent_state_t;
 
 static const char *	program_name;
@@ -90,6 +94,9 @@ static int		opt_reconnect;
 
 static ni_testbus_agent_state_t ni_testbus_agent_global_state;
 
+static void		ni_testbus_agent_publish_file(ni_testbus_agent_state_t *, const char *path);
+static void		ni_testbus_agent_state_setcap(ni_testbus_agent_state_t *, const char *name);
+static void		ni_testbus_agent_state_setenv(ni_testbus_agent_state_t *, const char *name, const char *value);
 static void		ni_testbus_agent(ni_testbus_agent_state_t *state);
 
 int
@@ -185,11 +192,35 @@ main(int argc, char **argv)
 		case OPT_RECONNECT:
 			opt_reconnect = 1;
 			break;
+
+		case OPT_PUBLISH:
+			ni_testbus_agent_publish_file(&ni_testbus_agent_global_state, optarg);
+			break;
 		}
 	}
 
-	if (optind < argc)
-		goto usage;
+	if (optind < argc) {
+		while (optind < argc) {
+			const char *kwd = argv[optind++];
+
+			if (ni_string_eq(kwd, "capability")) {
+				if (optind >= argc)
+					goto usage;
+				ni_testbus_agent_state_setcap(&ni_testbus_agent_global_state, argv[optind++]);
+			} else
+			if (ni_string_eq(kwd, "setenv")) {
+				const char *name, *value;
+
+				if (optind + 1 >= argc)
+					goto usage;
+				name = argv[optind++];
+				value = argv[optind++];
+				ni_testbus_agent_state_setenv(&ni_testbus_agent_global_state, name, value);
+			} else {
+				ni_fatal("unknown keyword \"%s\" on command line", kwd);
+			}
+		}
+	}
 
 	if (ni_init(APP_IDENTITY) < 0)
 		return 1;
@@ -212,6 +243,83 @@ main(int argc, char **argv)
 
 	ni_testbus_agent(&ni_testbus_agent_global_state);
 	return 0;
+}
+
+static inline char *
+__next_token(char **pos)
+{
+	char *s, *ret;
+
+	s = *pos;
+	while (isspace(*s))
+		++s;
+
+	ret = s++;
+	while (*s && !isspace(*s))
+		++s;
+	if (*s)
+		*s++ = '\0';
+
+	*pos = s;
+
+	if (*ret == '\0' || *ret == '#')
+		return NULL;
+
+	return ret;
+}
+
+static void
+ni_testbus_agent_publish_file(ni_testbus_agent_state_t *state, const char *path)
+{
+	FILE *fp;
+	char buf[512];
+	unsigned int lineno = 0;
+
+	if (!(fp = fopen(path, "r")))
+		ni_fatal("unable to open %s: %m", path);
+
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		char *pos = buf, *kwd, *name, *value;
+
+		++lineno;
+
+		if (!(kwd = __next_token(&pos)))
+			continue;
+
+		if (ni_string_eq(kwd, "capability")) {
+			while ((name = __next_token(&pos)) != NULL)
+				ni_testbus_agent_state_setcap(state, name);
+		} else if (ni_string_eq(kwd, "setenv")) {
+			unsigned int n;
+
+			if (!(name = __next_token(&pos)))
+				ni_fatal("%s, line %u: setenv without variable name", path, lineno);
+
+			value = ni_unquote((const char **) &pos, " \t\r\n");
+			if (value == NULL || *value == '#')
+				ni_fatal("%s, line %u: setenv without variable value", path, lineno);
+			if (__next_token(&pos))
+				ni_fatal("%s, line %u: garbage after setenv variable value", path, lineno);
+
+			ni_testbus_agent_state_setenv(state, name, value);
+			free(value); /* ni_quote returns an allocated string */
+		} else {
+			ni_fatal("%s, line %u: unknown keyword \"%s\"", path, lineno, kwd);
+		}
+	}
+	fclose(fp);
+}
+
+static void
+ni_testbus_agent_state_setcap(ni_testbus_agent_state_t *state, const char *name)
+{
+	ni_string_array_append(&state->capabilities, name);
+}
+
+static void
+ni_testbus_agent_state_setenv(ni_testbus_agent_state_t *state, const char *name, const char *value)
+{
+	ni_var_array_set(&state->environ, name, value);
 }
 
 static const char *
@@ -267,8 +375,7 @@ ni_testbus_agent_read_state(ni_testbus_agent_state_t *state)
 
 	xml_document_free(doc);
 
-	ni_debug_wicked("Successfully read state from %s; hostname=%s uuid=%s",
-			state_file, state->hostname, ni_uuid_print(&state->uuid));
+	ni_debug_wicked("Successfully read state from %s", state_file);
 }
 
 void
@@ -590,7 +697,41 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	ni_dbus_object_t *host_object;
 	ni_dbus_client_t *dbus_client;
 
-	ni_testbus_agent_read_state(&ni_testbus_agent_global_state);
+	ni_testbus_agent_read_state(state);
+
+	if (ni_debug & NI_TRACE_WICKED) {
+		ni_trace("Agent state");
+		ni_trace("Hostname:     %s", state->hostname);
+		ni_trace("UUID:         %s", ni_uuid_print(&state->uuid));
+
+		if (state->capabilities.count == 0) {
+			ni_trace("Capabilities: none");
+		} else {
+			ni_stringbuf_t sb = NI_STRINGBUF_INIT_DYNAMIC;
+			unsigned int i;
+
+			for (i = 0; i < state->capabilities.count; ++i) {
+				if (i)
+					ni_stringbuf_putc(&sb, ' ');
+				ni_stringbuf_puts(&sb, state->capabilities.data[i]);
+			}
+			ni_trace("Capabilities: %s", sb.string);
+			ni_stringbuf_destroy(&sb);
+		}
+
+		if (state->environ.count == 0) {
+			ni_trace("Environment:  none");
+		} else {
+			unsigned int i;
+
+			ni_trace("Environment:  %u variables", state->environ.count);
+			for (i = 0; i < state->environ.count; ++i) {
+				ni_var_t *vp = &state->environ.data[i];
+
+				ni_trace("              %s=\"%s\"", vp->name, vp->value);
+			}
+		}
+	}
 
 	if (!ni_objectmodel_register(&ni_testbus_agent_objectmodel))
 		ni_fatal("Cannot initialize objectmodel, giving up.");
@@ -602,7 +743,7 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	dbus_client = ni_dbus_server_create_shared_client(dbus_server, NI_TESTBUS_DBUS_BUS_NAME);
 	ni_call_init_client(dbus_client);
 
-	ni_trace("Testbus agent starting");
+	ni_debug_wicked("Testbus agent starting");
 	if (state->hostname == NULL || !opt_reconnect) {
 		char hostname[HOST_NAME_MAX];
 
@@ -635,6 +776,9 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 
 	if (!ni_testbus_agent_add_capabilities(host_object, &state->capabilities))
 		ni_fatal("failed to register agent capabilities");
+
+	if (!ni_testbus_agent_add_environment(host_object, &state->environ))
+		ni_fatal("failed to publish agent environment");
 
 	if (!opt_foreground && ni_server_background(APP_IDENTITY) < 0)
 		ni_fatal("unable to background testbus agent");
