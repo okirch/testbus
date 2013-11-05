@@ -25,7 +25,7 @@
 #include <dborb/dbus-model.h>
 #include <testbus/model.h>
 #include "model.h"
-#include "container.h"
+#include "host.h"
 
 #define APP_IDENTITY		"master"
 
@@ -254,8 +254,13 @@ __ni_testbus_dbus_bus_signal_handler(ni_dbus_connection_t *connection, ni_dbus_m
 		if (!strncmp(name, NI_TESTBUS_NAMESPACE, sizeof(NI_TESTBUS_NAMESPACE)-1))
 			ni_testbus_record_wellknown_bus_name(name, new_owner);
 
-		if (new_owner == NULL || new_owner[0] == '\0')
-			ni_testbus_container_notify_agent_exit(ni_testbus_global_context(), name);
+		if (new_owner == NULL || new_owner[0] == '\0') {
+			ni_testbus_host_t *host;
+
+			host = ni_testbus_container_find_agent_host(ni_testbus_global_context(), name);
+			if (host != NULL)
+				ni_testbus_host_agent_disconnected(host);
+		}
 	}
 }
 

@@ -234,8 +234,8 @@ ni_testbus_container_destroy(ni_testbus_container_t *container)
 		ni_testbus_container_unregister(container);
 }
 
-void
-ni_testbus_container_notify_agent_exit(ni_testbus_container_t *container, const char *dbus_name)
+ni_testbus_host_t *
+ni_testbus_container_find_agent_host(ni_testbus_container_t *container, const char *dbus_name)
 {
 	unsigned int i;
 
@@ -243,13 +243,12 @@ ni_testbus_container_notify_agent_exit(ni_testbus_container_t *container, const 
 		for (i = 0; i < container->hosts.count; ++i) {
 			ni_testbus_host_t *host = container->hosts.data[i];
 
-			if (ni_string_eq(host->agent_bus_name, dbus_name)) {
-				ni_debug_wicked("host %s - owning agent disconnected",
-						host->context.name);
-				ni_string_free(&host->agent_bus_name);
-			}
+			if (ni_string_eq(host->agent_bus_name, dbus_name))
+				return host;
 		}
 	}
+
+	return NULL;
 }
 
 /*

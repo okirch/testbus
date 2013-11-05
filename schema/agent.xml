@@ -1,5 +1,6 @@
 
 <service name="agent" interface="org.opensuse.Testbus.Agent" object-class="agent">
+  <signal name="ready" />
 </service>
 
 <service name="agent-fs" interface="org.opensuse.Testbus.Agent.Filesystem" object-class="filesystem">

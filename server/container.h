@@ -120,6 +120,7 @@ extern void		ni_testbus_container_add_test(ni_testbus_container_t *, ni_testbus_
 extern void		ni_testbus_container_remove_test(ni_testbus_container_t *, ni_testbus_testcase_t *);
 extern ni_testbus_testcase_t *ni_testbus_container_get_test_by_name(ni_testbus_container_t *, const char *);
 
+extern ni_testbus_host_t *ni_testbus_container_find_agent_host(ni_testbus_container_t *container, const char *dbus_name);
 extern void		ni_testbus_container_notify_agent_exit(ni_testbus_container_t *, const char *);
 
 extern ni_bool_t	ni_testbus_container_isa_host(const ni_testbus_container_t *);

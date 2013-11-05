@@ -783,6 +783,13 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	if (!opt_foreground && ni_server_background(APP_IDENTITY) < 0)
 		ni_fatal("unable to background testbus agent");
 
+	/* Inform master that we're ready to serve requests */
+	ni_dbus_server_send_signal(dbus_server,
+			ni_dbus_server_get_root_object(dbus_server),
+			NI_TESTBUS_AGENT_INTERFACE,
+			"ready",
+			0, NULL);
+
 	while (!ni_caught_terminal_signal()) {
 		long timeout;
 

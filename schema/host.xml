@@ -5,6 +5,7 @@
     <uuid type="uuid-type" />
     <agent type="string" />
     <role type="string" />
+    <ready type="boolean" />
     <capabilities class="array" element-type="string" />
   </define>
 
@@ -26,6 +27,7 @@
   </method>
 
   <signal name="connected" />
+  <signal name="ready" />
 
   <signal name="processScheduled">
     <arguments>

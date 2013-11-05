@@ -109,6 +109,26 @@ ni_testbus_host_set_role(ni_testbus_host_t *host, const char *role, ni_testbus_c
 	return TRUE;
 }
 
+/*
+ * Agent related functions
+ */
+void
+ni_testbus_host_agent_ready(ni_testbus_host_t *host)
+{
+	ni_debug_wicked("host %s ready", host->context.name);
+	host->ready = TRUE;
+
+	/* FIXME: re-broadcast the signal to all clients */
+}
+
+void
+ni_testbus_host_agent_disconnected(ni_testbus_host_t *host)
+{
+	ni_debug_wicked("host %s - owning agent disconnected", host->context.name);
+	ni_string_free(&host->agent_bus_name);
+	host->ready = FALSE;
+}
+
 void
 ni_testbus_host_add_capability(ni_testbus_host_t *host, const char *capability)
 {

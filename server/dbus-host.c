@@ -10,12 +10,6 @@
 #include "host.h"
 #include "command.h"
 
-void
-ni_testbus_create_static_objects_host(ni_dbus_server_t *server)
-{
-	ni_objectmodel_create_object(server, NI_TESTBUS_HOSTLIST_PATH, ni_testbus_hostlist_class(), NULL);
-}
-
 const char *
 xni_testbus_host_full_path(const ni_testbus_host_t *host)
 {
@@ -67,15 +61,26 @@ __ni_testbus_host_set_agent(ni_testbus_host_t *host, const char *owner)
  * Send Host.connected() signal
  */
 static void
-ni_testbus_host_signal_connected(ni_dbus_object_t *host_object)
+__ni_testbus_host_signal(ni_dbus_object_t *host_object, const char *signal_name)
 {
 	/* Send the signal */
 	ni_dbus_server_send_signal(ni_dbus_object_get_server(host_object), host_object,
 			NI_TESTBUS_HOST_INTERFACE,
-			"connected",
+			signal_name,
 			0, NULL);
 }
 
+static inline void
+ni_testbus_host_signal_connected(ni_dbus_object_t *host_object)
+{
+	__ni_testbus_host_signal(host_object, "connected");
+}
+
+static inline void
+ni_testbus_host_signal_ready(ni_dbus_object_t *host_object)
+{
+	__ni_testbus_host_signal(host_object, "ready");
+}
 
 /*
  * Hostlist.createHost(name)
@@ -202,6 +207,7 @@ NI_TESTBUS_METHOD_BINDING(Hostlist, reconnect);
 static ni_dbus_property_t       __ni_Testbus_Host_properties[] = {
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, name, context.name, RO),
 	NI_DBUS_GENERIC_UUID_PROPERTY(testbus_host, uuid, uuid, RO),
+	NI_DBUS_GENERIC_BOOL_PROPERTY(testbus_host, ready, ready, RO),
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, agent, agent_bus_name, RO),
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, role, role, RO),
 	NI_DBUS_GENERIC_STRING_ARRAY_PROPERTY(testbus_host, capabilities, capabilities, RO),
@@ -430,7 +436,52 @@ __ni_Testbus_Hostset_addHost(ni_dbus_object_t *object, const ni_dbus_method_t *m
 
 NI_TESTBUS_METHOD_BINDING(Hostset, addHost);
 
+/*
+ * Handle signals from agent
+ */
+static void
+__ni_testbus_host_agent_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+{
+	ni_dbus_server_t *server = user_data;
+	const char *sender_name = dbus_message_get_sender(msg);
+	const char *signal_name = dbus_message_get_member(msg);
 
+	ni_debug_wicked("received signal %s.%s() from %s",
+			dbus_message_get_interface(msg),
+			signal_name, sender_name);
+
+	if (ni_string_eq(signal_name, "ready")) {
+		ni_testbus_host_t *host;
+
+		sender_name = ni_testbus_lookup_wellknown_bus_name(sender_name);
+		if ((host = ni_testbus_container_find_agent_host(ni_testbus_global_context(), sender_name)) != NULL) {
+			ni_testbus_host_agent_ready(host);
+			if (host->context.dbus_object_path) {
+				ni_dbus_object_t *host_object;
+
+				host_object = ni_dbus_server_get_object(server,
+						host->context.dbus_object_path);
+				if (host_object)
+					ni_testbus_host_signal_ready(host_object);
+			}
+		}
+	}
+
+}
+
+
+void
+ni_testbus_create_static_objects_host(ni_dbus_server_t *server)
+{
+	ni_objectmodel_create_object(server, NI_TESTBUS_HOSTLIST_PATH, ni_testbus_hostlist_class(), NULL);
+
+	ni_dbus_server_add_signal_handler(server,
+			NULL,				/* any sender - should be Testbus.Agent* */
+			NULL,				/* any object path */
+			NI_TESTBUS_AGENT_INTERFACE,	/* interface */
+			__ni_testbus_host_agent_signal,
+			server);
+}
 
 void
 ni_testbus_bind_builtin_host(void)
