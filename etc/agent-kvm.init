@@ -12,10 +12,10 @@
 # System startup script for the cron daemon
 #
 ### BEGIN INIT INFO
-# Provides:       testbus
+# Provides:       testbus-agent
 # Required-Start: dbus $remote_fs
 # Required-Stop:  dbus $remote_fs
-# Should-Stop:	  testbus-agent
+# Should-Stop:
 # Default-Start:  2 3 5
 # Default-Stop:   0 1 6
 # Short-Description: Testbus agent service for KVM guests
