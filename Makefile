@@ -108,31 +108,37 @@ LIBTGTS	= $(LIBDBORB) $(LIBTESTBUS)
 ALL	= $(LIBTGTS) $(BINTGTS)
 LIBDEPS	= $(LIBDBORB) $(LIBTESTBUS)
 
+INSTALL_BINDIRS = \
+	/usr/bin \
+	/usr/sbin \
+	/etc/init.d
+
+INSTALL_DATADIRS = \
+	/etc/testbus \
+	/etc/testbus/schema \
+	/etc/dbus-1/system.d \
+	/etc/testbus/agent.d \
+	/var/run/testbus \
+	/var/lib/testbus
+
 all:	$(ALL)
 
 install: install-bin install-data
 
 install-bin: $(ALL)
-	install -m755 -d $(DESTDIR)/usr/bin
+	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_BINDIRS))
 	install -m555 $(BINTGTS) $(DESTDIR)/usr/bin
-	install -m755 -d $(DESTDIR)/usr/sbin
-	install -m755 -d $(DESTDIR)/etc/init.d
 	install -m555 etc/master.init $(DESTDIR)/etc/init.d/testbus-master
 	ln -s ../../etc/init.d/testbus-master $(DESTDIR)/usr/sbin/rctestbus-master
 	install -m555 etc/agent-kvm.init $(DESTDIR)/etc/init.d/testbus-agent-kvm
 	ln -s ../../etc/init.d/testbus-agent-kvm $(DESTDIR)/usr/sbin/rctestbus-agent-kvm
 
 install-data: etc/org.opensuse.Testbus.conf
-	install -m755 -d $(DESTDIR)/etc
-	install -m755 -d $(DESTDIR)/etc/testbus
+	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
 	install -m644 etc/config.xml $(DESTDIR)/etc/testbus/config.xml
-	install -m755 -d $(DESTDIR)/etc/testbus/schema
 	install -m644 schema/*.xml $(DESTDIR)/etc/testbus/schema
-	install -m755 -d $(DESTDIR)/etc/dbus-1/system.d/
 	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/
-	install -m755 -d $(DESTDIR)/var/run/testbus
-	install -m755 -d $(DESTDIR)/var/lib/testbus
-	install -m755 -d $(DESTDIR)/etc/testbus/agent.d
+	install -m755 etc/agent.d/* $(DESTDIR)/etc/testbus/agent.d
 
 distclean clean::
 	rm -rf obj core vgcore.*
