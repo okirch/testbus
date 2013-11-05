@@ -18,7 +18,7 @@ LINK	= -L. -ltestbus -ldborb \
 	  -L/$(ARCHLIB) -ldbus-1 \
 	  -lgcrypt \
 	  -ldl
-CWARNFLAGS= -Wall -Werror -Wno-unused
+CWARNFLAGS= -Wall -Werror
 
 LIBSRCS	= \
 	dborb/appconfig.c \
@@ -137,6 +137,7 @@ install-bin: $(ALL)
 install-data: etc/org.opensuse.Testbus.conf
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
 	install -m644 etc/config.xml $(DESTDIR)/etc/testbus/config.xml
+	install -m555 selftest/functions $(DESTDIR)/usr/share/testbus
 	install -m644 schema/*.xml $(DESTDIR)/usr/share/testbus/schema
 	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/
 	install -m755 etc/agent.d/* $(DESTDIR)/etc/testbus/agent.d

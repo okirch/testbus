@@ -290,8 +290,6 @@ ni_testbus_agent_publish_file(ni_testbus_agent_state_t *state, const char *path)
 			while ((name = __next_token(&pos)) != NULL)
 				ni_testbus_agent_state_setcap(state, name);
 		} else if (ni_string_eq(kwd, "setenv")) {
-			unsigned int n;
-
 			if (!(name = __next_token(&pos)))
 				ni_fatal("%s, line %u: setenv without variable name", path, lineno);
 
