@@ -2230,6 +2230,9 @@ ni_unquote(const char **stringp, const char *sepa)
 	const char *src = *stringp;
 	int cc;
 
+	if (sepa)
+		src += strspn(src, sepa);
+
 	while ((cc = *src) != '\0') {
 		++src;
 		if (sepa && strchr(sepa, cc))
