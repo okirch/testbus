@@ -444,7 +444,7 @@ __ni_testbus_host_get_cached_property(const ni_dbus_object_t *host_object, const
 
 	var = ni_dbus_object_get_cached_property(host_object, name, __ni_testbus_host_service());
 	if (var == NULL) {
-		ni_error("host %s has no property named %s", host_object->path, name);
+		ni_debug_wicked("host %s has no property named %s", host_object->path, name);
 		return NULL;
 	}
 
@@ -468,6 +468,22 @@ __ni_testbus_host_get_cached_string_property(const ni_dbus_object_t *host_object
 }
 
 static ni_bool_t
+__ni_testbus_host_get_cached_boolean_property(const ni_dbus_object_t *host_object, const char *name, dbus_bool_t *value_p)
+{
+	const ni_dbus_variant_t *var = NULL;
+
+	if (!(var = __ni_testbus_host_get_cached_property(host_object, name)))
+		return FALSE;
+
+	if (!ni_dbus_variant_get_bool(var, value_p)) {
+		ni_error("host property %s is not of type boolean", name);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static ni_bool_t
 __ni_testbus_host_is_active(const ni_dbus_object_t *host_object)
 {
 	const char *owner = NULL;
@@ -476,6 +492,17 @@ __ni_testbus_host_is_active(const ni_dbus_object_t *host_object)
 		return FALSE;
 
 	return owner != NULL && *owner != '\0';
+}
+
+static ni_bool_t
+__ni_testbus_host_is_ready(const ni_dbus_object_t *host_object)
+{
+	dbus_bool_t host_ready;
+
+	if (!__ni_testbus_host_get_cached_boolean_property(host_object, "ready", &host_ready))
+		return FALSE;
+
+	return host_ready;
 }
 
 static ni_bool_t
@@ -573,27 +600,131 @@ ni_testbus_call_claim_host_by_name(const char *hostname, ni_dbus_object_t *conta
 	return host_object;
 }
 
+/*
+ * Signal handling needed to wait for agent(s) to become ready
+ */
+static void
+__ni_testbus_host_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+{
+	const char *signal_name = dbus_message_get_member(msg);
+	const char *object_path = dbus_message_get_path(msg);
+
+	if (!signal_name)
+		return;
+
+	ni_debug_wicked("received %s.%s() signal", object_path, signal_name);
+	/* Nothing else to be done - the ni_socket_wait should return now and allow
+	 * us to loop back and examine the host list once more */
+}
+
+static void
+__ni_testbus_setup_host_signal_handler(void)
+{
+	static ni_bool_t initialized = FALSE;
+
+	if (initialized)
+		return;
+
+	ni_dbus_client_add_signal_handler(ni_call_client,
+			NI_TESTBUS_DBUS_BUS_NAME,	/* sender */
+			NULL,				/* path */
+			NI_TESTBUS_HOST_INTERFACE,	/* interface */
+			__ni_testbus_host_signal,
+			NULL);
+
+	initialized = TRUE;
+}
+
+
+/*
+ * Simple timeout handling
+ */
+static void
+__ni_testbus_wait_timeout(void *user_data, const ni_timer_t *timer)
+{
+	ni_testbus_client_timeout_t *timeout = user_data;
+
+	timeout->handle = NULL;
+
+	if (timeout->timedout)
+		timeout->timedout(timeout->user_data);
+}
+
+static void
+__ni_testbus_wait_setup(ni_testbus_client_timeout_t *timeout)
+{
+	__ni_testbus_setup_host_signal_handler();
+
+	ni_trace("register timer for %u ms", timeout->timeout_msec);
+	timeout->handle = ni_timer_register(timeout->timeout_msec, __ni_testbus_wait_timeout, timeout);
+}
+
+static void
+__ni_testbus_wait_cancel(ni_testbus_client_timeout_t *timeout)
+{
+	if (timeout->handle) {
+		ni_timer_cancel((const ni_timer_t *) timeout->handle);
+		timeout->handle = NULL;
+	}
+}
+
+void
+ni_testbus_client_timeout_init(ni_testbus_client_timeout_t *timeout, unsigned int msec)
+{
+	memset(timeout, 0, sizeof(*timeout));
+	timeout->timeout_msec = msec;
+}
+
+void
+ni_testbus_client_timeout_destroy(ni_testbus_client_timeout_t *timeout, unsigned int msec)
+{
+	__ni_testbus_wait_cancel(timeout);
+}
+
 ni_dbus_object_t *
-ni_testbus_call_claim_host_by_capability(const char *capability, ni_dbus_object_t *container_object, const char *role)
+ni_testbus_call_claim_host_by_capability(const char *capability, ni_dbus_object_t *container_object,
+						const char *role, ni_testbus_client_timeout_t *timeout)
 {
 	ni_dbus_object_t *host_base_object, *host_object;
 	unsigned int match_count = 0;
 
-	host_base_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
-	if (!host_base_object)
-		return NULL;
+	if (timeout)
+		__ni_testbus_wait_setup(timeout);
 
-	for (host_object = host_base_object->children; host_object; host_object = host_object->next) {
-		if (__ni_testbus_host_has_capability(host_object, capability)) {
-			match_count++;
+	while (TRUE) {
+		match_count = 0;
 
-			if (!__ni_testbus_host_is_inuse(host_object, container_object)) {
-				if (__ni_testbus_container_add_host(container_object, host_object->path, role))
-					return host_object;
+		host_base_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
+		if (!host_base_object)
+			return NULL;
 
-				ni_error("failed to claim host %s in role %s", host_object->path, role);
-				/* plod on... */
+		for (host_object = host_base_object->children; host_object; host_object = host_object->next) {
+			if (!__ni_testbus_host_is_ready(host_object))
+				continue;
+			if (__ni_testbus_host_has_capability(host_object, capability)) {
+				match_count++;
+
+				if (!__ni_testbus_host_is_inuse(host_object, container_object)) {
+					if (__ni_testbus_container_add_host(container_object, host_object->path, role)) {
+						__ni_testbus_wait_cancel(timeout);
+						return host_object;
+					}
+
+					ni_error("failed to claim host %s in role %s", host_object->path, role);
+					/* plod on... */
+				}
 			}
+		}
+
+		if (!timeout->handle) {
+			break;
+		} else {
+			long waitfor = -1;
+
+			ni_debug_dbus("waiting for host(s) to come online");
+			if (timeout->busy_wait)
+				waitfor = timeout->busy_wait(timeout->user_data);
+			ni_socket_wait(waitfor);
 		}
 	}
 
@@ -602,6 +733,7 @@ ni_testbus_call_claim_host_by_capability(const char *capability, ni_dbus_object_
 	} else {
 		ni_error("all hosts matching capability \"%s\" are in use (%u total)", capability, match_count);
 	}
+	__ni_testbus_wait_cancel(timeout);
 	return NULL;
 }
 

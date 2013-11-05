@@ -5,6 +5,15 @@
 #include <testbus/types.h>
 #include <dborb/dbus.h>
 
+typedef struct ni_testbus_client_timeout {
+	unsigned int		timeout_msec;
+	int			(*busy_wait)(void *);
+	void			(*timedout)(void *);
+	void *			user_data;
+
+	const void *		handle;
+} ni_testbus_client_timeout_t;
+
 extern void			ni_call_init_client(ni_dbus_client_t *client);
 extern ni_dbus_object_t *	ni_testbus_call_get_object(const char *path);
 extern ni_dbus_object_t *	ni_testbus_call_get_and_refresh_object(const char *path);
@@ -17,7 +26,8 @@ extern ni_dbus_object_t *	ni_testbus_call_reconnect_host(const char *, const ni_
 extern ni_bool_t		ni_testbus_call_remove_host(const char *name);
 extern ni_bool_t		ni_testbus_call_delete(ni_dbus_object_t *);
 extern ni_dbus_object_t *	ni_testbus_call_claim_host_by_name(const char *, ni_dbus_object_t *, const char *);
-extern ni_dbus_object_t *	ni_testbus_call_claim_host_by_capability(const char *, ni_dbus_object_t *, const char *);
+extern ni_dbus_object_t *	ni_testbus_call_claim_host_by_capability(const char *, ni_dbus_object_t *, const char *,
+						ni_testbus_client_timeout_t *);
 extern ni_dbus_object_t *	ni_testbus_call_get_agent(const char *);
 extern ni_bool_t		ni_testbus_call_setenv(ni_dbus_object_t *, const char *name, const char *value);
 extern ni_buffer_t *		ni_testbus_agent_retrieve_file(ni_dbus_object_t *, const char *);
@@ -31,5 +41,7 @@ extern ni_bool_t		ni_testbus_call_command_add_file(ni_dbus_object_t *, const cha
 extern ni_dbus_object_t *	ni_testbus_call_host_run(ni_dbus_object_t *, const ni_dbus_object_t *);
 extern ni_bool_t		ni_testbus_wait_for_process(ni_dbus_object_t *, long, ni_process_exit_info_t *);
 extern ni_bool_t		ni_testbus_call_process_exit(ni_dbus_object_t *, const ni_process_exit_info_t *);
+
+extern void			ni_testbus_client_timeout_init(ni_testbus_client_timeout_t *, unsigned int msec);
 
 #endif /* __NI_TESTBUS_CLIENT_H__ */

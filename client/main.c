@@ -58,6 +58,7 @@ static struct option	options[] = {
 static const char *	program_name;
 static const char *	opt_log_level;
 static const char *	opt_log_target;
+ni_bool_t		opt_quiet;
 int			opt_global_dryrun;
 char *			opt_global_rootdir;
 
@@ -872,14 +873,34 @@ do_upload_file(int argc, char **argv)
 	return 0;
 }
 
+static int
+__do_claim_host_busywait(void *dummy)
+{
+	static unsigned int count = 0;
+
+	if (count++ == 0)
+		fprintf(stderr, "Waiting for host to come online");
+	fputc('.', stderr);
+	fflush(stderr);
+
+	return 1000; /* come back in 1 second */
+}
+
+static void
+__do_claim_host_timedout(void *dummy)
+{
+	fprintf(stderr, " timed out.\n");
+}
+
 int
 do_claim_host(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_HOSTNAME, OPT_CAPABILITY, OPT_ROLE };
+	enum  { OPT_HELP, OPT_HOSTNAME, OPT_CAPABILITY, OPT_ROLE, OPT_TIMEOUT };
 	static struct option local_options[] = {
 		{ "hostname", required_argument, NULL, OPT_HOSTNAME },
 		{ "capability", required_argument, NULL, OPT_CAPABILITY },
 		{ "set-role", required_argument, NULL, OPT_ROLE },
+		{ "timeout", required_argument, NULL, OPT_TIMEOUT },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
@@ -887,12 +908,14 @@ do_claim_host(int argc, char **argv)
 	const char *opt_hostname = NULL;
 	const char *opt_capability = NULL;
 	const char *opt_role = NULL;
+	unsigned int opt_timeout = 0;
 	int c;
 
 	optind = 1;
 	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
 		switch (c) {
 		default:
+			ni_error("Unsupported option %d", optind);
 		case OPT_HELP:
 		usage:
 			fprintf(stderr,
@@ -909,6 +932,9 @@ do_claim_host(int argc, char **argv)
 				"  --set-role <role>\n"
 				"      This will add the host using the specified role. If no role is given,\n"
 				"      it will default to \"testhost\".\n"
+				"  --timeout <seconds>\n"
+				"      If there is no unsed host matching the requested capabilities,\n"
+				"      wait for it to come online.\n"
 				"  --help\n"
 				"      Show this help text.\n"
 				);
@@ -925,6 +951,13 @@ do_claim_host(int argc, char **argv)
 		case OPT_ROLE:
 			opt_role = optarg;
 			break;
+
+		case OPT_TIMEOUT:
+			if (ni_parse_uint(optarg, &opt_timeout, 0) < 0) {
+				ni_error("cannot parse timeout argument");
+				goto usage;
+			}
+			break;
 		}
 	}
 
@@ -937,6 +970,7 @@ do_claim_host(int argc, char **argv)
 	}
 
 	if (optind != argc - 1) {
+		ni_error("Bad number of arguments");
 		goto usage;
 	} else {
 		const char *container_path = argv[optind++];
@@ -951,13 +985,28 @@ do_claim_host(int argc, char **argv)
 	if (opt_hostname) {
 		host_object = ni_testbus_call_claim_host_by_name(opt_hostname, container_object, opt_role);
 	} else {
+		ni_testbus_client_timeout_t timeout, *tmo = NULL;
+
 		if (opt_capability == NULL)
 			opt_capability = "any";
-		host_object = ni_testbus_call_claim_host_by_capability(opt_capability, container_object, opt_role);
+
+		if (opt_timeout) {
+			ni_testbus_client_timeout_init(&timeout, opt_timeout * 1000);
+
+			if (!ni_debug && !opt_quiet) {
+				timeout.busy_wait = __do_claim_host_busywait;
+				timeout.timedout = __do_claim_host_timedout;
+			}
+			tmo = &timeout;
+		}
+
+		host_object = ni_testbus_call_claim_host_by_capability(opt_capability, container_object, opt_role, tmo);
 	}
 
-	if (host_object == NULL)
+	if (host_object == NULL) {
+		ni_error("Unable to claim host.");
 		return 1;
+	}
 
 	printf("%s\n", host_object->path);
 	return 0;
