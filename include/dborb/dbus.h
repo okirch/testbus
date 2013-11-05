@@ -167,6 +167,7 @@ typedef void			ni_dbus_signal_handler_t(ni_dbus_connection_t *connection,
 					void *user_data);
 
 extern ni_dbus_object_t *	ni_dbus_server_get_root_object(const ni_dbus_server_t *);
+extern ni_dbus_object_t *	ni_dbus_server_get_object(ni_dbus_server_t *, const char *path);
 extern ni_dbus_object_t *	ni_dbus_server_register_object(ni_dbus_server_t *server,
 					const char *object_path,
 					const ni_dbus_class_t *object_class,

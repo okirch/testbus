@@ -144,6 +144,12 @@ ni_dbus_server_get_root_object(const ni_dbus_server_t *server)
 	return server->root_object;
 }
 
+ni_dbus_object_t *
+ni_dbus_server_get_object(ni_dbus_server_t *server, const char *path)
+{
+	return ni_dbus_object_lookup(server->root_object, path);
+}
+
 /*
  * Turn a dbus object into a server side object
  */
