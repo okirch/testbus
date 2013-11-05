@@ -159,7 +159,7 @@ ni_debug_facility_to_description(unsigned int facility)
 int
 ni_enable_debug(const char *fac)
 {
-	unsigned int _debug = 0;
+	unsigned int _debug = ni_debug;
 	char *copy, *s;
 	int rv = 0;
 
@@ -195,7 +195,7 @@ ni_enable_debug(const char *fac)
 	free(copy);
 	if (rv == 0) {
 		ni_debug = _debug;
-		if (ni_log_level < NI_LOG_DEBUG)
+		if (ni_debug && ni_log_level < NI_LOG_DEBUG)
 			__ni_log_level_set(NI_LOG_DEBUG);
 	}
 	return rv;
