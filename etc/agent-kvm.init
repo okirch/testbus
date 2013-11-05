@@ -87,8 +87,8 @@ case "$1" in
 	# mount -t 9p testbus /mnt/testbus -o trans=virtio
 
 	echo -n "Starting testbus-agent daemon"
-	set -x
 	$AGENT_BIN \
+		--reconnect \
 		--dbus-socket unix:path=/var/run/dbus-proxy.sock \
 		`get_agent_publish_args`
 
