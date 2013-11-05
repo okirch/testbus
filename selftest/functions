@@ -3,11 +3,37 @@
 # Support functions for testbus self tests
 #
 
-#DEBUG="--debug all"
 #exec 2>client.log
-CONFIG="--config etc/common.xml"
-CLIENT="./testbus-client --config etc/common.xml $DEBUG"
 
+# The following variable(s) are considered tunables that can be overridden from
+# the test script after sourcing this file.
+TESTBUS_CLAIM_TIMEOUT=60
+
+# By setting TESTBUS_SELFTEST_LOCALFILES=yes, you can tell the testbus self tests
+# to use the uninstalled programs and files.
+if test -n "$TESTBUS_SELFTEST_LOCALFILES"; then
+	if test ! -x ./testbus-client; then
+		echo "Cannot run selftest in localfiles mode - no testbus-client in local directory" >&2
+		exit 1
+	fi
+	CLIENT=./testbus-client
+	PROXY=./dbus-proxy
+
+	if test -n "$TESTBUS_SELFTEST_DEBUG"; then
+		DEBUG="--debug $TESTBUS_SELFTEST_DEBUG"
+	fi
+	if test -f etc/common.xml; then
+		sed 's:<schema name=[^"]*/:<schema name="schema:g' etc/common.xml > etc/local.xml
+		CONFIG="--config etc/local.xml"
+	fi
+else
+	CLIENT=testbus-client
+	PROXY=dbus-proxy
+	CONFIG=
+	DEBUG=
+fi
+
+# Anything below this line is not user serviceable. Hands off, please.
 TESTBUS_GLOBAL_STATUS=SUCCESS
 TESTBUS_GROUP_STATUS=SUCCESS
 
@@ -15,7 +41,7 @@ TESTGROUP_NAME=default
 
 function testbus_call {
 
-	./testbus-client $CONFIG $DEBUG "$@"
+	$CLIENT $CONFIG $DEBUG "$@"
 }
 
 function testbus_trace {
@@ -116,12 +142,18 @@ function testbus_claim_host {
 	testbus_trace "claim host $*"
 
 	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
-		testbus_call claim-host "$@" $TESTBUS_TEST_HANDLE
+		context=$TESTBUS_TEST_HANDLE
 	elif [ -n "$TESTBUS_GROUP_HANDLE" ]; then
-		testbus_call claim-host "$@" $TESTBUS_GROUP_HANDLE
+		context=$TESTBUS_GROUP_HANDLE
 	else
 		echo "No context to claim host for" >&2
 		exit 1
+	fi
+
+	if test -n "$TESTBUS_CLAIM_TIMEOUT"; then
+		testbus_call claim-host --timeout $TESTBUS_CLAIM_TIMEOUT "$@" $context
+	else
+		testbus_call claim-host "$@" $context
 	fi
 }
 
