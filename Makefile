@@ -115,9 +115,10 @@ INSTALL_BINDIRS = \
 
 INSTALL_DATADIRS = \
 	/etc/testbus \
-	/etc/testbus/schema \
 	/etc/dbus-1/system.d \
 	/etc/testbus/agent.d \
+	/usr/share/testbus \
+	/usr/share/testbus/schema \
 	/var/run/testbus \
 	/var/lib/testbus
 
@@ -136,7 +137,7 @@ install-bin: $(ALL)
 install-data: etc/org.opensuse.Testbus.conf
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
 	install -m644 etc/config.xml $(DESTDIR)/etc/testbus/config.xml
-	install -m644 schema/*.xml $(DESTDIR)/etc/testbus/schema
+	install -m644 schema/*.xml $(DESTDIR)/usr/share/testbus/schema
 	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/
 	install -m755 etc/agent.d/* $(DESTDIR)/etc/testbus/agent.d
 

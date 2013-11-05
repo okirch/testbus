@@ -13,5 +13,5 @@
 
   <statedir path="/var/lib/testbus" mode="0755"/>
 
-  <schema name="/etc/testbus/schema/testbus.xml"/>
+  <schema name="/usr/share/testbus/schema/testbus.xml"/>
 </config>
