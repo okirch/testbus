@@ -31,6 +31,8 @@
 
   <signal name="connected" />
   <signal name="ready" />
+  <signal name="shutdownRequested" />
+  <signal name="rebootRequested" />
 
   <signal name="processScheduled">
     <arguments>
@@ -56,7 +58,7 @@
 
 
 <!--
-  -- This is the global host registry
+     This is the global host registry
   -->
 <service name="hostlist" interface="org.opensuse.Testbus.Hostlist" object-class="hostlist">
   <method name="createHost">
@@ -83,4 +85,8 @@
       <uuid type="uuid-type" />
     </arguments>
   </method>
+
+  <!-- these methods operate on all hosts in the set -->
+  <method name="shutdown" />
+  <method name="reboot" />
 </service>

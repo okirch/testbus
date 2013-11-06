@@ -707,13 +707,15 @@ do_shutdown(int argc, char **argv)
 		usage:
 			fprintf(stderr,
 				"testbus [options] shutdown object-path ...\n"
+				"testbus [options] shutdown all\n"
 				"\nSupported options:\n"
 				"  --reboot\n"
 				"      Reboot rather than shutdown.\n"
 				"  --help\n"
 				"      Show this help text.\n"
 				"The object paths can refer both to individual hosts or containers\n"
-				"that hold hosts.\n"
+				"that hold hosts. Specifying \"all\" will shut down all hosts currently\n"
+				"registered with the testbus master\n"
 				);
 			return 1;
 
@@ -725,6 +727,16 @@ do_shutdown(int argc, char **argv)
 
 	if (optind >= argc)
 		goto usage;
+
+	if (optind + 1 == argc && ni_string_eq(argv[optind], "all")) {
+		ni_dbus_object_t *hostlist;
+
+		hostlist = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
+		if (!ni_testbus_call_host_shutdown(hostlist, opt_reboot))
+			return 1;
+
+		return 0;
+	}
 
 	while (optind < argc) {
 		const char *path = argv[optind++];
