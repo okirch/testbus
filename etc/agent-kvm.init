@@ -89,6 +89,7 @@ case "$1" in
 	echo -n "Starting testbus-agent daemon"
 	$AGENT_BIN \
 		--reconnect \
+		--allow-shutdown \
 		--dbus-socket unix:path=/var/run/dbus-proxy.sock \
 		`get_agent_publish_args`
 
