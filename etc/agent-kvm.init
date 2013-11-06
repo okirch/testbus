@@ -100,6 +100,10 @@ case "$1" in
 	killproc -TERM -p $AGENT_PIDFILE $AGENT_BIN 
 	rc_status -v
 
+	# Remove the host
+	DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/dbus-proxy.sock" \
+	testbus-client remove-host `hostname`
+
 	echo -n "Shutting down dbus-proxy daemon"
 	killproc -TERM -p $PROXY_PIDFILE $PROXY_BIN 
 	rc_status -v
