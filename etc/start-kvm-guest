@@ -1,0 +1,131 @@
+#!/bin/bash
+#
+# Start a KVM instance with DBus forwarding; optionally installing
+# some additional RPMs inside.
+#
+# For instance, you invoke it as
+#
+# start-kvm \
+#	--add-rpm testbus-agent-kvm-0.1-0.x86_64.rpm \
+#	client sle11-image.qcow2
+#
+# Note that start-kvm always copies the provided image, so changes are
+# never retained across restarts.
+#
+
+INSTANCE_BASE_DIR=/var/run/testbus
+
+echo $*
+set -- `getopt -u -l add-rpm:,mac-addr -o R:M: -- "$@"`
+echo $*
+
+while [ $# -gt 0 ]; do
+	option=$1; shift
+	case $option in
+	--add-rpm|-R)
+		rpm_list="$rpm_list $1"
+		shift
+		;;
+	--mac-addr|-M)
+		mac_address=$1
+		shift
+		;;
+	--)
+		break
+		;;
+	*)
+		echo "Unsupported option $option" >&2
+		exit 1
+		;;
+	esac
+done
+
+if [ $# -ne 2 ]; then
+	echo "Bad number of non-option arguments. Expected <tag> <image-path>" >&2
+	exit 1
+fi
+
+instance_tag=$1
+base_image_path=$2
+
+function fatal {
+
+	echo "Fatal error: $@" >&2
+	exit 1
+}
+
+function instance_dir_init {
+
+	tag=$1
+
+	test -n "$tag" || fatal "cannot build instance_dir_path: empty tag name"
+	dir="$INSTANCE_BASE_DIR/$tag.d"
+
+	rm -rf $dir
+	mkdir -p $dir
+	mkdir -p $dir/guestfs
+
+	echo $dir
+}
+
+function instance_dir_add_rpms {
+
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
+	for pkg; do
+		cp -v "$pkg" $instance_dir/guestfs
+	done
+}
+
+function instance_dir_add_image {
+
+	img=$1; shift
+
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
+	cp --reflink=auto -v $img $instance_dir/image
+}
+
+function instance_proxy_start {
+
+	test -n "$instance_tag" || fatal "$0: instance tag not set"
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
+
+	socket="$instance_dir/proxy.socket"
+
+	dbus-proxy \
+		--identity "testbus-$instance_tag" \
+		--downstream unix-mux:$socket
+	
+	echo $socket
+}
+
+function instance_proxy_stop {
+
+	test -n "$instance_tag" || fatal "$0: instance tag not set"
+	dbus-proxy --kill="testbus-$instance_tag"
+}
+
+echo "------------------"
+echo "Starting KVM instance $instance_tag"
+echo "Base image:      $base_image_path"
+echo "RPMs to install: ${rpm_list:-none}"
+echo "MAC Address:     ${mac_addr:-default}"
+echo "------------------"
+
+set -e
+instance_dir=`instance_dir_init $instance_tag`
+instance_dir_add_rpms $rpm_list
+instance_dir_add_image $base_image_path
+
+instance_socket=`instance_proxy_start`
+
+qemu-kvm \
+	-name $instance_tag \
+	-pidfile $instance_dir/kvm.pid \
+	-display vnc=:2 \
+	-device virtio-serial \
+	-device virtserialport,chardev=testbus-serial,name=org.opensuse.Testbus.0 \
+	-chardev socket,id=testbus-serial,path=$instance_socket \
+	-virtfs local,path=$instance_dir/guestfs,security_model=passthrough,mount_tag=testbus \
+	$instance_dir/image
+
+instance_proxy_stop
