@@ -697,6 +697,14 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 
 	ni_testbus_agent_read_state(state);
 
+	if (state->hostname == NULL) {
+		char hostname[HOST_NAME_MAX];
+
+		if (gethostname(hostname, sizeof(hostname)) < 0)
+			ni_fatal("unable to get hostname");
+		ni_string_dup(&state->hostname, hostname);
+	}
+
 	if (ni_debug & NI_TRACE_WICKED) {
 		ni_trace("Agent state");
 		ni_trace("Hostname:     %s", state->hostname);
@@ -742,14 +750,8 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	ni_call_init_client(dbus_client);
 
 	ni_debug_wicked("Testbus agent starting");
-	if (state->hostname == NULL || !opt_reconnect) {
-		char hostname[HOST_NAME_MAX];
-
-		if (gethostname(hostname, sizeof(hostname)) < 0)
-			ni_fatal("unable to get hostname");
-		ni_string_dup(&state->hostname, hostname);
-
-		host_object = ni_testbus_call_create_host(hostname);
+	if (!opt_reconnect) {
+		host_object = ni_testbus_call_create_host(state->hostname);
 	} else {
 		host_object = ni_testbus_call_reconnect_host(state->hostname, &state->uuid);
 	}
