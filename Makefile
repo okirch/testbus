@@ -133,6 +133,7 @@ install-bin: $(ALL)
 	ln -fs ../../etc/init.d/testbus-master $(DESTDIR)/usr/sbin/rctestbus-master
 	install -m555 etc/agent-kvm.init $(DESTDIR)/etc/init.d/testbus-agent-kvm
 	ln -fs ../../etc/init.d/testbus-agent-kvm $(DESTDIR)/usr/sbin/rctestbus-agent-kvm
+	install -m555 etc/start-kvm-guest $(DESTDIR)/usr/sbin/testbus-kvm-guest
 
 install-data: etc/org.opensuse.Testbus.conf
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
