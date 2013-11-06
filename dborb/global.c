@@ -128,7 +128,7 @@ ni_server_is_running(const char *appname)
 	rv = ni_pidfile_check(pidfilepath);
 	free(pidfilepath);
 
-	return rv >= 0;
+	return rv > 0;
 }
 
 int
