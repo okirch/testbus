@@ -28,6 +28,10 @@ fi
 if ls /mnt/testbus | grep -qs '\.rpm$'; then
 	echo "testbus: installing/updating packages"
 	rpm -Uvh /mnt/testbus/*.rpm 2>&1|tee /mnt/testbus/update.log
+
+	if [ -f /etc/init.d/testbus-agent-kvm ]; then
+		insserv testbus-agent-kvm
+	fi
 fi
 
 if [ -x /mnt/testbus/onboot.sh ]; then
