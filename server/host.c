@@ -206,6 +206,10 @@ ni_testbus_host_array_remove(ni_testbus_host_array_t *array, const ni_testbus_ho
 	 || (taken = ni_testbus_host_array_take_at(array, index)) == NULL)
 		return FALSE;
 
+	if (taken->context.parent
+	 && &taken->context.parent->hosts == array)
+		taken->context.parent = NULL;
+
 	/* Drop the reference to the host */
 	ni_testbus_host_put(taken);
 	return TRUE;

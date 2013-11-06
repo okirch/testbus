@@ -102,7 +102,7 @@ extern ni_bool_t	ni_testbus_container_merge_files(ni_testbus_container_t *, ni_t
 extern void		ni_testbus_container_unregister(ni_testbus_container_t *);
 
 extern ni_testbus_container_t *	ni_testbus_container_get(ni_testbus_container_t *);
-extern void			ni_testbus_container_put(ni_testbus_container_t *);
+extern void		ni_testbus_container_put(ni_testbus_container_t *);
 
 extern void		ni_testbus_container_add_host(ni_testbus_container_t *, ni_testbus_host_t *);
 extern void		ni_testbus_container_remove_host(ni_testbus_container_t *, ni_testbus_host_t *);
