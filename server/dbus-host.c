@@ -82,6 +82,18 @@ ni_testbus_host_signal_ready(ni_dbus_object_t *host_object)
 	__ni_testbus_host_signal(host_object, "ready");
 }
 
+static inline void
+ni_testbus_host_signal_reboot(ni_dbus_object_t *host_object)
+{
+	__ni_testbus_host_signal(host_object, "rebootRequested");
+}
+
+static inline void
+ni_testbus_host_signal_shutdown(ni_dbus_object_t *host_object)
+{
+	__ni_testbus_host_signal(host_object, "shutdownRequested");
+}
+
 /*
  * Hostlist.createHost(name)
  *
@@ -371,6 +383,48 @@ __ni_Testbus_Host_addCapability(ni_dbus_object_t *object, const ni_dbus_method_t
 NI_TESTBUS_METHOD_BINDING(Host, addCapability);
 
 /*
+ * Host.shutdown()
+ */
+static dbus_bool_t
+__ni_Testbus_Host_shutdown(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	/* We don't need the host, we just check to make sure it *is* a host */
+	if (ni_testbus_host_unwrap(object, error) == NULL)
+		return FALSE;
+
+	if (argc != 0)
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	ni_testbus_host_signal_shutdown(object);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Host, shutdown);
+
+/*
+ * Host.reboot()
+ */
+static dbus_bool_t
+__ni_Testbus_Host_reboot(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	/* We don't need the host, we just check to make sure it *is* a host */
+	if (ni_testbus_host_unwrap(object, error) == NULL)
+		return FALSE;
+
+	if (argc != 0)
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	ni_testbus_host_signal_reboot(object);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Host, reboot);
+
+/*
  * Hostset.addHost(name, host-object-path)
  */
 static dbus_bool_t
@@ -492,6 +546,8 @@ ni_testbus_bind_builtin_host(void)
 
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Host_run_binding);
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Host_addCapability_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Host_shutdown_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Host_reboot_binding);
 	ni_dbus_objectmodel_bind_properties(&__ni_Testbus_Host_Properties_binding);
 
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostset_addHost_binding);

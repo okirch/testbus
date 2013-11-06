@@ -1371,3 +1371,23 @@ failed:
 	ni_dbus_variant_destroy(&arg);
 	return rv;
 }
+
+/*
+ * shut down a remote host
+ */
+ni_bool_t
+ni_testbus_call_host_shutdown(ni_dbus_object_t *host_object, ni_bool_t reboot)
+{
+	const char *method_name = reboot? "reboot" : "shutdown";
+	DBusError error = DBUS_ERROR_INIT;
+	ni_bool_t result;
+
+	result = ni_dbus_object_call_variant(host_object, NULL, method_name, 0, NULL, 0, NULL, &error);
+	if (!result) {
+		ni_dbus_print_error(&error, "%s.%s(): failed", host_object->path, method_name);
+		dbus_error_free(&error);
+	}
+
+	return result;
+}
+

@@ -45,9 +45,12 @@ enum {
 	OPT_FOREGROUND,
 	OPT_DBUS_SOCKET,
 
+	/* FIXME: nuke these */
 	OPT_DRYRUN,
 	OPT_ROOTDIR,
+
 	OPT_RECONNECT,
+	OPT_ALLOW_SHUTDOWN,
 	OPT_PUBLISH,
 };
 
@@ -69,6 +72,7 @@ static struct option	options[] = {
 	{ "dry-run",		no_argument,		NULL,	OPT_DRYRUN },
 	{ "root-directory",	required_argument,	NULL,	OPT_ROOTDIR },
 	{ "reconnect",		no_argument,		NULL,	OPT_RECONNECT },
+	{ "allow-shutdown",	no_argument,		NULL,	OPT_ALLOW_SHUTDOWN },
 	{ "publish",		required_argument,	NULL,	OPT_PUBLISH },
 
 	{ NULL }
@@ -90,7 +94,8 @@ int			opt_global_dryrun;
 char *			opt_global_rootdir;
 char *			opt_dbus_socket;
 char *			opt_hostname;
-static int		opt_reconnect;
+static ni_bool_t	opt_reconnect;
+static ni_bool_t	opt_allow_shutdown;
 
 static ni_testbus_agent_state_t ni_testbus_agent_global_state;
 
@@ -190,7 +195,11 @@ main(int argc, char **argv)
 			break;
 
 		case OPT_RECONNECT:
-			opt_reconnect = 1;
+			opt_reconnect = TRUE;
+			break;
+
+		case OPT_ALLOW_SHUTDOWN:
+			opt_allow_shutdown = TRUE;
 			break;
 
 		case OPT_PUBLISH:
@@ -593,8 +602,7 @@ __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus
 			goto out;
 		}
 
-		ni_trace("received signal %s from %s", signal_name, object_path);
-
+		ni_debug_wicked("received signal %s(%s)", signal_name, object_path);
 		if (!__ni_testbus_process_run(pi, object_path, files)) {
 #ifdef notyet
 			ni_process_exit_info_t exit_info = { .how = NI_PROCESS_NONSTARTER };
@@ -606,6 +614,28 @@ __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus
 			ni_testbus_file_array_free(files);
 			ni_process_free(pi);
 		}
+	} else
+	if (ni_string_eq(signal_name, "shutdownRequested")) {
+		ni_debug_wicked("received signal %s", signal_name);
+
+		if (!opt_allow_shutdown) {
+			ni_note("exiting due to shutdownRequested() signal");
+			exit(0);
+		}
+
+		execl("/sbin/shutdown", "shutdown", "-h", "now", NULL);
+		ni_fatal("unable to execute /sbin/shutdown: %m");
+	} else
+	if (ni_string_eq(signal_name, "rebootRequested")) {
+		ni_debug_wicked("received signal %s", signal_name);
+
+		if (!opt_allow_shutdown) {
+			ni_note("exiting due to rebootRequested() signal");
+			exit(0);
+		}
+
+		execl("/sbin/reboot", "reboot", NULL);
+		ni_fatal("unable to execute /sbin/reboot: %m");
 	}
 
 out:
@@ -642,11 +672,11 @@ __ni_testbus_agent_process_file_signal(ni_dbus_connection_t *connection, ni_dbus
 }
 
 static void
-ni_testbus_agent_setup_signals(ni_dbus_client_t *client)
+ni_testbus_agent_setup_signals(ni_dbus_client_t *client, ni_dbus_object_t *host_object)
 {
 	ni_dbus_client_add_signal_handler(client,
 			NI_TESTBUS_DBUS_BUS_NAME,		/* sender */
-			NULL,					/* path */
+			host_object->path,			/* path */
 			NI_TESTBUS_HOST_INTERFACE,		/* interface */
 			__ni_testbus_agent_process_host_signal,
 			NULL);
@@ -772,7 +802,7 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 		}
 	}
 
-	ni_testbus_agent_setup_signals(dbus_client);
+	ni_testbus_agent_setup_signals(dbus_client, host_object);
 
 	if (!ni_testbus_agent_add_capabilities(host_object, &state->capabilities))
 		ni_fatal("failed to register agent capabilities");

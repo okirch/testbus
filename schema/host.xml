@@ -26,6 +26,9 @@
     </arguments>
   </method>
 
+  <method name="shutdown" />
+  <method name="reboot" />
+
   <signal name="connected" />
   <signal name="ready" />
 

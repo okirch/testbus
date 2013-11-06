@@ -687,6 +687,62 @@ do_setenv(int argc, char **argv)
 }
 
 static int
+do_shutdown(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_REBOOT, };
+	static struct option local_options[] = {
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ "reboot", no_argument, NULL, OPT_REBOOT },
+		{ NULL }
+	};
+	ni_dbus_object_t *host_objects[argc];
+	ni_bool_t opt_reboot;
+	int c, nhosts = 0;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] shutdown object-path ...\n"
+				"\nSupported options:\n"
+				"  --reboot\n"
+				"      Reboot rather than shutdown.\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+
+		case OPT_REBOOT:
+			opt_reboot = TRUE;
+			break;
+		}
+	}
+
+	if (optind >= argc)
+		goto usage;
+
+	while (optind < argc) {
+		const char *path = argv[optind++];
+		ni_dbus_object_t *object;
+
+		object = ni_testbus_call_get_and_refresh_object(path);
+		if (object == NULL) {
+			ni_error("unknown host object %s", path);
+			return 1;
+		}
+		host_objects[nhosts++] = object;
+	}
+
+	while (nhosts)
+		ni_testbus_call_host_shutdown(host_objects[--nhosts], opt_reboot);
+
+	return 0;
+}
+
+static int
 do_retrieve_file(int argc, char **argv)
 {
 	enum  { OPT_HELP, };
@@ -1321,6 +1377,7 @@ static struct client_command	client_command_table[] = {
 	{ "create-command",	do_create_command	},
 	{ "run-command",	do_run_command		},
 	{ "setenv",		do_setenv		},
+	{ "shutdown",		do_shutdown		},
 	{ NULL, }
 };
 
