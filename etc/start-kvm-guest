@@ -65,9 +65,14 @@ function instance_dir_init {
 	mkdir -p $dir
 	mkdir -p $dir/guestfs
 
-	cat >$dir/guestfs/onboot.sh <<-EOF
+	cat >$dir/guestfs/onboot.sh <<-"EOF"
 #!/bin/bash
 insserv testbus-agent-kvm
+
+dirname=${0%/*}
+if test -f $dirname/ifcfg-eth0; then
+	cp $dirname/ifcfg-eth0 /etc/sysconfig/network
+fi
 EOF
 	chmod 555 $dir/guestfs/onboot.sh
 
@@ -110,36 +115,41 @@ function instance_proxy_stop {
 	dbus-proxy --kill="testbus-$instance_tag"
 }
 
-function instance_pick_vnc_display {
+function instance_pick_index {
 
-	port_list=`
+	index_list=`
 	for dir in $INSTANCE_BASE_DIR/*.d; do
-		if [ -f $dir/vnc-port ]; then
-			cat $dir/vnc-port
+		if [ -f $dir/index ]; then
+			cat $dir/index
 		fi
 	done |  sort -n`
 
-	free_port=2
-	for port in $port_list; do
-		if [ $port -lt $free_port ]; then
+	free_index=2
+	for next_used in $index_list; do
+		if [ $next_used -lt $free_index ]; then
 			continue;
 		fi
-		if [ $port -gt $free_port ]; then
+		if [ $next_used -gt $free_index ]; then
 			break
 		fi
-		let free_port=$free_port+1
+		let free_index=$free_index+1
 	done
 
-	echo "$free_port" > $instance_dir/vnc-port
-	echo ":$free_port"
+	echo "$free_index" > $instance_dir/index
+	echo "$free_index"
 }
 
-echo "------------------"
-echo "Starting KVM instance $instance_tag"
-echo "Base image:      $base_image_path"
-echo "RPMs to install: ${rpm_list:-none}"
-echo "MAC Address:     ${mac_addr:-default}"
-echo "------------------"
+function instance_config_network {
+
+	ifname=$1; shift
+	ipaddr=$1
+
+	cat >$instance_dir/guestfs/ifcfg-$ifname <<-EOF
+BOOTPROTO=static
+STARTMODE=auto
+IPADDR=$ipaddr
+EOF
+}
 
 set -e
 instance_dir=`instance_dir_init $instance_tag`
@@ -147,16 +157,34 @@ instance_dir_add_rpms $rpm_list
 instance_dir_add_image $base_image_path
 
 instance_socket=`instance_proxy_start`
-instance_vnc_display=`instance_pick_vnc_display`
+instance_index=`instance_pick_index`
+
+instance_ipaddr="10.0.0.$instance_index/8"
+instance_config_network eth0 $instance_ipaddr
+
+# FIXME: we need to set up the bridge here
+# if ! grep -qs kvmbr0 /etc/qemu-kvm/bridge.conf; then .. add acl entry
+# if ! ip link show kvmbr0; then brctl addrbr kvmbr0
+# ...
+
+
+echo "------------------"
+echo "Starting KVM instance $instance_tag"
+echo "Base image:      $base_image_path"
+echo "RPMs to install: ${rpm_list:-none}"
+echo "MAC Address:     ${mac_addr:-default}"
+echo "IP Address:      $instance_ipaddr"
+echo "------------------"
 
 qemu-kvm \
 	-name $instance_tag \
 	-pidfile $instance_dir/kvm.pid \
-	-display vnc=$instance_vnc_display \
+	-display vnc=:$instance_index \
 	-device virtio-serial \
 	-device virtserialport,chardev=testbus-serial,name=org.opensuse.Testbus.0 \
 	-chardev socket,id=testbus-serial,path=$instance_socket \
 	-virtfs local,path=$instance_dir/guestfs,security_model=passthrough,mount_tag=testbus \
+	-net bridge,br=kvmbr0 -net nic,model=virtio \
 	$instance_dir/image
 
 instance_proxy_stop

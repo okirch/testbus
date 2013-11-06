@@ -578,6 +578,11 @@ __ni_Testbus_Hostset_addHost(ni_dbus_object_t *object, const ni_dbus_method_t *m
 		return FALSE;
 	}
 
+	/* Now, merge all of the host's published environment into the container's
+	 * environment. We prefix the variables with the host tag, which means if
+	 * we add a host tagged as "server", its environment variables "ipaddr"
+	 * will be added as "server_ipaddr" to the container environment */
+
 	ni_testbus_container_add_host(context, host);
 	return TRUE;
 }
