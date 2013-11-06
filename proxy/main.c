@@ -351,10 +351,17 @@ main(int argc, char **argv)
 	}
 
 	if (opt_kill) {
+		pid_t pid;
+
 		if (ni_init("proxy") < 0)
 			return 1;
-		if (ni_server_terminate(opt_kill) < 0) {
+		pid = ni_server_terminate(opt_kill);
+		if (pid < 0) {
 			ni_error("unable to terminate testbus service %s", opt_kill);
+			return 1;
+		}
+		if (pid == 0) {
+			ni_error("testbus service %s was not running", opt_kill);
 			return 1;
 		}
 		return 0;
