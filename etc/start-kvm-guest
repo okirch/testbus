@@ -65,6 +65,12 @@ function instance_dir_init {
 	mkdir -p $dir
 	mkdir -p $dir/guestfs
 
+	cat >$dir/guestfs/onboot.sh <<-EOF
+#!/bin/bash
+insserv testbus-agent-kvm
+EOF
+	chmod 555 $dir/guestfs/onboot.sh
+
 	echo $dir
 }
 
