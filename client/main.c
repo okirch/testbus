@@ -48,22 +48,19 @@ static struct option	options[] = {
 	{ NULL }
 };
 
+typedef int		client_command_handler_t(int, char **);
+
+struct client_command {
+	const char *	name;
+	client_command_handler_t *handler;
+};
+
 static const char *	program_name;
 static const char *	opt_log_level;
 static const char *	opt_log_target;
 static ni_bool_t	opt_quiet;
 
-static int		do_show_xml(int, char **);
-static int		do_delete_object(int, char **);
-static int		do_create_host(int, char **);
-static int		do_remove_host(int, char **);
-static int		do_create_test(int, char **);
-static int		do_setenv(int, char **);
-static int		do_retrieve_file(int, char **);
-static int		do_upload_file(int, char **);
-static int		do_claim_host(int, char **);
-static int		do_create_command(int, char **);
-static int		do_run_command(int, char **);
+static client_command_handler_t *get_client_command(const char *);
 
 static ni_buffer_t *	ni_testbus_read_local_file(const char *);
 
@@ -71,6 +68,7 @@ int
 main(int argc, char **argv)
 {
 	char *cmd;
+	client_command_handler_t *handler;
 	int c;
 
 	mtrace();
@@ -170,31 +168,13 @@ main(int argc, char **argv)
 
 	ni_call_init_client(NULL);
 
-	if (!strcmp(cmd, "show-xml"))
-		return do_show_xml(argc - optind, argv + optind);
-	if (!strcmp(cmd, "delete"))
-		return do_delete_object(argc - optind, argv + optind);
-	if (!strcmp(cmd, "create-host"))
-		return do_create_host(argc - optind, argv + optind);
-	if (!strcmp(cmd, "remove-host"))
-		return do_remove_host(argc - optind, argv + optind);
-	if (!strcmp(cmd, "create-test"))
-		return do_create_test(argc - optind, argv + optind);
-	if (!strcmp(cmd, "retrieve-file"))
-		return do_retrieve_file(argc - optind, argv + optind);
-	if (!strcmp(cmd, "upload-file"))
-		return do_upload_file(argc - optind, argv + optind);
-	if (!strcmp(cmd, "claim-host"))
-		return do_claim_host(argc - optind, argv + optind);
-	if (!strcmp(cmd, "create-command"))
-		return do_create_command(argc - optind, argv + optind);
-	if (!strcmp(cmd, "run-command"))
-		return do_run_command(argc - optind, argv + optind);
-	if (!strcmp(cmd, "setenv"))
-		return do_setenv(argc - optind, argv + optind);
+	handler = get_client_command(cmd);
+	if (handler == NULL) {
+		fprintf(stderr, "Unsupported command %s\n", cmd);
+		goto usage;
+	}
 
-	fprintf(stderr, "Unsupported command %s\n", cmd);
-	goto usage;
+	return handler(argc - optind, argv + optind);
 }
 
 /* Hack */
@@ -377,7 +357,7 @@ __dump_schema_xml(const ni_dbus_variant_t *variant, ni_xs_scope_t *schema)
 }
 
 
-int
+static int
 do_show_xml(int argc, char **argv)
 {
 	enum  { OPT_HELP, OPT_RAW, };
@@ -453,7 +433,7 @@ out:
 	return rv;
 }
 
-int
+static int
 do_create_host(int argc, char **argv)
 {
 	enum  { OPT_HELP, };
@@ -496,7 +476,7 @@ out:
 	return rv;
 }
 
-int
+static int
 do_remove_host(int argc, char **argv)
 {
 	enum  { OPT_HELP, };
@@ -533,7 +513,7 @@ do_remove_host(int argc, char **argv)
 	return 0;
 }
 
-int
+static int
 do_delete_object(int argc, char **argv)
 {
 	enum  { OPT_HELP, OPT_CONTEXT };
@@ -601,7 +581,7 @@ do_delete_object(int argc, char **argv)
 	return rv;
 }
 
-int
+static int
 do_create_test(int argc, char **argv)
 {
 	enum  { OPT_HELP, OPT_CONTEXT };
@@ -656,7 +636,7 @@ out:
 	return rv;
 }
 
-int
+static int
 do_setenv(int argc, char **argv)
 {
 	enum  { OPT_HELP, };
@@ -706,7 +686,7 @@ do_setenv(int argc, char **argv)
 	return 0;
 }
 
-int
+static int
 do_retrieve_file(int argc, char **argv)
 {
 	enum  { OPT_HELP, };
@@ -752,7 +732,7 @@ do_retrieve_file(int argc, char **argv)
 	return 0;
 }
 
-int
+static int
 do_upload_file(int argc, char **argv)
 {
 	enum  { OPT_HELP, OPT_HOST, OPT_CONTEXT };
@@ -878,7 +858,7 @@ __do_claim_host_timedout(void *dummy)
 	fprintf(stderr, " timed out.\n");
 }
 
-int
+static int
 do_claim_host(int argc, char **argv)
 {
 	enum  { OPT_HELP, OPT_HOSTNAME, OPT_CAPABILITY, OPT_ROLE, OPT_TIMEOUT };
@@ -1119,7 +1099,7 @@ flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *of
  * Create a command on a given host.
  * This can be executed via run-command, or scheduled for async execution.
  */
-int
+static int
 do_create_command(int argc, char **argv)
 {
 	enum  { OPT_HELP, OPT_CONTEXT, };
@@ -1180,7 +1160,7 @@ do_create_command(int argc, char **argv)
 /*
  * Run a command on a given host, block and wait for the result
  */
-int
+static int
 do_run_command(int argc, char **argv)
 {
 	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT };
@@ -1324,4 +1304,35 @@ ni_testbus_read_local_file(const char *filename)
 	fclose(fp);
 
 	return result;
+}
+
+/*
+ * Command table
+ */
+static struct client_command	client_command_table[] = {
+	{ "show-xml",		do_show_xml		},
+	{ "delete",		do_delete_object	},
+	{ "create-host",	do_create_host		},
+	{ "remove-host",	do_remove_host		},
+	{ "create-test",	do_create_test		},
+	{ "retrieve-file",	do_retrieve_file	},
+	{ "upload-file",	do_upload_file		},
+	{ "claim-host",		do_claim_host		},
+	{ "create-command",	do_create_command	},
+	{ "run-command",	do_run_command		},
+	{ "setenv",		do_setenv		},
+	{ NULL, }
+};
+
+static client_command_handler_t *
+get_client_command(const char *name)
+{
+	struct client_command *cmd;
+
+	for (cmd = client_command_table; cmd->name; ++cmd) {
+		if (ni_string_eq(cmd->name, name))
+			return cmd->handler;
+	}
+
+	return NULL;
 }
