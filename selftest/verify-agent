@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# Very simple test to verify that the agent that's needed to run all the
+# others tests is there.
+#
+
+. ${0%/*}/functions
+
+# Override the timeout for claiming the host.
+# Bringing up a VM guest can take some time, especially if it goes
+# through a firstboot stage first.
+TESTBUS_CLAIM_TIMEOUT=240
+
+testbus_init_test $0
+testbus_claim_host
+testbus_exit

@@ -1,3 +1,6 @@
+# This needs to go first - it's a simple test to verify that
+# the agent is running.
+agent
 runnable
 nested
 runstress

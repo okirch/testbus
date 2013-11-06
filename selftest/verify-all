@@ -7,7 +7,7 @@ function run {
 	for name; do
 		case $name in
 		@*)	file=$dir/${name#@}
-			run `cat $file`
+			run `cat $file|sed 's:#.*::'`
 			: ;;
 		*)
 			$dir/verify-$name
