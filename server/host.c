@@ -125,6 +125,8 @@ void
 ni_testbus_host_agent_disconnected(ni_testbus_host_t *host)
 {
 	ni_debug_wicked("host %s - owning agent disconnected", host->context.name);
+	ni_string_array_destroy(&host->capabilities);
+	ni_testbus_env_destroy(&host->context.env);
 	ni_string_free(&host->agent_bus_name);
 	host->ready = FALSE;
 }
