@@ -48,6 +48,10 @@
       <host-path type="string" />
     </arguments>
   </method>
+
+  <!-- these methods operate on all hosts in the set -->
+  <method name="shutdown" />
+  <method name="reboot" />
 </service>
 
 

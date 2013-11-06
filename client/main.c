@@ -712,6 +712,8 @@ do_shutdown(int argc, char **argv)
 				"      Reboot rather than shutdown.\n"
 				"  --help\n"
 				"      Show this help text.\n"
+				"The object paths can refer both to individual hosts or containers\n"
+				"that hold hosts.\n"
 				);
 			return 1;
 

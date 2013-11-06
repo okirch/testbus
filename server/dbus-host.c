@@ -491,6 +491,101 @@ __ni_Testbus_Hostset_addHost(ni_dbus_object_t *object, const ni_dbus_method_t *m
 NI_TESTBUS_METHOD_BINDING(Hostset, addHost);
 
 /*
+ * Method delegation
+ */
+static const ni_dbus_method_t *
+__ni_testbus_delegate_method(const ni_dbus_method_t *set_method, const ni_dbus_service_t *item_interface)
+{
+	const ni_dbus_method_t *item_method;
+
+	if (!(item_method = ni_dbus_service_get_method(item_interface, set_method->name))) {
+		ni_error("cannot delegate method %s - method not found in %s", set_method->name, item_interface->name);
+		return NULL;
+	}
+	if (!ni_string_eq(set_method->call_signature, item_method->call_signature)) {
+		ni_error("cannot delegate method %s to %s - call signature mismatch", set_method->name, item_interface->name);
+		return NULL;
+	}
+	if (item_method->handler == NULL) {
+		ni_error("cannot delegate method %s to %s - no handler function", set_method->name, item_interface->name);
+		return NULL;
+	}
+
+	return item_method;
+}
+
+static ni_bool_t
+__ni_testbus_delegate_call(ni_dbus_server_t *server, const char *item_path, const ni_dbus_method_t *item_method,
+				unsigned int argc, const ni_dbus_variant_t *argv,
+				ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_dbus_object_t *item_object;
+
+	item_object = ni_dbus_server_get_object(server, item_path);
+	if (item_object == NULL) {
+		dbus_set_error(error, DBUS_ERROR_FAILED, "unable to look up item object %s", item_path);
+		return FALSE;
+	}
+	return item_method->handler(item_object, item_method, argc, argv, NULL, error);
+}
+
+
+static dbus_bool_t
+__ni_Testbus_Hostset_delegate(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_dbus_server_t *server = ni_dbus_object_get_server(object);
+	const ni_dbus_method_t *item_method;
+	ni_testbus_container_t *context;
+	unsigned int i;
+
+	if ((context = ni_testbus_container_unwrap(object, error)) == NULL)
+		return FALSE;
+
+	item_method = __ni_testbus_delegate_method(method, ni_testbus_host_interface());
+	if (item_method == NULL) {
+		dbus_set_error(error, DBUS_ERROR_FAILED, "internal error in Hostset.%s()", method->name);
+		return FALSE;
+	}
+
+	for (i = 0; i < context->hosts.count; ++i) {
+		ni_testbus_host_t *host = context->hosts.data[i];
+
+		if (!__ni_testbus_delegate_call(server, host->context.dbus_object_path, item_method,
+					argc, argv, reply, error))
+			return FALSE;
+	}
+	return TRUE;
+}
+
+/*
+ * Hostset.shutdown
+ */
+static dbus_bool_t
+__ni_Testbus_Hostset_shutdown(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	return __ni_Testbus_Hostset_delegate(object, method, argc, argv, reply, error);
+}
+
+NI_TESTBUS_METHOD_BINDING(Hostset, shutdown);
+
+/*
+ * Hostset.reboot
+ */
+static dbus_bool_t
+__ni_Testbus_Hostset_reboot(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	return __ni_Testbus_Hostset_delegate(object, method, argc, argv, reply, error);
+}
+
+NI_TESTBUS_METHOD_BINDING(Hostset, reboot);
+
+/*
  * Handle signals from agent
  */
 static void
@@ -551,4 +646,6 @@ ni_testbus_bind_builtin_host(void)
 	ni_dbus_objectmodel_bind_properties(&__ni_Testbus_Host_Properties_binding);
 
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostset_addHost_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostset_shutdown_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Hostset_reboot_binding);
 }

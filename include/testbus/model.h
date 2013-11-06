@@ -67,5 +67,7 @@ extern const ni_dbus_class_t *	ni_testbus_file_class(void);
 extern const ni_dbus_class_t *	ni_testbus_testset_class(void);
 extern const ni_dbus_class_t *	ni_testbus_testcase_class(void);
 
+extern const ni_dbus_service_t *ni_testbus_host_interface(void);
+
 #endif /* __NI_TESTBUS_MODEL_H__ */
 
