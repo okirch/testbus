@@ -110,6 +110,30 @@ function instance_proxy_stop {
 	dbus-proxy --kill="testbus-$instance_tag"
 }
 
+function instance_pick_vnc_display {
+
+	port_list=`
+	for dir in $INSTANCE_BASE_DIR/*.d; do
+		if [ -f $dir/vnc-port ]; then
+			cat $dir/vnc-port
+		fi
+	done |  sort -n`
+
+	free_port=2
+	for port in $port_list; do
+		if [ $port -lt $free_port ]; then
+			continue;
+		fi
+		if [ $port -gt $free_port ]; then
+			break
+		fi
+		let free_port=$free_port+1
+	done
+
+	echo "$free_port" > $instance_dir/vnc-port
+	echo ":$free_port"
+}
+
 echo "------------------"
 echo "Starting KVM instance $instance_tag"
 echo "Base image:      $base_image_path"
@@ -123,11 +147,12 @@ instance_dir_add_rpms $rpm_list
 instance_dir_add_image $base_image_path
 
 instance_socket=`instance_proxy_start`
+instance_vnc_display=`instance_pick_vnc_display`
 
 qemu-kvm \
 	-name $instance_tag \
 	-pidfile $instance_dir/kvm.pid \
-	-display vnc=:2 \
+	-display vnc=$instance_vnc_display \
 	-device virtio-serial \
 	-device virtserialport,chardev=testbus-serial,name=org.opensuse.Testbus.0 \
 	-chardev socket,id=testbus-serial,path=$instance_socket \
