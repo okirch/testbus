@@ -15,7 +15,7 @@
     </result>
   </method>
 
-  <method name="retrieve">
+  <method name="download">
     <arguments>
       <path type="string"/>
       <offset type="uint64" />
@@ -24,5 +24,13 @@
     <result>
       <data class="array" element-type="byte" />
     </result>
+  </method>
+
+  <method name="upload">
+    <arguments>
+      <path type="string"/>
+      <offset type="uint64" />
+      <data class="array" element-type="byte" />
+    </arguments>
   </method>
 </service>
