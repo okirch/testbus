@@ -10,6 +10,7 @@
 ### BEGIN INIT INFO
 # Provides:          boot.testbus
 # Required-Start:    boot.localfs
+# Should-Start:      boot.localnet
 # Required-Stop:     $null
 # Should-Stop:       $null
 # Default-Start:     B

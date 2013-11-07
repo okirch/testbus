@@ -65,7 +65,7 @@ function instance_dir_init {
 	mkdir -p $dir
 	mkdir -p $dir/guestfs
 
-	cat >$dir/guestfs/onboot.sh <<-"EOF"
+	cat >$dir/guestfs/onboot.sh <<"EOF"
 #!/bin/bash
 insserv testbus-agent-kvm
 
@@ -77,6 +77,18 @@ EOF
 	chmod 555 $dir/guestfs/onboot.sh
 
 	echo $dir
+}
+
+##################################################################
+# This is just a convenience function for use with here scripts.
+# Use as
+#  instance_onboot<<-EOF
+# ... stuff that should get added to the onboot script
+# EOF
+##################################################################
+function instance_onboot {
+
+	cat >>$instance_dir/guestfs/onboot.sh
 }
 
 function instance_dir_add_rpms {
@@ -139,6 +151,24 @@ function instance_pick_index {
 	echo "$free_index"
 }
 
+function instance_config_hostname {
+
+	hostname=$1; shift
+	ipaddr=$1; shift
+
+	alias_list=
+	for tag; do
+		alias_list="$alias_list $tag.testbus"
+	done
+
+	instance_onboot <<EOF
+echo $hostname >/etc/HOSTNAME
+hostname ${hostname%%.*}
+
+echo "$ipaddr $hostname $alias_list" >> /etc/hosts
+EOF
+}
+
 function instance_config_network {
 
 	ifname=$1; shift
@@ -159,12 +189,23 @@ instance_dir_add_image $base_image_path
 instance_socket=`instance_proxy_start`
 instance_index=`instance_pick_index`
 
-instance_ipaddr="10.0.0.$instance_index/8"
-instance_config_network eth0 $instance_ipaddr
+instance_ipaddr="10.0.0.$instance_index"
+instance_ipmask="8"
+instance_config_network eth0 "$instance_ipaddr/$instance_ipmask"
+
+instance_hostname="instance$instance_index.testnet"
+instance_config_hostname $instance_hostname $instance_ipaddr $instance_tag
+
+if [ -n "$mac_addr" ]; then
+	instance_macaddr=$mac_addr
+else
+	instance_macaddr=`printf 52:54:00:12:34:%02x $instance_index`
+fi
 
 # FIXME: we need to set up the bridge here
 # if ! grep -qs kvmbr0 /etc/qemu-kvm/bridge.conf; then .. add acl entry
 # if ! ip link show kvmbr0; then brctl addrbr kvmbr0
+# ifconfig kvmbr0 up
 # ...
 
 
@@ -172,8 +213,9 @@ echo "------------------"
 echo "Starting KVM instance $instance_tag"
 echo "Base image:      $base_image_path"
 echo "RPMs to install: ${rpm_list:-none}"
-echo "MAC Address:     ${mac_addr:-default}"
-echo "IP Address:      $instance_ipaddr"
+echo "MAC Address:     $instance_macaddr"
+echo "IP Address:      $instance_ipaddr/$instance_ipmask"
+echo "Hostname:        $instance_hostname"
 echo "------------------"
 
 qemu-kvm \
@@ -184,7 +226,7 @@ qemu-kvm \
 	-device virtserialport,chardev=testbus-serial,name=org.opensuse.Testbus.0 \
 	-chardev socket,id=testbus-serial,path=$instance_socket \
 	-virtfs local,path=$instance_dir/guestfs,security_model=passthrough,mount_tag=testbus \
-	-net bridge,br=kvmbr0 -net nic,model=virtio \
+	-net bridge,br=kvmbr0 -net nic,macaddr=$instance_macaddr,model=virtio \
 	$instance_dir/image
 
 instance_proxy_stop
