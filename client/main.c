@@ -166,7 +166,7 @@ main(int argc, char **argv)
 	if (!ni_objectmodel_register(&ni_testbus_objectmodel))
 		ni_fatal("Cannot initialize objectmodel, giving up.");
 
-	ni_call_init_client(NULL);
+	ni_testbus_client_init(NULL);
 
 	handler = get_client_command(cmd);
 	if (handler == NULL) {
@@ -397,7 +397,7 @@ do_show_xml(int argc, char **argv)
 	if (optind != argc)
 		goto usage;
 
-	list_object = ni_testbus_call_get_object(NULL);
+	list_object = ni_testbus_client_get_object(NULL);
 	if (!ni_dbus_object_call_variant(list_object,
 			"org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
 			0, NULL,
@@ -465,7 +465,7 @@ do_create_host(int argc, char **argv)
 		goto usage;
 	hostname = argv[optind++];
 
-	host_object = ni_testbus_call_create_host(hostname);
+	host_object = ni_testbus_client_create_host(hostname);
 	if (host_object == NULL)
 		goto out;
 
@@ -507,7 +507,7 @@ do_remove_host(int argc, char **argv)
 		goto usage;
 	hostname = argv[optind++];
 
-	if (!ni_testbus_call_remove_host(hostname))
+	if (!ni_testbus_client_remove_host(hostname))
 		return 1;
 
 	return 0;
@@ -551,7 +551,7 @@ do_delete_object(int argc, char **argv)
 		goto usage;
 
 	if (opt_container) {
-		container_object = ni_testbus_call_get_and_refresh_object(opt_container);
+		container_object = ni_testbus_client_get_and_refresh_object(opt_container);
 		(void) container_object;
 		ni_fatal("not implemented yet");
 	} else {
@@ -561,14 +561,14 @@ do_delete_object(int argc, char **argv)
 			const char *path = argv[optind++];
 			ni_dbus_object_t *object;
 
-			object = ni_testbus_call_get_and_refresh_object(path);
+			object = ni_testbus_client_get_and_refresh_object(path);
 			if (object == NULL) {
 				ni_error("no such object %s", path);
 				failed++;
 				continue;
 			}
 
-			if (!ni_testbus_call_delete(object)) {
+			if (!ni_testbus_client_delete(object)) {
 				ni_error("could not delete object %s", path);
 				failed++;
 				continue;
@@ -622,10 +622,10 @@ do_create_test(int argc, char **argv)
 	testname = argv[optind++];
 
 	if (opt_container
-	 && !(container_object = ni_testbus_call_get_container(opt_container)))
+	 && !(container_object = ni_testbus_client_get_container(opt_container)))
 		return 1;
 
-	test_object = ni_testbus_call_create_test(testname, container_object);
+	test_object = ni_testbus_client_create_test(testname, container_object);
 	if (test_object == NULL)
 		goto out;
 
@@ -668,7 +668,7 @@ do_setenv(int argc, char **argv)
 		goto usage;
 	opt_context = argv[optind++];
 
-	context_object = ni_testbus_call_get_container(opt_context);
+	context_object = ni_testbus_client_get_container(opt_context);
 	if (context_object == NULL)
 		return 1;
 
@@ -680,7 +680,7 @@ do_setenv(int argc, char **argv)
 			ni_fatal("setenv: argument must be name=value");
 		*value++ = '\0';
 
-		ni_testbus_call_setenv(context_object, name, value);
+		ni_testbus_client_setenv(context_object, name, value);
 	}
 
 	return 0;
@@ -731,8 +731,8 @@ do_shutdown(int argc, char **argv)
 	if (optind + 1 == argc && ni_string_eq(argv[optind], "all")) {
 		ni_dbus_object_t *hostlist;
 
-		hostlist = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
-		if (!ni_testbus_call_host_shutdown(hostlist, opt_reboot))
+		hostlist = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
+		if (!ni_testbus_client_host_shutdown(hostlist, opt_reboot))
 			return 1;
 
 		return 0;
@@ -742,7 +742,7 @@ do_shutdown(int argc, char **argv)
 		const char *path = argv[optind++];
 		ni_dbus_object_t *object;
 
-		object = ni_testbus_call_get_and_refresh_object(path);
+		object = ni_testbus_client_get_and_refresh_object(path);
 		if (object == NULL) {
 			ni_error("unknown host object %s", path);
 			return 1;
@@ -751,7 +751,7 @@ do_shutdown(int argc, char **argv)
 	}
 
 	while (nhosts)
-		ni_testbus_call_host_shutdown(host_objects[--nhosts], opt_reboot);
+		ni_testbus_client_host_shutdown(host_objects[--nhosts], opt_reboot);
 
 	return 0;
 }
@@ -788,7 +788,7 @@ do_retrieve_file(int argc, char **argv)
 		goto usage;
 	hostname = argv[optind++];
 
-	agent_object = ni_testbus_call_get_agent(hostname);
+	agent_object = ni_testbus_client_get_agent(hostname);
 	if (agent_object == NULL)
 		return 1;
 
@@ -865,7 +865,7 @@ do_upload_file(int argc, char **argv)
 		local_path = argv[optind++];
 		remote_path = argv[optind++];
 
-		agent_object = ni_testbus_call_get_agent(opt_hostname);
+		agent_object = ni_testbus_client_get_agent(opt_hostname);
 		if (agent_object == NULL)
 			return 1;
 
@@ -886,7 +886,7 @@ do_upload_file(int argc, char **argv)
 		local_path = argv[optind++];
 		identifier = argv[optind++];
 
-		context_object = ni_testbus_call_get_container(opt_context);
+		context_object = ni_testbus_client_get_container(opt_context);
 		if (context_object == NULL)
 			return 1;
 
@@ -895,11 +895,11 @@ do_upload_file(int argc, char **argv)
 			return 1;
 		count = ni_buffer_count(data);
 
-		file_object = ni_testbus_call_create_tempfile(identifier, NI_TESTBUS_FILE_READ, context_object);
+		file_object = ni_testbus_client_create_tempfile(identifier, NI_TESTBUS_FILE_READ, context_object);
 		if (file_object == NULL)
 			return 1;
 
-		if (!ni_testbus_call_upload_file(file_object, data))
+		if (!ni_testbus_client_upload_file(file_object, data))
 			return 1;
 
 		printf("Uploaded %u bytes\n", count);
@@ -1011,7 +1011,7 @@ do_claim_host(int argc, char **argv)
 	} else {
 		const char *container_path = argv[optind++];
 
-		container_object = ni_testbus_call_get_and_refresh_object(container_path);
+		container_object = ni_testbus_client_get_and_refresh_object(container_path);
 		if (container_object == NULL) {
 			ni_error("unknown container object %s", container_path);
 			return 1;
@@ -1019,7 +1019,7 @@ do_claim_host(int argc, char **argv)
 	}
 
 	if (opt_hostname) {
-		host_object = ni_testbus_call_claim_host_by_name(opt_hostname, container_object, opt_role);
+		host_object = ni_testbus_client_claim_host_by_name(opt_hostname, container_object, opt_role);
 	} else {
 		ni_testbus_client_timeout_t timeout, *tmo = NULL;
 
@@ -1036,7 +1036,7 @@ do_claim_host(int argc, char **argv)
 			tmo = &timeout;
 		}
 
-		host_object = ni_testbus_call_claim_host_by_capability(opt_capability, container_object, opt_role, tmo);
+		host_object = ni_testbus_client_claim_host_by_capability(opt_capability, container_object, opt_role, tmo);
 	}
 
 	if (host_object == NULL) {
@@ -1089,14 +1089,14 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 	for (index = 0; index < argc; ++index)
 		ni_string_array_append(&command_argv, argv[index]);
 
-	cmd_object = ni_testbus_call_create_command(container_object, &command_argv);
+	cmd_object = ni_testbus_client_create_command(container_object, &command_argv);
 	ni_string_array_destroy(&command_argv);
 
 	if (send_stdin) {
 		ni_buffer_t *data;
 
 		data = ni_file_read(stdin);
-		ni_testbus_call_command_add_file(cmd_object, "stdin", data, NI_TESTBUS_FILE_READ);
+		ni_testbus_client_command_add_file(cmd_object, "stdin", data, NI_TESTBUS_FILE_READ);
 		ni_buffer_free(data);
 	}
 
@@ -1112,7 +1112,7 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 		data = ni_file_read(script);
 		fclose(script);
 
-		ni_testbus_call_command_add_file(cmd_object, "script", data, NI_TESTBUS_FILE_READ | NI_TESTBUS_FILE_EXEC);
+		ni_testbus_client_command_add_file(cmd_object, "script", data, NI_TESTBUS_FILE_READ | NI_TESTBUS_FILE_EXEC);
 		ni_buffer_free(data);
 	}
 
@@ -1126,9 +1126,9 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 	 * If they refer to different files, we should tell the server to capture
 	 * these separately.
 	 */
-	ni_testbus_call_create_tempfile("stdout", NI_TESTBUS_FILE_WRITE, cmd_object);
+	ni_testbus_client_create_tempfile("stdout", NI_TESTBUS_FILE_WRITE, cmd_object);
 	if (!__samefile(1, 2)) {
-		ni_testbus_call_create_tempfile("stderr", NI_TESTBUS_FILE_WRITE, cmd_object);
+		ni_testbus_client_create_tempfile("stderr", NI_TESTBUS_FILE_WRITE, cmd_object);
 	}
 
 	return cmd_object;
@@ -1144,7 +1144,7 @@ flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *of
 	ni_buffer_t *data;
 
 	ni_debug_wicked("%s(%s, %s)", __func__, proc_object->path, filename);
-	file_object = ni_testbus_call_container_child_by_name(proc_object,
+	file_object = ni_testbus_client_container_child_by_name(proc_object,
 					ni_testbus_file_class(),
 					filename);
 	if (file_object == NULL) {
@@ -1155,7 +1155,7 @@ flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *of
 	ni_trace("%s(%s) -> %s", __func__, filename, file_object->path);
 
 	/* Now download the file */
-	data = ni_testbus_call_download_file(file_object);
+	data = ni_testbus_client_download_file(file_object);
 	if (data == NULL) {
 		ni_error("failed to download %s", filename);
 		return;
@@ -1206,7 +1206,7 @@ do_create_command(int argc, char **argv)
 	}
 
 	if (opt_container != 0) {
-		container_object = ni_testbus_call_get_and_refresh_object(opt_container);
+		container_object = ni_testbus_client_get_and_refresh_object(opt_container);
 		if (container_object == NULL) {
 			ni_error("unknown host object %s", opt_container);
 			return 1;
@@ -1287,7 +1287,7 @@ do_run_command(int argc, char **argv)
 	}
 
 	if (opt_hostpath != 0) {
-		host_object = ni_testbus_call_get_and_refresh_object(opt_hostpath);
+		host_object = ni_testbus_client_get_and_refresh_object(opt_hostpath);
 		if (host_object == NULL) {
 			ni_error("unknown host object %s", opt_hostpath);
 			return 1;
@@ -1298,7 +1298,7 @@ do_run_command(int argc, char **argv)
 	}
 
 	if (opt_contextpath != 0) {
-		ctxt_object = ni_testbus_call_get_and_refresh_object(opt_contextpath);
+		ctxt_object = ni_testbus_client_get_and_refresh_object(opt_contextpath);
 		if (ctxt_object == NULL) {
 			ni_error("unknown context object %s", opt_contextpath);
 			return 1;
@@ -1314,7 +1314,7 @@ do_run_command(int argc, char **argv)
 	if (!cmd_object)
 		return 1;
 
-	proc_object = ni_testbus_call_host_run(host_object, cmd_object);
+	proc_object = ni_testbus_client_host_run(host_object, cmd_object);
 	if (!proc_object)
 		return 1;
 
@@ -1334,8 +1334,8 @@ do_run_command(int argc, char **argv)
 	if (exit_info.stderr_bytes)
 		flush_process_file(proc_object, "stderr", stderr);
 
-	ni_testbus_call_delete(proc_object);
-	ni_testbus_call_delete(cmd_object);
+	ni_testbus_client_delete(proc_object);
+	ni_testbus_client_delete(cmd_object);
 
 	switch (exit_info.how) {
 	case NI_PROCESS_NONSTARTER:

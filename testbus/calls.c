@@ -52,25 +52,25 @@ static void	ni_call_error_context_destroy(ni_call_error_context_t *);
 /*
  * Local statics
  */
-static ni_dbus_client_t *	ni_call_client;
-static ni_dbus_object_t *	ni_call_root_object;
+static ni_dbus_client_t *	ni_testbus_client_handle;
+static ni_dbus_object_t *	ni_testbus_client_root_object;
 
 /*
  * Create the client
  */
 void
-ni_call_init_client(ni_dbus_client_t *client)
+ni_testbus_client_init(ni_dbus_client_t *client)
 {
-	ni_assert(ni_call_root_object == NULL);
-	ni_assert(ni_call_client == NULL);
+	ni_assert(ni_testbus_client_root_object == NULL);
+	ni_assert(ni_testbus_client_handle == NULL);
 
 	if (client == NULL) {
 		client = ni_objectmodel_create_client();
 		if (!client)
 			ni_fatal("Unable to connect to dbus service");
 	}
-	ni_call_client = client;
-	ni_call_root_object = ni_dbus_client_get_root_object(client);
+	ni_testbus_client_handle = client;
+	ni_testbus_client_root_object = ni_dbus_client_get_root_object(client);
 }
 
 
@@ -78,21 +78,21 @@ ni_call_init_client(ni_dbus_client_t *client)
  * Create the client and return the handle of the root object
  */
 static ni_dbus_object_t *
-ni_call_get_root(void)
+ni_testbus_client_get_root(void)
 {
-	ni_assert(ni_call_root_object);
-	return ni_call_root_object;
+	ni_assert(ni_testbus_client_root_object);
+	return ni_testbus_client_root_object;
 }
 
 /*
  * Obtain an object handle, generic version
  */
 static ni_dbus_object_t *
-__ni_call_get_proxy_object(const ni_dbus_service_t *service, const char *relative_path)
+__ni_testbus_client_get_proxy_object(const ni_dbus_service_t *service, const char *relative_path)
 {
 	ni_dbus_object_t *root_object, *child;
 
-	if (!(root_object = ni_call_get_root()))
+	if (!(root_object = ni_testbus_client_get_root()))
 		return NULL;
 
 	child = ni_dbus_object_create(root_object, relative_path,
@@ -109,7 +109,7 @@ __ni_call_get_proxy_object(const ni_dbus_service_t *service, const char *relativ
  * Obtain an object handle by name
  */
 ni_dbus_object_t *
-__ni_call_proxy_object_by_path(const char *path, const char *service_name)
+__ni_testbus_call_proxy_object_by_path(const char *path, const char *service_name)
 {
 	const ni_dbus_service_t *service = NULL;
 	const char *relative_path;
@@ -128,7 +128,7 @@ __ni_call_proxy_object_by_path(const char *path, const char *service_name)
 		ni_assert(service);
 	}
 
-	object = __ni_call_get_proxy_object(service, relative_path);
+	object = __ni_testbus_client_get_proxy_object(service, relative_path);
 
 	ni_dbus_object_set_default_interface(object, service_name);
 	return object;
@@ -141,11 +141,11 @@ enum {
 };
 
 static ni_dbus_object_t *
-__ni_testbus_call_get_object(ni_dbus_object_t *root_object, const char *path, unsigned int how)
+__ni_testbus_client_get_object(ni_dbus_object_t *root_object, const char *path, unsigned int how)
 {
 	ni_dbus_object_t *result;
 
-	if (!root_object && !(root_object = ni_call_get_root()))
+	if (!root_object && !(root_object = ni_testbus_client_get_root()))
 		return NULL;
 
 	result = ni_dbus_object_create(root_object, path, NULL, NULL);
@@ -181,29 +181,29 @@ __ni_testbus_call_get_object(ni_dbus_object_t *root_object, const char *path, un
 
 
 ni_dbus_object_t *
-ni_testbus_call_get_object(const char *path)
+ni_testbus_client_get_object(const char *path)
 {
-	return __ni_testbus_call_get_object(NULL, path, NI_TESTBUS_GET_NOUPDATE);
+	return __ni_testbus_client_get_object(NULL, path, NI_TESTBUS_GET_NOUPDATE);
 }
 
 ni_dbus_object_t *
-ni_testbus_call_get_and_refresh_object(const char *path)
+ni_testbus_client_get_and_refresh_object(const char *path)
 {
-	return __ni_testbus_call_get_object(NULL, path, NI_TESTBUS_GET_DATA);
+	return __ni_testbus_client_get_object(NULL, path, NI_TESTBUS_GET_DATA);
 }
 
 ni_dbus_object_t *
-ni_testbus_call_get_object_and_metadata(const char *path)
+ni_testbus_client_get_object_and_metadata(const char *path)
 {
-	return __ni_testbus_call_get_object(NULL, path, NI_TESTBUS_GET_INTERFACE);
+	return __ni_testbus_client_get_object(NULL, path, NI_TESTBUS_GET_INTERFACE);
 }
 
 ni_dbus_object_t *
-ni_testbus_call_get_container(const char *path)
+ni_testbus_client_get_container(const char *path)
 {
 	ni_dbus_object_t *object;
 
-	object = ni_testbus_call_get_object_and_metadata(path);
+	object = ni_testbus_client_get_object_and_metadata(path);
 	if (object == NULL)
 		return NULL;
 
@@ -230,11 +230,11 @@ __ni_testbus_handle_path_result(const ni_dbus_variant_t *res, const char *method
 		ni_error("%s() returns empty string", method_name);
 		return NULL;
 	}
-	return ni_testbus_call_get_and_refresh_object(value);
+	return ni_testbus_client_get_and_refresh_object(value);
 }
 
 static ni_dbus_object_t *
-__ni_testbus_container_create_child(ni_dbus_object_t *container, const char *method_name,
+__ni_testbus_client_container_create_child(ni_dbus_object_t *container, const char *method_name,
 			const char *name, const ni_dbus_variant_t *extraArg)
 {
 	ni_dbus_variant_t args[2];
@@ -263,7 +263,7 @@ __ni_testbus_container_create_child(ni_dbus_object_t *container, const char *met
 }
 
 static ni_bool_t
-__ni_testbus_container_add_host(ni_dbus_object_t *container, const char *host_path, const char *role)
+__ni_testbus_client_container_add_host(ni_dbus_object_t *container, const char *host_path, const char *role)
 {
 	ni_dbus_variant_t args[2];
 	DBusError error = DBUS_ERROR_INIT;
@@ -287,7 +287,7 @@ __ni_testbus_container_add_host(ni_dbus_object_t *container, const char *host_pa
 }
 
 ni_dbus_object_t *
-ni_testbus_call_container_child_by_name(ni_dbus_object_t *container_object, const ni_dbus_class_t *class, const char *name)
+ni_testbus_client_container_child_by_name(ni_dbus_object_t *container_object, const ni_dbus_class_t *class, const char *name)
 {
 	ni_dbus_variant_t args[2];
 	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
@@ -312,7 +312,7 @@ ni_testbus_call_container_child_by_name(ni_dbus_object_t *container_object, cons
 }
 
 ni_bool_t
-ni_testbus_call_setenv(ni_dbus_object_t *container, const char *name, const char *value)
+ni_testbus_client_setenv(ni_dbus_object_t *container, const char *name, const char *value)
 {
 	ni_dbus_variant_t args[2];
 	DBusError error = DBUS_ERROR_INIT;
@@ -336,7 +336,7 @@ ni_testbus_call_setenv(ni_dbus_object_t *container, const char *name, const char
 }
 
 ni_bool_t
-ni_testbus_call_delete(ni_dbus_object_t *object)
+ni_testbus_client_delete(ni_dbus_object_t *object)
 {
 	DBusError error = DBUS_ERROR_INIT;
 
@@ -349,19 +349,19 @@ ni_testbus_call_delete(ni_dbus_object_t *object)
 }
 
 ni_dbus_object_t *
-ni_testbus_call_create_host(const char *name)
+ni_testbus_client_create_host(const char *name)
 {
 	ni_dbus_object_t *hostlist_object;
 
-	hostlist_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
+	hostlist_object = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
 	if (!hostlist_object)
 		return NULL;
 
-	return __ni_testbus_container_create_child(hostlist_object, "createHost", name, NULL);
+	return __ni_testbus_client_container_create_child(hostlist_object, "createHost", name, NULL);
 }
 
 ni_dbus_object_t *
-ni_testbus_call_reconnect_host(const char *name, const ni_uuid_t *uuid)
+ni_testbus_client_reconnect_host(const char *name, const ni_uuid_t *uuid)
 {
 	ni_dbus_object_t *hostlist_object;
 	ni_dbus_variant_t args[2];
@@ -371,7 +371,7 @@ ni_testbus_call_reconnect_host(const char *name, const ni_uuid_t *uuid)
 
 	ni_dbus_variant_vector_init(args, 2);
 
-	hostlist_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
+	hostlist_object = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
 	if (!hostlist_object)
 		return NULL;
 
@@ -395,13 +395,13 @@ failed:
 }
 
 ni_bool_t
-ni_testbus_call_remove_host(const char *name)
+ni_testbus_client_remove_host(const char *name)
 {
 	ni_dbus_object_t *hostlist_object;
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
 	DBusError error = DBUS_ERROR_INIT;
 
-	hostlist_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
+	hostlist_object = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
 	if (!hostlist_object)
 		return FALSE;
 
@@ -417,12 +417,12 @@ ni_testbus_call_remove_host(const char *name)
 }
 
 ni_dbus_object_t *
-ni_testbus_call_create_test(const char *name, ni_dbus_object_t *parent)
+ni_testbus_client_create_test(const char *name, ni_dbus_object_t *parent)
 {
 	if (parent == NULL)
-		parent = ni_testbus_call_get_object_and_metadata(NI_TESTBUS_GLOBAL_CONTEXT_PATH);
+		parent = ni_testbus_client_get_object_and_metadata(NI_TESTBUS_GLOBAL_CONTEXT_PATH);
 
-	return __ni_testbus_container_create_child(parent, "createTest", name, NULL);
+	return __ni_testbus_client_container_create_child(parent, "createTest", name, NULL);
 }
 
 static const ni_dbus_service_t *
@@ -530,7 +530,7 @@ __ni_testbus_host_byname(const char *hostname)
 {
 	ni_dbus_object_t *host_base_object, *host;
 
-	host_base_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
+	host_base_object = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
 	if (!host_base_object)
 		return NULL;
 
@@ -581,7 +581,7 @@ __ni_testbus_host_has_capability(ni_dbus_object_t *host_object, const char *name
 }
 
 ni_dbus_object_t *
-ni_testbus_call_claim_host_by_name(const char *hostname, ni_dbus_object_t *container_object, const char *role)
+ni_testbus_client_claim_host_by_name(const char *hostname, ni_dbus_object_t *container_object, const char *role)
 {
 	ni_dbus_object_t *host_object;
 
@@ -592,7 +592,7 @@ ni_testbus_call_claim_host_by_name(const char *hostname, ni_dbus_object_t *conta
 	if (__ni_testbus_host_is_inuse(host_object, container_object))
 		return NULL;
 
-	if (!__ni_testbus_container_add_host(container_object, host_object->path, role)) {
+	if (!__ni_testbus_client_container_add_host(container_object, host_object->path, role)) {
 		ni_error("failed to claim host %s (%s) in role %s", hostname, host_object->path, role);
 		return NULL;
 	}
@@ -625,7 +625,7 @@ __ni_testbus_setup_host_signal_handler(void)
 	if (initialized)
 		return;
 
-	ni_dbus_client_add_signal_handler(ni_call_client,
+	ni_dbus_client_add_signal_handler(ni_testbus_client_handle,
 			NI_TESTBUS_DBUS_BUS_NAME,	/* sender */
 			NULL,				/* path */
 			NI_TESTBUS_HOST_INTERFACE,	/* interface */
@@ -682,7 +682,7 @@ ni_testbus_client_timeout_destroy(ni_testbus_client_timeout_t *timeout, unsigned
 }
 
 ni_dbus_object_t *
-ni_testbus_call_claim_host_by_capability(const char *capability, ni_dbus_object_t *container_object,
+ni_testbus_client_claim_host_by_capability(const char *capability, ni_dbus_object_t *container_object,
 						const char *role, ni_testbus_client_timeout_t *timeout)
 {
 	ni_dbus_object_t *host_base_object, *host_object;
@@ -694,7 +694,7 @@ ni_testbus_call_claim_host_by_capability(const char *capability, ni_dbus_object_
 	while (TRUE) {
 		match_count = 0;
 
-		host_base_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
+		host_base_object = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
 		if (!host_base_object)
 			return NULL;
 
@@ -705,7 +705,7 @@ ni_testbus_call_claim_host_by_capability(const char *capability, ni_dbus_object_
 				match_count++;
 
 				if (!__ni_testbus_host_is_inuse(host_object, container_object)) {
-					if (__ni_testbus_container_add_host(container_object, host_object->path, role)) {
+					if (__ni_testbus_client_container_add_host(container_object, host_object->path, role)) {
 						__ni_testbus_wait_cancel(timeout);
 						return host_object;
 					}
@@ -757,12 +757,12 @@ ni_testbus_agent_create(const char *bus_name)
 }
 
 ni_dbus_object_t *
-ni_testbus_call_get_agent(const char *hostname)
+ni_testbus_client_get_agent(const char *hostname)
 {
 	ni_dbus_object_t *host_base_object, *host;
 	const ni_dbus_service_t *service;
 
-	host_base_object = ni_testbus_call_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
+	host_base_object = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
 	if (!host_base_object)
 		return NULL;
 
@@ -848,7 +848,7 @@ ni_testbus_agent_add_environment(ni_dbus_object_t *host_object, const ni_var_arr
 	ni_var_t *var;
 
 	for (i = 0, var = array->data; i < array->count; ++i, ++var) {
-		if (!ni_testbus_call_setenv(host_object, var->name, var->value))
+		if (!ni_testbus_client_setenv(host_object, var->name, var->value))
 			return FALSE;
 	}
 
@@ -927,22 +927,22 @@ out_fail:
 }
 
 ni_dbus_object_t *
-ni_testbus_call_create_tempfile(const char *name, unsigned int mode, ni_dbus_object_t *parent)
+ni_testbus_client_create_tempfile(const char *name, unsigned int mode, ni_dbus_object_t *parent)
 {
 	ni_dbus_variant_t marg = NI_DBUS_VARIANT_INIT;
 	ni_dbus_object_t *result;
 
 	if (parent == NULL)
-		parent = ni_testbus_call_get_object_and_metadata(NI_TESTBUS_GLOBAL_CONTEXT_PATH);
+		parent = ni_testbus_client_get_object_and_metadata(NI_TESTBUS_GLOBAL_CONTEXT_PATH);
 
 	ni_dbus_variant_set_uint32(&marg, mode);
-	result = __ni_testbus_container_create_child(parent, "createFile", name, &marg);
+	result = __ni_testbus_client_container_create_child(parent, "createFile", name, &marg);
 	ni_dbus_variant_destroy(&marg);
 	return result;
 }
 
 ni_bool_t
-__ni_testbus_call_upload_file(ni_dbus_object_t *file_object, ni_buffer_t *buffer)
+__ni_testbus_client_upload_file(ni_dbus_object_t *file_object, ni_buffer_t *buffer)
 {
 	while (ni_buffer_count(buffer)) {
 		DBusError error = DBUS_ERROR_INIT;
@@ -967,15 +967,15 @@ __ni_testbus_call_upload_file(ni_dbus_object_t *file_object, ni_buffer_t *buffer
 }
 
 ni_bool_t
-ni_testbus_call_upload_file(ni_dbus_object_t *file_object, const ni_buffer_t *buffer)
+ni_testbus_client_upload_file(ni_dbus_object_t *file_object, const ni_buffer_t *buffer)
 {
 	ni_buffer_t copy = *buffer;
 
-	return __ni_testbus_call_upload_file(file_object, &copy);
+	return __ni_testbus_client_upload_file(file_object, &copy);
 }
 
 ni_buffer_t *
-ni_testbus_call_download_file(ni_dbus_object_t *file_object)
+ni_testbus_client_download_file(ni_dbus_object_t *file_object)
 {
 	static const unsigned int ioblksize = 4096;
 	DBusError error = DBUS_ERROR_INIT;
@@ -983,7 +983,7 @@ ni_testbus_call_download_file(ni_dbus_object_t *file_object)
 	ni_buffer_t *result = NULL;
 	uint64_t offset = 0;
 
-	ni_debug_wicked("ni_testbus_call_download_file(%s)", file_object->path);
+	ni_debug_wicked("ni_testbus_client_download_file(%s)", file_object->path);
 	result = ni_buffer_new(0);
 	while (TRUE) {
 		ni_dbus_variant_t argv[2];
@@ -1032,7 +1032,7 @@ out_fail:
  * Create a command
  */
 ni_dbus_object_t *
-ni_testbus_call_create_command(ni_dbus_object_t *container_object, const ni_string_array_t *cmd_args)
+ni_testbus_client_create_command(ni_dbus_object_t *container_object, const ni_string_array_t *cmd_args)
 {
 	DBusError error = DBUS_ERROR_INIT;
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
@@ -1053,11 +1053,11 @@ ni_testbus_call_create_command(ni_dbus_object_t *container_object, const ni_stri
 }
 
 ni_bool_t
-ni_testbus_call_command_add_file(ni_dbus_object_t *cmd_object, const char *name, const ni_buffer_t *data, unsigned int mode)
+ni_testbus_client_command_add_file(ni_dbus_object_t *cmd_object, const char *name, const ni_buffer_t *data, unsigned int mode)
 {
 	ni_dbus_object_t *file_object;
 
-	file_object = ni_testbus_call_create_tempfile(name, mode, cmd_object);
+	file_object = ni_testbus_client_create_tempfile(name, mode, cmd_object);
 	if (!file_object) {
 		ni_error("%s: unable to create input file \"%s\"", cmd_object->path, name);
 		return FALSE;
@@ -1067,7 +1067,7 @@ ni_testbus_call_command_add_file(ni_dbus_object_t *cmd_object, const char *name,
 		ni_buffer_t data_copy;
 
 		data_copy = *data; /* Need to copy data to allow advancing the head pointer */
-		if (!__ni_testbus_call_upload_file(file_object, &data_copy))
+		if (!__ni_testbus_client_upload_file(file_object, &data_copy))
 			return FALSE;
 	}
 
@@ -1270,7 +1270,7 @@ __ni_testbus_setup_process_handling(void)
 	if (initialized)
 		return;
 
-	ni_dbus_client_add_signal_handler(ni_call_client,
+	ni_dbus_client_add_signal_handler(ni_testbus_client_handle,
 			NI_TESTBUS_DBUS_BUS_NAME,	/* sender */
 			NULL,				/* path */
 			NI_TESTBUS_PROCESS_INTERFACE,	/* interface */
@@ -1284,7 +1284,7 @@ __ni_testbus_setup_process_handling(void)
  * Run a command on a remote host
  */
 ni_dbus_object_t *
-ni_testbus_call_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *cmd_object)
+ni_testbus_client_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *cmd_object)
 {
 	DBusError error = DBUS_ERROR_INIT;
 	ni_testbus_wait_queue_t spurious_queue = { .head = NULL };
@@ -1318,7 +1318,7 @@ ni_testbus_call_host_run(ni_dbus_object_t *host_object, const ni_dbus_object_t *
 		}
 		__ni_testbus_process_wait(object_path);
 
-		result = ni_testbus_call_get_and_refresh_object(object_path);
+		result = ni_testbus_client_get_and_refresh_object(object_path);
 	}
 
 failed:
@@ -1364,7 +1364,7 @@ ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_p
  * Callback from agent to master: process has exited
  */
 ni_bool_t
-ni_testbus_call_process_exit(ni_dbus_object_t *proc_object, const ni_process_exit_info_t *exit_info)
+ni_testbus_client_process_exit(ni_dbus_object_t *proc_object, const ni_process_exit_info_t *exit_info)
 {
 	DBusError error = DBUS_ERROR_INIT;
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
@@ -1391,7 +1391,7 @@ failed:
  * shut down a remote host
  */
 ni_bool_t
-ni_testbus_call_host_shutdown(ni_dbus_object_t *host_object, ni_bool_t reboot)
+ni_testbus_client_host_shutdown(ni_dbus_object_t *host_object, ni_bool_t reboot)
 {
 	const char *method_name = reboot? "reboot" : "shutdown";
 	DBusError error = DBUS_ERROR_INIT;

@@ -102,11 +102,11 @@ ni_testbus_agent_download_file(ni_testbus_file_t *file)
 		return FALSE;
 
 	ni_debug_wicked("need to download file %s (inum %u)", file->name, file->inum);
-	file_object = ni_testbus_call_get_and_refresh_object(file->object_path);
+	file_object = ni_testbus_client_get_and_refresh_object(file->object_path);
 	if (!file_object)
 		return FALSE;
 		
-	file->data = ni_testbus_call_download_file(file_object);
+	file->data = ni_testbus_client_download_file(file_object);
 	if (file->data == NULL)
 		return FALSE;
 

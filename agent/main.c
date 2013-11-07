@@ -422,9 +422,9 @@ ni_testbus_agent_upload_output(ni_dbus_object_t *proc_object, const char *filena
 		return;
 
 	if (file && file->object_path) {
-		file_object = ni_testbus_call_get_and_refresh_object(file->object_path);
+		file_object = ni_testbus_client_get_and_refresh_object(file->object_path);
 	} else {
-		file_object = ni_testbus_call_create_tempfile(filename, NI_TESTBUS_FILE_READ, proc_object);
+		file_object = ni_testbus_client_create_tempfile(filename, NI_TESTBUS_FILE_READ, proc_object);
 		if (file_object == NULL)
 			goto failed;
 	}
@@ -432,7 +432,7 @@ ni_testbus_agent_upload_output(ni_dbus_object_t *proc_object, const char *filena
 	ni_debug_wicked("%s(%s, %s, %u bytes)", __func__, proc_object->path, filename,
 			ni_buffer_chain_count(*chain));
 	while ((bp = ni_buffer_chain_get_next(chain)) != NULL) {
-		if (!ni_testbus_call_upload_file(file_object, bp)) {
+		if (!ni_testbus_client_upload_file(file_object, bp)) {
 			ni_buffer_free(bp);
 			goto failed;
 		}
@@ -497,12 +497,12 @@ __ni_testbus_process_exit_notify(ni_process_t *pi)
 	ni_trace("process %s exited", ctx->object_path);
 	ni_process_get_exit_info(pi, &exit_info);
 
-	proc_object = ni_testbus_call_get_and_refresh_object(ctx->object_path);
+	proc_object = ni_testbus_client_get_and_refresh_object(ctx->object_path);
 
 	ni_testbus_agent_upload_output(proc_object, "stdout", &ctx->stdout.buffers, ctx->stdout.file);
 	ni_testbus_agent_upload_output(proc_object, "stderr", &ctx->stderr.buffers, ctx->stderr.file);
 
-	ni_testbus_call_process_exit(proc_object, &exit_info);
+	ni_testbus_client_process_exit(proc_object, &exit_info);
 
 	__ni_testbus_process_context_free(ctx);
 	pi->user_data = NULL;
@@ -777,13 +777,13 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 		ni_fatal("Cannot create server, giving up.");
 
 	dbus_client = ni_dbus_server_create_shared_client(dbus_server, NI_TESTBUS_DBUS_BUS_NAME);
-	ni_call_init_client(dbus_client);
+	ni_testbus_client_init(dbus_client);
 
 	ni_debug_wicked("Testbus agent starting");
 	if (!opt_reconnect) {
-		host_object = ni_testbus_call_create_host(state->hostname);
+		host_object = ni_testbus_client_create_host(state->hostname);
 	} else {
-		host_object = ni_testbus_call_reconnect_host(state->hostname, &state->uuid);
+		host_object = ni_testbus_client_reconnect_host(state->hostname, &state->uuid);
 	}
 
 	if (host_object == NULL)
