@@ -153,7 +153,7 @@ __ni_Testbus_Agent_Filesystem_upload(ni_dbus_object_t *object, const ni_dbus_met
 		goto out_fail;
 	}
 
-	ni_buffer_init(&wbuf, argv[2].byte_array_value, argv[2].array.len);
+	ni_buffer_init_reader(&wbuf, argv[2].byte_array_value, argv[2].array.len);
 	while (ni_buffer_count(&wbuf)) {
 		int n;
 
