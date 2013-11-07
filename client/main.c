@@ -757,15 +757,17 @@ do_shutdown(int argc, char **argv)
 }
 
 static int
-do_retrieve_file(int argc, char **argv)
+do_download_file(int argc, char **argv)
 {
-	enum  { OPT_HELP, };
+	enum  { OPT_HELP, OPT_HOST, OPT_CONTEXT };
 	static struct option local_options[] = {
 		{ "help", no_argument, NULL, OPT_HELP },
+		{ "host", required_argument, NULL, OPT_HOST },
+		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ NULL }
 	};
-	const char *hostname, *pathname;
-	ni_dbus_object_t *agent_object;
+	const char *opt_hostname = NULL;
+	const char *opt_context = NULL;
 	int c;
 
 	optind = 1;
@@ -775,28 +777,63 @@ do_retrieve_file(int argc, char **argv)
 		case OPT_HELP:
 		usage:
 			fprintf(stderr,
-				"testbus [options] retrieve-file hostname path\n"
+				"testbus [options] download-file remote-path local-path\n"
 				"\nSupported options:\n"
+				"  --host <hostname>\n"
+				"      Specify the host to download the file from. A testbus agent\n"
+				"      must be running on the remote host.\n"
 				"  --help\n"
 				"      Show this help text.\n"
 				);
 			return 1;
+
+		case OPT_HOST:
+			opt_hostname = optarg;
+			break;
+
+		case OPT_CONTEXT:
+			opt_context = optarg;
+			break;
 		}
 	}
 
-	if (optind > argc - 2)
+	if ((!opt_hostname) ^ !(opt_context)) {
+		ni_error("You must specify exactly one --host or --context option");
 		goto usage;
-	hostname = argv[optind++];
+	}
 
-	agent_object = ni_testbus_client_get_agent(hostname);
-	if (agent_object == NULL)
+	if (opt_hostname) {
+		ni_dbus_object_t *agent_object;
+		const char *remote_path, *local_path;
+		ni_buffer_t *data;
+		int written;
+
+		if (optind > argc - 2)
+			goto usage;
+		remote_path = argv[optind++];
+		local_path = argv[optind++];
+
+		agent_object = ni_testbus_client_get_agent(opt_hostname);
+		if (agent_object == NULL)
+			return 1;
+
+		ni_debug_wicked("created agent handle");
+		data = ni_testbus_client_agent_download_file(agent_object, remote_path);
+		if (data == NULL) {
+			ni_error("Unable to download \"%s\" from %s", remote_path, opt_hostname);
+			return 1;
+		}
+
+		written = ni_file_write_path(local_path, data);
+		ni_buffer_free(data);
+
+		if (written < 0) {
+			ni_error("error writing \"%s\"", local_path);
+			return 1;
+		}
+	} else {
+		ni_error("download from container object not yet implemented");
 		return 1;
-
-	ni_debug_wicked("created agent handle");
-	while (optind < argc) {
-		pathname = argv[optind++];
-
-		ni_testbus_agent_retrieve_file(agent_object, pathname);
 	}
 
 	return 0;
@@ -859,6 +896,7 @@ do_upload_file(int argc, char **argv)
 		const char *local_path, *remote_path;
 		ni_dbus_object_t *agent_object;
 		ni_buffer_t *data;
+		ni_bool_t rv;
 
 		if (optind != argc - 2)
 			goto usage;
@@ -873,8 +911,16 @@ do_upload_file(int argc, char **argv)
 		if (!data)
 			return 1;
 
-		ni_fatal("Upload to agent not yet implemented");
-		(void) remote_path;
+		rv = ni_testbus_client_agent_upload_file(agent_object, remote_path, data);
+		ni_buffer_free(data);
+
+		if (!rv) {
+			ni_error("error uploading \"%s\" to \"%s\" on %s",
+					local_path, remote_path, opt_hostname);
+			return 1;
+		}
+
+		return 0;
 	} else {
 		const char *local_path, *identifier;
 		ni_dbus_object_t *context_object, *file_object;
@@ -1385,7 +1431,7 @@ static struct client_command	client_command_table[] = {
 	{ "create-host",	do_create_host		},
 	{ "remove-host",	do_remove_host		},
 	{ "create-test",	do_create_test		},
-	{ "retrieve-file",	do_retrieve_file	},
+	{ "download-file",	do_download_file	},
 	{ "upload-file",	do_upload_file		},
 	{ "claim-host",		do_claim_host		},
 	{ "create-command",	do_create_command	},

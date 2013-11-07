@@ -12,5 +12,6 @@
 TESTBUS_CLAIM_TIMEOUT=240
 
 testbus_init_test $0
-testbus_claim_host
+TESTBUS_HOST=`testbus_claim_host`
+testbus_upload_file $TESTBUS_HOST /etc/SuSE-release /etc/upload-test
 testbus_exit

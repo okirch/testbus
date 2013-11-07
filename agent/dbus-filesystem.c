@@ -55,11 +55,11 @@ __ni_Testbus_Agent_Filesystem_getInfo(ni_dbus_object_t *object, const ni_dbus_me
 __NI_TESTBUS_METHOD_BINDING(Agent_Filesystem, getInfo, NI_TESTBUS_NAMESPACE ".Agent.Filesystem");
 
 /*
- * Filesystem.retrieve(path, offset, count)
+ * Filesystem.download(path, offset, count)
  *
  */
 static dbus_bool_t
-__ni_Testbus_Agent_Filesystem_retrieve(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+__ni_Testbus_Agent_Filesystem_download(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 		unsigned int argc, const ni_dbus_variant_t *argv,
 		ni_dbus_message_t *reply, DBusError *error)
 {
@@ -118,11 +118,74 @@ out_fail:
 	return FALSE;
 }
 
-__NI_TESTBUS_METHOD_BINDING(Agent_Filesystem, retrieve, NI_TESTBUS_NAMESPACE ".Agent.Filesystem");
+__NI_TESTBUS_METHOD_BINDING(Agent_Filesystem, download, NI_TESTBUS_NAMESPACE ".Agent.Filesystem");
+
+/*
+ * Tmpfile.upload(path, offset, data)
+ */
+static dbus_bool_t
+__ni_Testbus_Agent_Filesystem_upload(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_buffer_t wbuf;
+	const char *path;
+	uint64_t offset;
+	unsigned int written = 0;
+	int fd, oflags;
+
+	if (argc != 3
+	 || !ni_dbus_variant_get_string(&argv[0], &path) || path[0] != '/'
+	 || !ni_dbus_variant_get_uint64(&argv[1], &offset)
+	 || !ni_dbus_variant_is_byte_array(&argv[2]))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	oflags = O_WRONLY;
+	if (offset == 0)
+		oflags |= O_CREAT|O_TRUNC;
+	if ((fd = open(path, oflags)) < 0) {
+		ni_dbus_set_error_from_errno(error, errno, "unable to open file \"%s\"", path);
+		return FALSE;
+	}
+	if (lseek(fd, offset, SEEK_SET) < 0) {
+		ni_dbus_set_error_from_errno(error, errno, "seek faile");
+		goto out_fail;
+	}
+
+	ni_buffer_init(&wbuf, argv[2].byte_array_value, argv[2].array.len);
+	while (ni_buffer_count(&wbuf)) {
+		int n;
+
+		n = write(fd, ni_buffer_head(&wbuf), ni_buffer_count(&wbuf));
+		if (n < 0) {
+			ni_dbus_set_error_from_errno(error, errno,
+						"error writing to \"%s\" at offset %Lu",
+						path, (unsigned long long) offset + written);
+			goto out_fail;
+		}
+
+		ni_buffer_pull_head(&wbuf, n);
+		written += n;
+	}
+
+	close(fd);
+
+	ni_debug_wicked("%s: wrote %u bytes at offset %Lu",
+			path, written, (unsigned long long) offset);
+	return TRUE;
+
+out_fail:
+	if (fd >= 0)
+		close(fd);
+	return FALSE;
+}
+
+static NI_TESTBUS_METHOD_BINDING(Agent_Filesystem, upload);
 
 void
 ni_testbus_bind_builtin_filesystem(void)
 {
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Agent_Filesystem_getInfo_binding);
-	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Agent_Filesystem_retrieve_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Agent_Filesystem_download_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Agent_Filesystem_upload_binding);
 }

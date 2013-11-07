@@ -1627,6 +1627,23 @@ ni_file_write(FILE *fp, const ni_buffer_t *wbuf)
 	return written;
 }
 
+int
+ni_file_write_path(const char *pathname, const ni_buffer_t *data)
+{
+	FILE *fp;
+	int written;
+
+	if (!(fp = fopen(pathname, "w"))) {
+		ni_error("unable to open \"%s\" for writing: %m", pathname);
+		return -1;
+	}
+
+	written = ni_file_write(fp, data);
+	fclose(fp);
+
+	return written;
+}
+
 ni_buffer_t *
 ni_file_read(FILE *fp)
 {

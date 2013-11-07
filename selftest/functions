@@ -177,6 +177,14 @@ function __testbus_upload_file {
 	testbus_call upload-file "$@"
 }
 
+function testbus_upload_file {
+
+	testbus_trace "upload file $*"
+
+	host=$1; shift
+	testbus_call upload-file --host $host "$@"
+}
+
 function testbus_run_command {
 
 	testbus_trace "run command $*"

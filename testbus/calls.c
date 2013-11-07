@@ -425,16 +425,18 @@ ni_testbus_client_create_test(const char *name, ni_dbus_object_t *parent)
 	return __ni_testbus_client_container_create_child(parent, "createTest", name, NULL);
 }
 
-static const ni_dbus_service_t *
-__ni_testbus_host_service(void)
+static inline ni_bool_t
+__match_string_property(const ni_dbus_object_t *object, const ni_dbus_service_t *service, const char *name, const char *match_value)
 {
-	static const ni_dbus_service_t *service;
+	const ni_dbus_variant_t *var;
+	const char *property_value;
 
-	if (!service) {
-		service = ni_objectmodel_service_by_name(NI_TESTBUS_HOST_INTERFACE);
-		ni_assert(service);
-	}
-	return service;
+	var = ni_dbus_object_get_cached_property(object, name, service);
+	if (var == NULL)
+		return FALSE;
+	if (!ni_dbus_variant_get_string(var, &property_value))
+		return FALSE;
+	return ni_string_eq(match_value, property_value);
 }
 
 static const ni_dbus_variant_t *
@@ -442,7 +444,7 @@ __ni_testbus_host_get_cached_property(const ni_dbus_object_t *host_object, const
 {
 	const ni_dbus_variant_t *var = NULL;
 
-	var = ni_dbus_object_get_cached_property(host_object, name, __ni_testbus_host_service());
+	var = ni_dbus_object_get_cached_property(host_object, name, ni_testbus_host_interface());
 	if (var == NULL) {
 		ni_debug_wicked("host %s has no property named %s", host_object->path, name);
 		return NULL;
@@ -756,40 +758,50 @@ ni_testbus_agent_create(const char *bus_name)
 	return object;
 }
 
+/*
+ * Given a hostname or object handle, return an agent object
+ */
+static ni_dbus_object_t *
+__ni_testbus_client_agent_for_host(const ni_dbus_object_t *host, const char *hostname)
+{
+	const ni_dbus_variant_t *var;
+	const char *value;
+
+	var = ni_dbus_object_get_cached_property(host, "agent", ni_testbus_host_interface());
+	if (var == NULL || !ni_dbus_variant_get_string(var, &value)) {
+		ni_error("host has no owner property");
+		return FALSE;
+	}
+	if (!value || !*value) {
+		ni_error("host %s: no agent running", hostname);
+		return NULL;
+	}
+	ni_debug_wicked("agent bus name for %s is %s", hostname, value);
+	return ni_testbus_agent_create(value);
+}
+
 ni_dbus_object_t *
 ni_testbus_client_get_agent(const char *hostname)
 {
 	ni_dbus_object_t *host_base_object, *host;
 	const ni_dbus_service_t *service;
 
+	if (!strncasecmp(hostname, NI_TESTBUS_HOST_BASE_PATH, sizeof(NI_TESTBUS_HOST_BASE_PATH) - 1)) {
+		host = ni_testbus_client_get_and_refresh_object(hostname);
+		return __ni_testbus_client_agent_for_host(host, hostname);
+	}
+
 	host_base_object = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOST_BASE_PATH);
 	if (!host_base_object)
 		return NULL;
 
-	service = ni_objectmodel_service_by_name(NI_TESTBUS_HOST_INTERFACE);
+	service = ni_testbus_host_interface();
 	ni_assert(service);
 
 	for (host = host_base_object->children; host; host = host->next) {
-		const ni_dbus_variant_t *var = NULL;
-		const char *value;
-
-		var = ni_dbus_object_get_cached_property(host, "name", service);
-		if (var == NULL || !ni_dbus_variant_get_string(var, &value))
-			continue;
-
-		if (ni_string_eq(hostname, value)) {
-			ni_debug_wicked("host %s object path %s", hostname, host->path);
-			var = ni_dbus_object_get_cached_property(host, "agent", service);
-			if (var == NULL || !ni_dbus_variant_get_string(var, &value)) {
-				ni_error("host has no owner property");
-				return FALSE;
-			}
-			if (!value || !*value) {
-				ni_error("host %s: no agent running", hostname);
-				return NULL;
-			}
-			return ni_testbus_agent_create(value);
-		}
+		if (__match_string_property(host, service, "name", hostname)
+		 || __match_string_property(host, service, "role", hostname))
+			return __ni_testbus_client_agent_for_host(host, hostname);
 	}
 
 	ni_error("host %s: no host by that name", hostname);
@@ -856,10 +868,10 @@ ni_testbus_agent_add_environment(ni_dbus_object_t *host_object, const ni_var_arr
 }
 
 /*
- * Client function: retrieve a file directly from an agent's file system
+ * Client function: download a file directly from an agent's file system
  */
 ni_buffer_t *
-ni_testbus_agent_retrieve_file(ni_dbus_object_t *agent, const char *path)
+ni_testbus_client_agent_download_file(ni_dbus_object_t *agent, const char *path)
 {
 	DBusError error = DBUS_ERROR_INIT;
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
@@ -895,14 +907,14 @@ ni_testbus_agent_retrieve_file(ni_dbus_object_t *agent, const char *path)
 		ni_dbus_variant_set_uint32(&argv[2], 4096);
 
 		ni_dbus_variant_destroy(&res);
-		if (!ni_dbus_object_call_variant(filesystem, NULL, "retrieve", 3, argv, 1, &res, &error)) {
+		if (!ni_dbus_object_call_variant(filesystem, NULL, "download", 3, argv, 1, &res, &error)) {
 			ni_dbus_variant_vector_destroy(argv, 3);
 			goto out_fail;
 		}
 		ni_dbus_variant_vector_destroy(argv, 3);
 
 		if (!ni_dbus_variant_is_byte_array(&res)) {
-			ni_error("incompatible return type in Filesystem.retrieve()");
+			ni_error("incompatible return type in Filesystem.download()");
 			goto out_fail;
 		}
 
@@ -913,7 +925,7 @@ ni_testbus_agent_retrieve_file(ni_dbus_object_t *agent, const char *path)
 		offset += count;
 	}
 
-	ni_debug_wicked("%s: retrieved %u bytes", path, ni_buffer_count(result));
+	ni_debug_wicked("%s: downloaded %u bytes", path, ni_buffer_count(result));
 
 out:
 	ni_dbus_variant_destroy(&arg);
@@ -924,6 +936,50 @@ out_fail:
 	ni_buffer_free(result);
 	result = NULL;
 	goto out;
+}
+
+/*
+ * Client function: upload a file directly to an agent's file system
+ */
+ni_bool_t
+ni_testbus_client_agent_upload_file(ni_dbus_object_t *agent, const char *path, const ni_buffer_t *wbuf)
+{
+	DBusError error = DBUS_ERROR_INIT;
+	ni_buffer_t data = *wbuf;
+	ni_dbus_object_t *filesystem;
+	uint64_t offset = 0;
+
+	filesystem = ni_dbus_object_create(agent, NI_TESTBUS_AGENT_FS_PATH, ni_testbus_filesystem_class(), NULL);
+	ni_objectmodel_bind_compatible_interfaces(filesystem);
+
+	while (ni_buffer_count(&data)) {
+		static const unsigned int wblksz = 4096;
+		ni_dbus_variant_t argv[3];
+		unsigned int count;
+
+		count = ni_buffer_count(&data);
+		if (count > wblksz)
+			count = wblksz;
+
+		ni_dbus_variant_vector_init(argv, 3);
+		ni_dbus_variant_set_string(&argv[0], path);
+		ni_dbus_variant_set_uint64(&argv[1], offset);
+		ni_dbus_variant_set_byte_array(&argv[2], ni_buffer_head(&data), count);
+
+		if (!ni_dbus_object_call_variant(filesystem, NULL, "upload", 3, argv, 0, NULL, &error)) {
+			ni_dbus_print_error(&error, "%s.upload(%s, %Lu, %u) failed", filesystem->path, path,
+							(unsigned long long) offset, count);
+			dbus_error_free(&error);
+			ni_dbus_variant_vector_destroy(argv, 3);
+			return FALSE;
+		}
+		ni_dbus_variant_vector_destroy(argv, 3);
+
+		ni_buffer_pull_head(&data, count);
+	}
+
+	ni_debug_wicked("%s: uploaded %u bytes", path, ni_buffer_count(wbuf));
+	return TRUE;
 }
 
 ni_dbus_object_t *
