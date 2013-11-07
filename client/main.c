@@ -797,7 +797,7 @@ do_download_file(int argc, char **argv)
 		}
 	}
 
-	if ((!opt_hostname) ^ !(opt_context)) {
+	if (!((!opt_hostname) ^ (!opt_context))) {
 		ni_error("You must specify exactly one --host or --context option");
 		goto usage;
 	}
@@ -919,8 +919,6 @@ do_upload_file(int argc, char **argv)
 					local_path, remote_path, opt_hostname);
 			return 1;
 		}
-
-		return 0;
 	} else {
 		const char *local_path, *identifier;
 		ni_dbus_object_t *context_object, *file_object;
