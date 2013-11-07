@@ -132,7 +132,7 @@ __ni_Testbus_Agent_Filesystem_upload(ni_dbus_object_t *object, const ni_dbus_met
 	const char *path;
 	uint64_t offset;
 	unsigned int written = 0;
-	int fd, oflags;
+	int fd;
 
 	if (argc != 3
 	 || !ni_dbus_variant_get_string(&argv[0], &path) || path[0] != '/'
@@ -140,10 +140,11 @@ __ni_Testbus_Agent_Filesystem_upload(ni_dbus_object_t *object, const ni_dbus_met
 	 || !ni_dbus_variant_is_byte_array(&argv[2]))
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
-	oflags = O_WRONLY;
 	if (offset == 0)
-		oflags |= O_CREAT|O_TRUNC;
-	if ((fd = open(path, oflags)) < 0) {
+		fd = open(path, O_CREAT|O_TRUNC|O_WRONLY, 0644);
+	else
+		fd = open(path, O_WRONLY);
+	if (fd < 0) {
 		ni_dbus_set_error_from_errno(error, errno, "unable to open file \"%s\"", path);
 		return FALSE;
 	}
