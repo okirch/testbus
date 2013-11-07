@@ -14,7 +14,7 @@
 <service name="file" interface="org.opensuse.Testbus.Tmpfile" object-class="file">
   <define name="properties" class="dict">
     <name type="string" />
-    <size type="uint64" />
+    <size type="uint32" />
   </define>
 
   <method name="append">
