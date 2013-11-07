@@ -782,8 +782,12 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	ni_debug_wicked("Testbus agent starting");
 	if (!opt_reconnect) {
 		host_object = ni_testbus_client_create_host(state->hostname);
+		/* FIXME: set the drop-on-disconnect property */
 	} else {
-		host_object = ni_testbus_client_reconnect_host(state->hostname, &state->uuid);
+		if (ni_uuid_is_null(&state->uuid))
+			host_object = ni_testbus_client_create_host(state->hostname);
+		else
+			host_object = ni_testbus_client_reconnect_host(state->hostname, &state->uuid);
 	}
 
 	if (host_object == NULL)

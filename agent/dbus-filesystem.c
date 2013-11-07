@@ -180,7 +180,7 @@ out_fail:
 	return FALSE;
 }
 
-static NI_TESTBUS_METHOD_BINDING(Agent_Filesystem, upload);
+__NI_TESTBUS_METHOD_BINDING(Agent_Filesystem, upload, NI_TESTBUS_NAMESPACE ".Agent.Filesystem");
 
 void
 ni_testbus_bind_builtin_filesystem(void)
