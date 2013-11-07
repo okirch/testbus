@@ -345,8 +345,6 @@ __ni_dbus_object_manager_get_managed_objects(ni_dbus_object_t *object,
 	ni_dbus_variant_t obj_dict = NI_DBUS_VARIANT_INIT;
 	int rv = TRUE;
 
-	NI_TRACE_ENTER_ARGS("path=%s, method=%s", object->path, method->name);
-
 	ni_dbus_variant_init_dict(&obj_dict);
 	rv = __ni_dbus_object_manager_enumerate_object(object, &obj_dict, error);
 	if (rv)
@@ -357,7 +355,7 @@ __ni_dbus_object_manager_get_managed_objects(ni_dbus_object_t *object,
 }
 
 static ni_dbus_method_t	__ni_dbus_object_manager_methods[] = {
-	{ "GetManagedObjects",		NULL,		__ni_dbus_object_manager_get_managed_objects },
+	{ "GetManagedObjects",		NULL,		__ni_dbus_object_manager_get_managed_objects, .suppress_logging = TRUE },
 	{ NULL }
 };
 
@@ -666,7 +664,6 @@ __ni_dbus_object_message(DBusConnection *conn, DBusMessage *call, void *user_dat
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
 
-	ni_debug_dbus("%s(path=%s, interface=%s, method=%s) called", __FUNCTION__, object->path, interface, method_name);
 	svc = ni_dbus_object_get_service(object, interface);
 	if (svc == NULL) {
 		ni_debug_dbus("Unsupported service %s on object %s", interface, object->path);
@@ -689,6 +686,9 @@ __ni_dbus_object_message(DBusConnection *conn, DBusMessage *call, void *user_dat
 		ni_dbus_method_call_ctx_t call_ctx;
 		ni_dbus_variant_t argv[16];
 		int argc = 0;
+
+		if (!method->suppress_logging)
+			ni_debug_dbus("%s(path=%s, interface=%s, method=%s) called", __FUNCTION__, object->path, interface, method_name);
 
 		memset(argv, 0, sizeof(argv));
 		if (method->call_signature) {

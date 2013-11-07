@@ -107,6 +107,8 @@ struct ni_dbus_method {
 	ni_dbus_async_method_handler_t *async_handler;
 	ni_dbus_async_method_completion_t *async_completion;
 
+	ni_bool_t		suppress_logging;
+
 	const ni_xs_method_t *	schema;
 };
 
