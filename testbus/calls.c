@@ -796,6 +796,10 @@ ni_testbus_call_get_agent(const char *hostname)
 	return NULL;
 }
 
+/*
+ * This is function is called by the agent to register a capability
+ * with the master.
+ */
 ni_bool_t
 ni_testbus_agent_add_capability(ni_dbus_object_t *host_object, const char *cap)
 {
@@ -816,6 +820,10 @@ ni_testbus_agent_add_capability(ni_dbus_object_t *host_object, const char *cap)
 	return rv;
 }
 
+/*
+ * This is function is called by the agent to register a list of capabilities
+ * with the master.
+ */
 ni_bool_t
 ni_testbus_agent_add_capabilities(ni_dbus_object_t *host_object, const ni_string_array_t *array)
 {
@@ -829,6 +837,10 @@ ni_testbus_agent_add_capabilities(ni_dbus_object_t *host_object, const ni_string
 	return TRUE;
 }
 
+/*
+ * This is function is called by the agent to add variables to the host's environment
+ * in the master.
+ */
 ni_bool_t
 ni_testbus_agent_add_environment(ni_dbus_object_t *host_object, const ni_var_array_t *array)
 {
@@ -843,6 +855,9 @@ ni_testbus_agent_add_environment(ni_dbus_object_t *host_object, const ni_var_arr
 	return TRUE;
 }
 
+/*
+ * Client function: retrieve a file directly from an agent's file system
+ */
 ni_buffer_t *
 ni_testbus_agent_retrieve_file(ni_dbus_object_t *agent, const char *path)
 {
