@@ -20,6 +20,8 @@ ni_testbus_global_context(void)
 	if (__ni_testbus_global_context == NULL) {
 		__ni_testbus_global_context = ni_malloc(sizeof(*__ni_testbus_global_context));
 		__ni_testbus_global_context->ops = &ni_testbus_global_context_ops;
+		__ni_testbus_global_context->refcount = 1;
+		ni_string_dup(&__ni_testbus_global_context->name, "globalcontext");
 	}
 	return __ni_testbus_global_context;
 }
@@ -128,23 +130,27 @@ ni_testbus_container_set_owner(ni_testbus_container_t *container, ni_testbus_con
 /*
  * Remove a child from a container
  */
-void
+ni_bool_t
 ni_testbus_container_remove_child(ni_testbus_container_t *container, ni_testbus_container_t *parent)
 {
+	ni_bool_t rv;
+
 	if (ni_testbus_container_isa_host(container)) {
-		ni_testbus_host_array_remove(&parent->hosts, ni_testbus_host_cast(container));
+		rv = ni_testbus_host_array_remove(&parent->hosts, ni_testbus_host_cast(container));
 	} else
 	if (ni_testbus_container_isa_testcase(container)) {
-		ni_testbus_test_array_remove(&parent->tests, ni_testbus_testcase_cast(container));
+		rv = ni_testbus_test_array_remove(&parent->tests, ni_testbus_testcase_cast(container));
 	} else
 	if (ni_testbus_container_isa_command(container)) {
-		ni_testbus_command_array_remove(&parent->commands, ni_testbus_command_cast(container));
+		rv = ni_testbus_command_array_remove(&parent->commands, ni_testbus_command_cast(container));
 	} else
 	if (ni_testbus_container_isa_process(container)) {
-		ni_testbus_process_array_remove(&parent->processes, ni_testbus_process_cast(container));
+		rv = ni_testbus_process_array_remove(&parent->processes, ni_testbus_process_cast(container));
 	} else {
 		ni_fatal("Don't know how to remove container from parent");
 	}
+
+	return rv;
 }
 
 /*
@@ -190,10 +196,11 @@ ni_testbus_container_release_owned(ni_testbus_container_t *container, const ni_t
 		if (child->owner == owner) {
 			child->owner = NULL;
 
-			/* The object may be unregistered/destroyed as part of this.  */
+			/* The object may be unregistered/destroyed as part of this.
+			 * Note, it is not being deleted - it's safe to access
+			 * it afterwards. */
 			if (child->ops->release)
 				child->ops->release(child);
-			child->owner = NULL;
 		}
 		if (child->refcount > 1)
 			ni_testbus_container_release_owned(child, owner);
@@ -212,7 +219,8 @@ ni_testbus_container_destroy(ni_testbus_container_t *container)
 		ni_testbus_container_t *parent = container->parent;
 
 		container->parent = NULL;
-		ni_testbus_container_remove_child(container, parent);
+		if (!ni_testbus_container_remove_child(container, parent))
+			ni_warn("Unable to remove %s from container %s", container->trace_name, parent->trace_name);
 	}
 
 	ni_testbus_container_release_owned(ni_testbus_global_context(), container);

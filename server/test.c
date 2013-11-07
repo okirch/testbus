@@ -86,6 +86,7 @@ ni_testbus_test_array_destroy(ni_testbus_test_array_t *array)
 	}
 
 	free(temp.data);
+	memset(array, 0, sizeof(*array));
 }
 
 void
@@ -117,7 +118,7 @@ ni_testbus_test_array_take_at(ni_testbus_test_array_t *array, unsigned int index
 
 	taken = array->data[index];
 
-	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
+	memmove(&array->data[index], &array->data[index+1], (array->count - (index + 1)) * sizeof(array->data[0]));
 	array->count --;
 
 	return taken;

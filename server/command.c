@@ -102,7 +102,7 @@ ni_testbus_command_array_take_at(ni_testbus_command_array_t *array, unsigned int
 
 	taken = array->data[index];
 
-	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
+	memmove(&array->data[index], &array->data[index+1], (array->count - (index + 1)) * sizeof(array->data[0]));
 	array->count --;
 
 	return taken;
@@ -341,6 +341,7 @@ ni_testbus_process_array_destroy(ni_testbus_process_array_t *array)
 		ni_testbus_process_put(cmd);
 	}
 	free(temp.data);
+	memset(array, 0, sizeof(*array));
 }
 
 void
@@ -372,7 +373,7 @@ ni_testbus_process_array_take_at(ni_testbus_process_array_t *array, unsigned int
 
 	taken = array->data[index];
 
-	memmove(&array->data[index], &array->data[index+1], array->count - (index + 1));
+	memmove(&array->data[index], &array->data[index+1], (array->count - (index + 1)) * sizeof(array->data[0]));
 	array->count --;
 
 	return taken;
