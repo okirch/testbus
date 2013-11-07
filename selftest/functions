@@ -19,9 +19,6 @@ if test -n "$TESTBUS_SELFTEST_LOCALFILES"; then
 	CLIENT=./testbus-client
 	PROXY=./dbus-proxy
 
-	if test -n "$TESTBUS_SELFTEST_DEBUG"; then
-		DEBUG="--debug $TESTBUS_SELFTEST_DEBUG"
-	fi
 	if test -f etc/common.xml; then
 		sed 's:<schema name=[^"]*/:<schema name="schema:g' etc/common.xml > etc/local.xml
 		CONFIG="--config etc/local.xml"
@@ -31,6 +28,10 @@ else
 	PROXY=dbus-proxy
 	CONFIG=
 	DEBUG=
+fi
+
+if test -n "$TESTBUS_SELFTEST_DEBUG"; then
+	DEBUG="--debug $TESTBUS_SELFTEST_DEBUG"
 fi
 
 # Anything below this line is not user serviceable. Hands off, please.
@@ -183,6 +184,14 @@ function testbus_upload_file {
 
 	host=$1; shift
 	testbus_call upload-file --host $host "$@"
+}
+
+function testbus_download_file {
+
+	testbus_trace "download file $*"
+
+	host=$1; shift
+	testbus_call download-file --host $host "$@"
 }
 
 function testbus_run_command {

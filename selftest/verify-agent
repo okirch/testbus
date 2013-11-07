@@ -4,6 +4,8 @@
 # others tests is there.
 #
 
+# TESTBUS_SELFTEST_DEBUG=all
+
 . ${0%/*}/functions
 
 # Override the timeout for claiming the host.
@@ -14,4 +16,12 @@ TESTBUS_CLAIM_TIMEOUT=240
 testbus_init_test $0
 TESTBUS_HOST=`testbus_claim_host`
 testbus_upload_file $TESTBUS_HOST /etc/SuSE-release /etc/upload-test
+testbus_download_file $TESTBUS_HOST /etc/upload-test /tmp/download-test
+if ! cmp /etc/SuSE-release /tmp/download-test; then
+	echo "File uploaded to agent and downloaded again morphed in transit" >&2
+	diff -u /etc/SuSE-release /tmp/download-test >&2
+	testbus_fail_test
+fi
+rm -f /tmp/download-test
+
 testbus_exit
