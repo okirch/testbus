@@ -70,8 +70,7 @@ __ni_Testbus_Environment_getenv(ni_dbus_object_t *object, const ni_dbus_method_t
 
 	if (argc != 1
 	 || !ni_dbus_variant_get_string(&argv[0], &name)
-	 || !ni_testbus_env_name_valid(name)
-	 || value == NULL)
+	 || !ni_testbus_env_name_valid(name))
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
 	if (!(env = ni_testbus_environ_unwrap(object, error)))
