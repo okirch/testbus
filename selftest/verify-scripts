@@ -128,4 +128,14 @@ EOF
 
 do_run $script
 
+##################################################################
+# Run a non-existent command. We expect this to return an
+# error.
+##################################################################
+testbus_init_test subtest6
+
+if testbus_run_command --host $TESTBUS_HOST /this/command/does/not/exist; then
+	testbus_fail_test "Trying to run /this/command/does/not/exist should exit with an error"
+fi
+
 testbus_exit
