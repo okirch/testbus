@@ -140,8 +140,10 @@ install-data: etc/org.opensuse.Testbus.conf
 	install -m644 etc/config.xml $(DESTDIR)/etc/testbus/config.xml
 	install -m555 selftest/functions $(DESTDIR)/usr/share/testbus
 	install -m644 schema/*.xml $(DESTDIR)/usr/share/testbus/schema
-	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/
 	install -m755 etc/agent.d/* $(DESTDIR)/etc/testbus/agent.d
+	# This is special - dbus-daemon does weird things if we install the file directly.
+	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/org.opensuse.Testbus.conf.new
+	mv $(DESTDIR)/etc/dbus-1/system.d/org.opensuse.Testbus.conf{.new,}
 
 distclean clean::
 	rm -rf obj core vgcore.*
