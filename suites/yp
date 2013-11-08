@@ -1,0 +1,124 @@
+#!/bin/bash
+#
+# This is a draft idea of how headers for testbus scripts
+# could be used to drive the setup
+##################################################################
+# Start-Testbus-Requirements
+# Instances		2
+# Bridged-Network	yes
+# Instance-NICs		1
+# End-Testbus-Requirements
+##################################################################
+
+NISDOMAIN=nistest.opensuse.org
+
+# TESTBUS_SELFTEST_DEBUG=all
+
+. /usr/share/testbus/functions
+
+TMPDIR=/tmp/testbus-yp
+mkdir -p $TMPDIR
+
+# Override the timeout for claiming the host.
+# Bringing up a VM guest can take some time, especially if it goes
+# through a firstboot stage first.
+TESTBUS_CLAIM_TIMEOUT=240
+
+function run_client {
+	testbus_run_command --host $NIS_CLIENT "$@"
+}
+
+function run_server {
+	testbus_run_command --host $NIS_SERVER "$@"
+}
+
+##################################################################
+# Start testing
+##################################################################
+testbus_init_group $0
+
+NIS_SERVER=`testbus_claim_host --role server`
+NIS_CLIENT=`testbus_claim_host --role client`
+
+NIS_SERVER_IP=`testbus_getenv $NIS_SERVER primary_ip`
+NIS_CLIENT_IP=`testbus_getenv $NIS_CLIENT primary_ip`
+
+NIS_SERVER_NAME=`testbus_getenv $NIS_SERVER hostname`
+NIS_CLIENT_NAME=`testbus_getenv $NIS_CLIENT hostname`
+
+##################################################################
+# Initialize NIS server
+##################################################################
+testbus_init_test server-init
+
+testbus_trace "server: setting nis domain to $NISDOMAIN"
+run_server /bin/domainname $NISDOMAIN
+
+testbus_trace "server: building default NIS maps"
+run_server /usr/bin/make -C /var/yp
+
+testbus_trace "server: starting ypserv"
+run_server /etc/init.d/ypserv start
+
+# This is a workaround. There's something wrong with the firewalling
+# code that I don't understand
+run_server /sbin/rcSuSEfirewall2 stop
+run_client /sbin/rcSuSEfirewall2 stop
+
+##################################################################
+# Initialize NIS client
+##################################################################
+testbus_init_test client-init
+
+testbus_trace "client: uploading config files"
+echo $NISDOMAIN |
+	testbus_upload_file $NIS_CLIENT - /etc/defaultdomain
+echo "domain $NISDOMAIN server $NIS_SERVER_IP" |
+	testbus_upload_file $NIS_CLIENT - /etc/yp.conf
+
+testbus_trace "client: starting ypbind"
+run_client /etc/init.d/ypbind restart
+
+testbus_trace "client: verify binding"
+bound_to=`run_client /usr/bin/ypwhich`
+if [ -z "$bound_to" -o "$bound_to" != $NIS_SERVER_IP ]; then
+	testbus_fail_test "yp client should be bound to $NIS_SERVER_IP, but bound to $bound_to instead"
+fi
+
+##################################################################
+# Try NIS host resolution
+##################################################################
+testbus_init_test nis-hosts
+
+if [ -z "$NIS_SERVER_NAME" ]; then
+	testbus_fail_test "nis server name is empty"
+fi
+if [ -z "$NIS_CLIENT_NAME" ]; then
+	testbus_fail_test "nis client name is empty"
+fi
+
+# Change nsswitch.conf
+testbus_trace "configure client to use NIS for host lookups"
+run_client /bin/cp /etc/nsswitch.conf /etc/nsswitch.conf.save
+echo "hosts: files nis" |
+	testbus_upload_file $NIS_CLIENT - /etc/nsswitch.conf
+
+# On the server, generates the hosts.* maps
+testbus_trace "configuring server to generate hosts.* maps"
+run_server /usr/bin/make -C /var/yp/$NISDOMAIN -f /var/yp/Makefile hosts
+
+# Make sure ping in general works
+testbus_trace "verify name resolution"
+run_client /bin/ping -c 1 127.0.0.1
+run_client /bin/ping -c 1 $NIS_SERVER_IP
+# Check that we can resolve the server's hostname
+run_client /bin/ping -c 1 $NIS_SERVER_NAME
+# Check that we can still resolve the client's hostname (which should be
+# in the hosts file)
+run_client /bin/ping -c 1 $NIS_CLIENT_NAME
+
+# Restore nsswitch.conf
+testbus_trace "client side cleanup"
+run_client /bin/mv /etc/nsswitch.conf.save /etc/nsswitch.conf
+
+testbus_exit
