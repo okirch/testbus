@@ -113,6 +113,7 @@ function testbus_init_test {
 function testbus_finish_test {
 
 	status=${1:-SUCCESS}
+	shift || true
 
 	if [ -n "$TESTBUS_TEMPDIR" ]; then
 		rm -rf $TESTBUS_TEMPDIR
@@ -124,33 +125,42 @@ function testbus_finish_test {
 		unset TESTBUS_TEST_HANDLE
 	fi
 	if [ -n "$TESTCASE_NAME" ]; then
-		echo "$TESTCASE_NAME: $status"
+		echo -n "$TESTCASE_NAME: $status"
+		if [ -n "$*" ]; then
+			echo -n " ($*)"
+		fi
+		echo
 	fi >&2
 	unset TESTCASE_NAME
 
 	if [ "$status" != "SUCCESS" ]; then
 		TESTBUS_GROUP_STATUS=FAILED
 	fi
+	return 0
 }
 
 function testbus_fail_test {
 
-	testbus_finish_test FAILED
+	testbus_finish_test FAILED "$@"
+}
+
+function __testbus_test_context {
+
+	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
+		echo $TESTBUS_TEST_HANDLE
+	elif [ -n "$TESTBUS_GROUP_HANDLE" ]; then
+		echo $TESTBUS_GROUP_HANDLE
+	else
+		echo "$1: cannot call this function outside a test" >&2
+		exit 1
+	fi
 }
 
 function testbus_claim_host {
 
 	testbus_trace "claim host $*"
 
-	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
-		context=$TESTBUS_TEST_HANDLE
-	elif [ -n "$TESTBUS_GROUP_HANDLE" ]; then
-		context=$TESTBUS_GROUP_HANDLE
-	else
-		echo "No context to claim host for" >&2
-		exit 1
-	fi
-
+	context=`__testbus_test_context $0`
 	if test -n "$TESTBUS_CLAIM_TIMEOUT"; then
 		testbus_call claim-host --timeout $TESTBUS_CLAIM_TIMEOUT "$@" $context
 	else
@@ -170,6 +180,20 @@ function testbus_setenv {
 		echo "No context to setenv for" >&2
 		exit 1
 	fi
+}
+
+function testbus_getenv {
+
+	testbus_trace "getenv $*"
+
+	case $1 in
+	/org/opensuse/Testbus/*)
+		context=$1; shift;;
+	*)
+		context=`__testbus_test_context $0`;;
+	esac
+
+	testbus_call getenv $context "$@"
 }
 
 function __testbus_upload_file {
