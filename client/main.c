@@ -1409,13 +1409,17 @@ ni_testbus_read_local_file(const char *filename)
 	ni_buffer_t *result;
 	FILE *fp;
 
-	if (!(fp = fopen(filename, "r"))) {
-		ni_error("unable to open %s: %m", filename);
-		return NULL;
-	}
+	if (ni_string_eq(filename, "-")) {
+		result = ni_file_read(stdin);
+	} else {
+		if (!(fp = fopen(filename, "r"))) {
+			ni_error("unable to open %s: %m", filename);
+			return NULL;
+		}
 
-	result = ni_file_read(fp);
-	fclose(fp);
+		result = ni_file_read(fp);
+		fclose(fp);
+	}
 
 	return result;
 }
