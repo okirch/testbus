@@ -2250,7 +2250,11 @@ ni_quote(const char *string, const char *sepa)
 	unsigned int n, m;
 	int cc;
 
-	m = strcspn(string, sepa);
+	if (sepa)
+		m = strcspn(string, sepa);
+	else
+		m = strlen(string);
+
 	n = strcspn(string, "\"'");
 	if (m == n && string[n] == '\0')
 		return xstrdup(string);
