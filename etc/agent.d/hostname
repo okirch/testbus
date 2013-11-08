@@ -1,0 +1,38 @@
+#!/bin/bash
+
+function report {
+
+	echo setenv hostname "$*"
+	exit 0
+}
+
+function report_if_qualified {
+
+	hostname=$1
+	case $hostname in
+	*.*)
+		report $hostname;;
+	esac
+}
+
+hostname=`cat /etc/HOSTNAME`
+report_if_qualified $hostname
+
+hostname=`hostname`
+report_if_qualified $hostname
+
+cat /etc/hosts | sed 's/#.*//' | while read line; do
+	set -- $line
+	shift || continue
+
+	canonical_name=$1
+	while [ $# -gt 0 ]; do
+		name=$1; shift
+		if [ "$name" = "hostname" ]; then
+			report $canonical_name
+			exit 0
+		fi
+	done
+done
+
+report $hostname
