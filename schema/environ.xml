@@ -13,4 +13,13 @@
     </arguments>
   </method>
 
+  <method name="getenv">
+    <arguments>
+      <name type="string" />
+    </arguments>
+    <result>
+      <value type="string" />
+    </result>
+  </method>
+
 </service>

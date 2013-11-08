@@ -68,22 +68,16 @@ ni_testbus_unsetenv(ni_testbus_env_t *env, const char *name)
 	env->sorted = FALSE;
 }
 
-#if 0
 const char *
 ni_testbus_getenv(ni_testbus_env_t *env, const char *name)
 {
 	ni_var_t *var;
 
-	while (env) {
-		if ((var = ni_var_array_get(&env->vars, name)) && var->value != NULL)
-			return var->value;
-
-		env = env->parent;
-	}
+	if ((var = ni_var_array_get(&env->vars, name)) && var->value != NULL)
+		return var->value;
 
 	return NULL;
 }
-#endif
 
 void
 ni_testbus_env_array_init(ni_testbus_env_array_t *array)

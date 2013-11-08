@@ -319,7 +319,6 @@ ni_testbus_client_setenv(ni_dbus_object_t *container, const char *name, const ch
 	ni_bool_t result = FALSE;
 
 	ni_assert(container);
-	ni_debug_wicked("%s.setenv(%s, %s): failed", container->path, name, value);
 
 	ni_dbus_variant_vector_init(args, 2);
 	ni_dbus_variant_set_string(&args[0], name);
@@ -334,6 +333,36 @@ ni_testbus_client_setenv(ni_dbus_object_t *container, const char *name, const ch
 	ni_dbus_variant_vector_destroy(args, 2);
 	return result;
 }
+
+char *
+ni_testbus_client_getenv(ni_dbus_object_t *container, const char *name)
+{
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
+	DBusError error = DBUS_ERROR_INIT;
+	char *result = NULL;
+
+	ni_assert(container);
+
+	ni_dbus_variant_set_string(&arg, name);
+	if (!ni_dbus_object_call_variant(container, NULL, "getenv", 1, &arg, 1, &res, &error)) {
+		ni_dbus_print_error(&error, "%s.getenv(%s): failed", container->path, name);
+		dbus_error_free(&error);
+	} else {
+		const char *resp;
+
+		if (ni_dbus_variant_get_string(&res, &resp)) {
+			result = strdup(resp? resp : "");
+		} else {
+			ni_error("%s.getenv(%s): not a string value", container->path, name);
+		}
+	}
+
+	ni_dbus_variant_destroy(&arg);
+	ni_dbus_variant_destroy(&res);
+	return result;
+}
+
 
 ni_bool_t
 ni_testbus_client_delete(ni_dbus_object_t *object)

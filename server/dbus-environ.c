@@ -57,8 +57,39 @@ __ni_Testbus_Environment_setenv(ni_dbus_object_t *object, const ni_dbus_method_t
 
 NI_TESTBUS_METHOD_BINDING(Environment, setenv);
 
+/*
+ * Environment.getenv(name)
+ */
+static dbus_bool_t
+__ni_Testbus_Environment_getenv(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_testbus_env_t *env;
+	const char *name, *value;
+
+	if (argc != 1
+	 || !ni_dbus_variant_get_string(&argv[0], &name)
+	 || !ni_testbus_env_name_valid(name)
+	 || value == NULL)
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	if (!(env = ni_testbus_environ_unwrap(object, error)))
+		return FALSE;
+
+	value = ni_testbus_getenv(env, name);
+	if (!value)
+		value = "";
+
+	ni_dbus_message_append_string(reply, value);
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Environment, getenv);
+
 void
 ni_testbus_bind_builtin_environ(void)
 {
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Environment_setenv_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Environment_getenv_binding);
 }

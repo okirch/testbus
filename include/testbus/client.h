@@ -30,6 +30,7 @@ extern ni_dbus_object_t *	ni_testbus_client_claim_host_by_capability(const char 
 						ni_testbus_client_timeout_t *);
 extern ni_dbus_object_t *	ni_testbus_client_get_agent(const char *);
 extern ni_bool_t		ni_testbus_client_setenv(ni_dbus_object_t *, const char *name, const char *value);
+extern char *			ni_testbus_client_getenv(ni_dbus_object_t *, const char *name);
 extern ni_buffer_t *		ni_testbus_client_agent_download_file(ni_dbus_object_t *, const char *);
 extern ni_bool_t		ni_testbus_client_agent_upload_file(ni_dbus_object_t *, const char *, const ni_buffer_t *);
 extern ni_bool_t		ni_testbus_client_upload_file(ni_dbus_object_t *, const ni_buffer_t *);

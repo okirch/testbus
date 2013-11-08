@@ -687,6 +687,72 @@ do_setenv(int argc, char **argv)
 }
 
 static int
+do_getenv(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_EXPORT };
+	static struct option local_options[] = {
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ "export", no_argument, NULL, OPT_EXPORT },
+		{ NULL }
+	};
+	const char *opt_context;
+	ni_dbus_object_t *context_object;
+	ni_bool_t opt_export = FALSE;
+	int c;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] getenv object-path name=value ...\n"
+				"\nSupported options:\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+
+		case OPT_EXPORT:
+			opt_export = TRUE;
+			break;
+		}
+	}
+
+	if (optind >= argc - 1)
+		goto usage;
+	opt_context = argv[optind++];
+
+	context_object = ni_testbus_client_get_container(opt_context);
+	if (context_object == NULL)
+		return 1;
+
+	while (optind < argc) {
+		char *name, *value;
+
+		name = argv[optind++];
+		value = ni_testbus_client_getenv(context_object, name);
+		if (value == NULL) {
+			ni_error("getenv failed");
+			return 1;
+		}
+
+		if (opt_export) {
+			char *quoted = ni_quote(value, NULL);
+
+			printf("%s=%s\n", name, quoted);
+			free(quoted);
+		} else {
+			printf("%s\n", value);
+		}
+		free(value);
+	}
+
+	return 0;
+}
+
+static int
 do_shutdown(int argc, char **argv)
 {
 	enum  { OPT_HELP, OPT_REBOOT, };
@@ -1439,6 +1505,7 @@ static struct client_command	client_command_table[] = {
 	{ "create-command",	do_create_command	},
 	{ "run-command",	do_run_command		},
 	{ "setenv",		do_setenv		},
+	{ "getenv",		do_getenv		},
 	{ "shutdown",		do_shutdown		},
 	{ NULL, }
 };
