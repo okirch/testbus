@@ -161,7 +161,6 @@ __ni_testbus_context_delegate_hosts(ni_dbus_server_t *server, ni_testbus_contain
 
 /*
  * Hostlist.createHost(name)
- *
  */
 static dbus_bool_t
 __ni_Testbus_Hostlist_createHost(ni_dbus_object_t *object, const ni_dbus_method_t *method,
@@ -224,12 +223,11 @@ __ni_Testbus_Hostlist_removeHost(ni_dbus_object_t *object, const ni_dbus_method_
 NI_TESTBUS_METHOD_BINDING(Hostlist, removeHost);
 
 /*
- * Hostlist.reconnect(name, uuid)
+ * Hostlist.reconnect(name)
  *
- * If a host with the given name exists, and its uuid matches the one presented
- * by the client, return its object path.
+ * If a host with the given name exists, and is currently not active, return its object path.
  *
- * Otherwise, return an empty string.
+ * Otherwise, return an error
  */
 static dbus_bool_t
 __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t *method,
@@ -239,11 +237,9 @@ __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t
 	ni_testbus_container_t *context = ni_testbus_global_context();
 	const char *name;
 	ni_testbus_host_t *host;
-	ni_uuid_t uuid;
 
-	if (argc != 2
-	 || !ni_dbus_variant_get_string(&argv[0], &name)
-	 || !ni_dbus_variant_get_uuid(&argv[1], &uuid))
+	if (argc != 1
+	 || !ni_dbus_variant_get_string(&argv[0], &name))
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
 	host = ni_testbus_container_get_host_by_name(context, name);
@@ -254,20 +250,16 @@ __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t
 			ni_dbus_set_error_from_code(error, rc, "unable to create new host \"%s\"", name);
 			return FALSE;
 		}
-		host->uuid = uuid;
 
 		(void) ni_testbus_host_wrap(object, host);
-	} else if (!ni_uuid_equal(&host->uuid, &uuid)) {
-		ni_debug_wicked("Hostlist.reconnect: cannot reconnect host \"%s\", uuid mismatch", name);
-		dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "host name \"%s\" already taken (uuid mismatch)", name);
-		return FALSE;
-	} else
-	if (host->agent_bus_name != NULL) {
-		ni_debug_wicked("Hostlist.reconnect: cannot reconnect host \"%s\", already claimed by other service", name);
-		dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "host name \"%s\" already taken (duplicate registration)", name);
-		return FALSE;
+	} else {
+		if (host->agent_bus_name != NULL) {
+			ni_debug_wicked("Hostlist.reconnect: cannot reconnect host \"%s\", already claimed by other service", name);
+			dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "host name \"%s\" already taken (duplicate registration)", name);
+			return FALSE;
+		}
 	}
-	
+
 	/* Remember the DBus name of the service owning this object, so that we can
 	 * send it messages. */
 	__ni_testbus_host_set_agent(host, dbus_message_get_destination(reply));
@@ -312,7 +304,6 @@ NI_TESTBUS_METHOD_BINDING(Hostlist, reboot);
 
 static ni_dbus_property_t       __ni_Testbus_Host_properties[] = {
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, name, context.name, RO),
-	NI_DBUS_GENERIC_UUID_PROPERTY(testbus_host, uuid, uuid, RO),
 	NI_DBUS_GENERIC_BOOL_PROPERTY(testbus_host, ready, ready, RO),
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, agent, agent_bus_name, RO),
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, role, role, RO),

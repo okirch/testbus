@@ -390,25 +390,21 @@ ni_testbus_client_create_host(const char *name)
 }
 
 ni_dbus_object_t *
-ni_testbus_client_reconnect_host(const char *name, const ni_uuid_t *uuid)
+ni_testbus_client_reconnect_host(const char *name)
 {
 	ni_dbus_object_t *hostlist_object;
-	ni_dbus_variant_t args[2];
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
 	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
 	DBusError error = DBUS_ERROR_INIT;
 	ni_dbus_object_t *host_object = NULL;
-
-	ni_dbus_variant_vector_init(args, 2);
 
 	hostlist_object = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
 	if (!hostlist_object)
 		return NULL;
 
-	ni_dbus_variant_set_string(&args[0], name);
-	ni_dbus_variant_set_uuid(&args[1], uuid);
-	if (!ni_dbus_object_call_variant(hostlist_object, NULL, "reconnect", 2, args, 1, &res, &error)) {
-		ni_dbus_print_error(&error, "%s.reconnect(%s, %s): failed",
-				hostlist_object->path, name, ni_uuid_print(uuid));
+	ni_dbus_variant_set_string(&arg, name);
+	if (!ni_dbus_object_call_variant(hostlist_object, NULL, "reconnect", 1, &arg, 1, &res, &error)) {
+		ni_dbus_print_error(&error, "%s.reconnect(%s): failed", hostlist_object->path, name);
 		dbus_error_free(&error);
 		goto failed;
 	} else {
@@ -418,7 +414,7 @@ ni_testbus_client_reconnect_host(const char *name, const ni_uuid_t *uuid)
 	}
 
 failed:
-	ni_dbus_variant_vector_destroy(args, 2);
+	ni_dbus_variant_destroy(&arg);
 	ni_dbus_variant_destroy(&res);
 	return host_object;
 }

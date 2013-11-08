@@ -5,7 +5,6 @@
 #include "container.h"
 
 struct ni_testbus_host {
-	ni_uuid_t		uuid;
 	ni_string_array_t	capabilities;
 
 	char *			agent_bus_name;

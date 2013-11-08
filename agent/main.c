@@ -80,7 +80,6 @@ static struct option	options[] = {
 
 typedef struct ni_testbus_agent_state {
 	char *			hostname;
-	ni_uuid_t		uuid;
 	ni_string_array_t	capabilities;
 	ni_var_array_t		environ;
 } ni_testbus_agent_state_t;
@@ -369,9 +368,6 @@ ni_testbus_agent_read_state(ni_testbus_agent_state_t *state)
 			if (ni_string_eq(c->name, "hostname"))
 				ni_string_dup(&state->hostname, c->cdata);
 			else
-			if (ni_string_eq(c->name, "uuid"))
-				ni_uuid_parse(&state->uuid, c->cdata);
-			else
 			if (ni_string_eq(c->name, "capability"))
 				ni_string_array_append(&state->capabilities, c->cdata);
 			else
@@ -397,7 +393,6 @@ ni_testbus_agent_write_state(const ni_testbus_agent_state_t *state)
 
 	node = xml_node_new("state", root);
 	xml_node_new_element("hostname", node, state->hostname);
-	xml_node_new_element("uuid", node, ni_uuid_print(&state->uuid));
 
 	state_file = ni_testbus_agent_state_file_path();
 	if (xml_document_write(doc, state_file) < 0)
@@ -738,7 +733,6 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	if (ni_debug & NI_TRACE_WICKED) {
 		ni_trace("Agent state");
 		ni_trace("Hostname:     %s", state->hostname);
-		ni_trace("UUID:         %s", ni_uuid_print(&state->uuid));
 
 		if (state->capabilities.count == 0) {
 			ni_trace("Capabilities: none");
@@ -784,27 +778,12 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 		host_object = ni_testbus_client_create_host(state->hostname);
 		/* FIXME: set the drop-on-disconnect property */
 	} else {
-		if (ni_uuid_is_null(&state->uuid))
-			host_object = ni_testbus_client_create_host(state->hostname);
-		else
-			host_object = ni_testbus_client_reconnect_host(state->hostname, &state->uuid);
+		host_object = ni_testbus_client_reconnect_host(state->hostname);
 	}
 
 	if (host_object == NULL)
 		ni_fatal("unable to register agent name \"%s\"", state->hostname);
 	ni_debug_wicked("registered agent as host %s", host_object->path);
-
-	{
-		const ni_dbus_variant_t *var = NULL;
-
-		var = ni_dbus_object_get_cached_property(host_object, "uuid",
-				ni_dbus_object_get_service(host_object, NI_TESTBUS_HOST_INTERFACE));
-		if (var == NULL || !ni_dbus_variant_get_uuid(var, &state->uuid)) {
-			ni_warn("could not get host registration uuid");
-		} else {
-			ni_testbus_agent_write_state(state);
-		}
-	}
 
 	ni_testbus_agent_setup_signals(dbus_client, host_object);
 

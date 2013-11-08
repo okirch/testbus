@@ -2,7 +2,6 @@
 <service name="host" interface="org.opensuse.Testbus.Host" object-class="host">
   <define name="properties" class="dict">
     <name type="string" />
-    <uuid type="uuid-type" />
     <agent type="string" />
     <role type="string" />
     <ready type="boolean" />
@@ -82,7 +81,6 @@
   <method name="reconnect">
     <arguments>
       <name type="string" />
-      <uuid type="uuid-type" />
     </arguments>
   </method>
 

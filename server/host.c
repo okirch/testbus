@@ -36,7 +36,6 @@ ni_testbus_host_new(ni_testbus_container_t *parent, const char *name, int *err_r
 		return NULL;
 
 	host = ni_malloc(sizeof(*host));
-	ni_uuid_generate(&host->uuid);
 
 	ni_testbus_container_init(&host->context,
 			&ni_testbus_host_ops,
