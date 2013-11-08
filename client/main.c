@@ -1045,7 +1045,7 @@ do_claim_host(int argc, char **argv)
 	static struct option local_options[] = {
 		{ "hostname", required_argument, NULL, OPT_HOSTNAME },
 		{ "capability", required_argument, NULL, OPT_CAPABILITY },
-		{ "set-role", required_argument, NULL, OPT_ROLE },
+		{ "role", required_argument, NULL, OPT_ROLE },
 		{ "timeout", required_argument, NULL, OPT_TIMEOUT },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
@@ -1065,8 +1065,8 @@ do_claim_host(int argc, char **argv)
 		case OPT_HELP:
 		usage:
 			fprintf(stderr,
-				"testbus [options] claim-host --hostname <name> [--set-role <role>] <container-path>\n"
-				"testbus [options] claim-host --capability <name> [--set-role <role>] <container-path>\n"
+				"testbus [options] claim-host --hostname <name> [--role <role>] <container-path>\n"
+				"testbus [options] claim-host --capability <name> [--role <role>] <container-path>\n"
 				"\nSupported options:\n"
 				"  --hostname <name>\n"
 				"      Argument is a hostname, as registered by the agent.\n"
@@ -1075,7 +1075,7 @@ do_claim_host(int argc, char **argv)
 				"      this capability.\n"
 				"      The capability \"any\" will match any host. This is the default if neither this\n"
 				"      option nor --hostname is given.\n"
-				"  --set-role <role>\n"
+				"  --role <role>\n"
 				"      This will add the host using the specified role. If no role is given,\n"
 				"      it will default to \"testhost\".\n"
 				"  --timeout <seconds>\n"
