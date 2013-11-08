@@ -1653,22 +1653,45 @@ ni_file_read(FILE *fp)
 
 	if (fstat(fileno(fp), &stb) < 0)
 		return NULL;
-	size = stb.st_size;
 
-	result = ni_buffer_new_dynamic(size);
-	if (result == NULL)
-		return NULL;
+	if (S_ISREG(stb.st_mode)) {
+		size = stb.st_size;
 
-	for (done = 0; done < size; done += count) {
-		void *buffer = ni_buffer_tail(result);
-
-		count = fread(buffer, 1, size - done, fp);
-		if (count == 0) {
-			ni_error("%s: short read from file", __func__);
-			free(buffer);
+		result = ni_buffer_new_dynamic(size);
+		if (result == NULL)
 			return NULL;
+
+		for (done = 0; done < size; done += count) {
+			void *buffer = ni_buffer_tail(result);
+
+			count = fread(buffer, 1, size - done, fp);
+			if (count == 0)
+				break;
+			ni_buffer_push_tail(result, count);
 		}
-		ni_buffer_push_tail(result, count);
+	} else {
+		/* Could be a pipe or tty or socket */
+		result = ni_buffer_new_dynamic(4096);
+		if (result == NULL)
+			return NULL;
+
+		while (TRUE) {
+			void *buffer;
+
+			ni_buffer_ensure_tailroom(result, 4096);
+			buffer = ni_buffer_tail(result);
+
+			count = fread(buffer, 1, ni_buffer_tailroom(result), fp);
+			if (count == 0)
+				break;
+			ni_buffer_push_tail(result, count);
+		}
+	}
+
+	if (ferror(fp)) {
+		ni_error("%s: read error on file", __func__);
+		ni_buffer_free(result);
+		return NULL;
 	}
 
 	return result;
