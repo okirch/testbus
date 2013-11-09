@@ -489,7 +489,7 @@ __ni_testbus_process_exit_notify(ni_process_t *pi)
 	ni_process_exit_info_t exit_info;
 	ni_dbus_object_t *proc_object;
 
-	ni_trace("process %s exited", ctx->object_path);
+	ni_debug_testbus("process %s exited", ctx->object_path);
 	ni_process_get_exit_info(pi, &exit_info);
 
 	proc_object = ni_testbus_client_get_and_refresh_object(ctx->object_path);
@@ -647,7 +647,7 @@ __ni_testbus_agent_process_container_signal(ni_dbus_connection_t *connection, ni
 		return;
 
 	if (ni_string_eq(signal_name, "deleted")) {
-		ni_trace("received signal %s from %s", signal_name, object_path);
+		ni_debug_testbus("received signal %s from %s", signal_name, object_path);
 	}
 }
 
@@ -661,7 +661,7 @@ __ni_testbus_agent_process_file_signal(ni_dbus_connection_t *connection, ni_dbus
 		return;
 
 	if (ni_string_eq(signal_name, "deleted")) {
-		ni_trace("received signal %s from %s", signal_name, object_path);
+		ni_debug_testbus("received signal %s from %s", signal_name, object_path);
 		ni_testbus_agent_discard_cached_file(object_path);
 	}
 }

@@ -682,7 +682,7 @@ __ni_testbus_wait_setup(ni_testbus_client_timeout_t *timeout)
 {
 	__ni_testbus_setup_host_signal_handler();
 
-	ni_trace("register timer for %u ms", timeout->timeout_msec);
+	ni_debug_testbus("register timer for %u ms", timeout->timeout_msec);
 	timeout->handle = ni_timer_register(timeout->timeout_msec, __ni_testbus_wait_timeout, timeout);
 }
 
@@ -1285,7 +1285,7 @@ __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t 
 			goto out;
 		}
 
-		ni_trace("received signal %s from %s", signal_name, object_path);
+		ni_debug_testbus("received signal %s from %s", signal_name, object_path);
 		if ((wq = ni_testbus_waitq_find(object_path)) == NULL) {
 			if (ni_testbus_spurious_waitq) {
 				wq = ni_testbus_waitq_new(object_path);

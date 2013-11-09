@@ -542,7 +542,7 @@ ni_dbus_deserialize_xml(ni_dbus_variant_t *var, const ni_xs_type_t *type, xml_no
 			depth++;
 	}
 
-	ni_trace("%*.*sdeserialize <%s>", depth, depth, "", node->name);
+	ni_debug_dbus("%*.*sdeserialize <%s>", depth, depth, "", node->name);
 #endif
 
 	switch (type->class) {
@@ -1608,7 +1608,7 @@ ni_dbus_xml_map_method_argument(const ni_dbus_method_t *method, unsigned int ind
 			}
 
 #if 0
-			ni_trace("applying xpath %s to node <%s> @%s - rv=%d", attr,
+			ni_debug_dbus("applying xpath %s to node <%s> @%s - rv=%d", attr,
 					doc_node->name, xml_node_location(doc_node), rv);
 #endif
 

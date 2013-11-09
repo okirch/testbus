@@ -303,7 +303,7 @@ __dump_fake_xml(const ni_dbus_variant_t *variant, unsigned int indent, const cha
 			printf("%*.*s</e>\n", indent, indent, "");
 		}
 	} else {
-		ni_trace("%s: %s", __func__, ni_dbus_variant_signature(variant));
+		ni_error("%s: cannot handle signature \"%s\"", __func__, ni_dbus_variant_signature(variant));
 	}
 }
 
@@ -1258,11 +1258,9 @@ flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *of
 					ni_testbus_file_class(),
 					filename);
 	if (file_object == NULL) {
-		ni_trace("%s: no file named %s", proc_object->path, filename);
+		ni_debug_testbus("%s: no file named %s", proc_object->path, filename);
 		return;
 	}
-
-	ni_trace("%s(%s) -> %s", __func__, filename, file_object->path);
 
 	/* Now download the file */
 	data = ni_testbus_client_download_file(file_object);
@@ -1270,6 +1268,8 @@ flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *of
 		ni_error("failed to download %s", filename);
 		return;
 	}
+
+	ni_debug_testbus("downloaded file %s (%s)", filename, file_object->path);
 
 	ni_file_write(ofp, data);
 	ni_buffer_free(data);

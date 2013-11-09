@@ -277,10 +277,8 @@ ni_testbus_process_finalize(ni_testbus_process_t *proc)
 	for (i = 0; i < array->count; ++i) {
 		ni_testbus_file_t *file = array->data[i];
 
-		if (file->mode & NI_TESTBUS_FILE_WRITE) {
-			ni_trace("output file %s", file->name);
+		if (file->mode & NI_TESTBUS_FILE_WRITE)
 			ni_testbus_file_array_append(&ofiles, file);
-		}
 	}
 
 
