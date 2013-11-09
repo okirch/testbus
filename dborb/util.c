@@ -2156,7 +2156,7 @@ ni_caught_terminal_signal(void)
 	if (!__ni_terminal_signal)
 		return FALSE;
 
-	ni_debug_wicked("caught signal %u, exiting", __ni_terminal_signal);
+	ni_debug_testbus("caught signal %u, exiting", __ni_terminal_signal);
 	return TRUE;
 }
 

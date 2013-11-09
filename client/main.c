@@ -883,7 +883,7 @@ do_download_file(int argc, char **argv)
 		if (agent_object == NULL)
 			return 1;
 
-		ni_debug_wicked("created agent handle");
+		ni_debug_testbus("created agent handle");
 		data = ni_testbus_client_agent_download_file(agent_object, remote_path);
 		if (data == NULL) {
 			ni_error("Unable to download \"%s\" from %s", remote_path, opt_hostname);
@@ -1253,7 +1253,7 @@ flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *of
 	ni_dbus_object_t *file_object;
 	ni_buffer_t *data;
 
-	ni_debug_wicked("%s(%s, %s)", __func__, proc_object->path, filename);
+	ni_debug_testbus("%s(%s, %s)", __func__, proc_object->path, filename);
 	file_object = ni_testbus_client_container_child_by_name(proc_object,
 					ni_testbus_file_class(),
 					filename);

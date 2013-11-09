@@ -339,7 +339,7 @@ ni_testbus_agent_state_file_path(void)
 		opt_state_file = state_file_pathbuf;
 	}
 
-	ni_debug_wicked("State file is %s", opt_state_file);
+	ni_debug_testbus("State file is %s", opt_state_file);
 	return opt_state_file;
 }
 
@@ -352,7 +352,7 @@ ni_testbus_agent_read_state(ni_testbus_agent_state_t *state)
 
 	state_file = ni_testbus_agent_state_file_path();
 	if (!ni_file_exists(state_file)) {
-		ni_debug_wicked("State file does not exist");
+		ni_debug_testbus("State file does not exist");
 		return;
 	}
 
@@ -378,7 +378,7 @@ ni_testbus_agent_read_state(ni_testbus_agent_state_t *state)
 
 	xml_document_free(doc);
 
-	ni_debug_wicked("Successfully read state from %s", state_file);
+	ni_debug_testbus("Successfully read state from %s", state_file);
 }
 
 void
@@ -398,7 +398,7 @@ ni_testbus_agent_write_state(const ni_testbus_agent_state_t *state)
 	if (xml_document_write(doc, state_file) < 0)
 		ni_error("unable to write status file %s", state_file);
 	else
-		ni_debug_wicked("Wrote agent state to %s.", state_file);
+		ni_debug_testbus("Wrote agent state to %s.", state_file);
 
 	xml_document_free(doc);
 }
@@ -424,7 +424,7 @@ ni_testbus_agent_upload_output(ni_dbus_object_t *proc_object, const char *filena
 			goto failed;
 	}
 
-	ni_debug_wicked("%s(%s, %s, %u bytes)", __func__, proc_object->path, filename,
+	ni_debug_testbus("%s(%s, %s, %u bytes)", __func__, proc_object->path, filename,
 			ni_buffer_chain_count(*chain));
 	while ((bp = ni_buffer_chain_get_next(chain)) != NULL) {
 		if (!ni_testbus_client_upload_file(file_object, bp)) {
@@ -597,7 +597,7 @@ __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus
 			goto out;
 		}
 
-		ni_debug_wicked("received signal %s(%s)", signal_name, object_path);
+		ni_debug_testbus("received signal %s(%s)", signal_name, object_path);
 		if (!__ni_testbus_process_run(pi, object_path, files)) {
 #ifdef notyet
 			ni_process_exit_info_t exit_info = { .how = NI_PROCESS_NONSTARTER };
@@ -611,7 +611,7 @@ __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus
 		}
 	} else
 	if (ni_string_eq(signal_name, "shutdownRequested")) {
-		ni_debug_wicked("received signal %s", signal_name);
+		ni_debug_testbus("received signal %s", signal_name);
 
 		if (!opt_allow_shutdown) {
 			ni_note("exiting due to shutdownRequested() signal");
@@ -622,7 +622,7 @@ __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus
 		ni_fatal("unable to execute /sbin/shutdown: %m");
 	} else
 	if (ni_string_eq(signal_name, "rebootRequested")) {
-		ni_debug_wicked("received signal %s", signal_name);
+		ni_debug_testbus("received signal %s", signal_name);
 
 		if (!opt_allow_shutdown) {
 			ni_note("exiting due to rebootRequested() signal");
@@ -730,7 +730,7 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 		ni_string_dup(&state->hostname, hostname);
 	}
 
-	if (ni_debug & NI_TRACE_WICKED) {
+	if (ni_debug & NI_TRACE_TESTBUS) {
 		ni_trace("Agent state");
 		ni_trace("Hostname:     %s", state->hostname);
 
@@ -773,7 +773,7 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 	dbus_client = ni_dbus_server_create_shared_client(dbus_server, NI_TESTBUS_DBUS_BUS_NAME);
 	ni_testbus_client_init(dbus_client);
 
-	ni_debug_wicked("Testbus agent starting");
+	ni_debug_testbus("Testbus agent starting");
 	if (!opt_reconnect) {
 		host_object = ni_testbus_client_create_host(state->hostname);
 		/* FIXME: set the drop-on-disconnect property */
@@ -783,7 +783,7 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 
 	if (host_object == NULL)
 		ni_fatal("unable to register agent name \"%s\"", state->hostname);
-	ni_debug_wicked("registered agent as host %s", host_object->path);
+	ni_debug_testbus("registered agent as host %s", host_object->path);
 
 	ni_testbus_agent_setup_signals(dbus_client, host_object);
 

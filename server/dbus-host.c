@@ -53,7 +53,7 @@ __ni_testbus_host_set_agent(ni_testbus_host_t *host, const char *owner)
 {
 	owner = ni_testbus_lookup_wellknown_bus_name(owner);
 
-	ni_debug_wicked("host %s owned by %s", host->context.name, owner);
+	ni_debug_testbus("host %s owned by %s", host->context.name, owner);
 	ni_string_dup(&host->agent_bus_name, owner);
 }
 
@@ -254,7 +254,7 @@ __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t
 		(void) ni_testbus_host_wrap(object, host);
 	} else {
 		if (host->agent_bus_name != NULL) {
-			ni_debug_wicked("Hostlist.reconnect: cannot reconnect host \"%s\", already claimed by other service", name);
+			ni_debug_testbus("Hostlist.reconnect: cannot reconnect host \"%s\", already claimed by other service", name);
 			dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "host name \"%s\" already taken (duplicate registration)", name);
 			return FALSE;
 		}
@@ -264,7 +264,7 @@ __ni_Testbus_Hostlist_reconnect(ni_dbus_object_t *object, const ni_dbus_method_t
 	 * send it messages. */
 	__ni_testbus_host_set_agent(host, dbus_message_get_destination(reply));
 
-	ni_debug_wicked("reconnecting host \"%s\" - object path %s", name, host->context.dbus_object_path);
+	ni_debug_testbus("reconnecting host \"%s\" - object path %s", name, host->context.dbus_object_path);
 	ni_dbus_message_append_string(reply, host->context.dbus_object_path);
 
 	ni_testbus_host_signal_connected(object);
@@ -428,7 +428,7 @@ __ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 	 */
 	ni_testbus_host_signal_process_scheduled(object, process_object, proc);
 
-	ni_debug_wicked("created process object %s", process_object->path);
+	ni_debug_testbus("created process object %s", process_object->path);
 	ni_dbus_message_append_string(reply, process_object->path);
 	return TRUE;
 }
@@ -630,7 +630,7 @@ __ni_testbus_host_agent_signal(ni_dbus_connection_t *connection, ni_dbus_message
 	const char *sender_name = dbus_message_get_sender(msg);
 	const char *signal_name = dbus_message_get_member(msg);
 
-	ni_debug_wicked("received signal %s.%s() from %s",
+	ni_debug_testbus("received signal %s.%s() from %s",
 			dbus_message_get_interface(msg),
 			signal_name, sender_name);
 

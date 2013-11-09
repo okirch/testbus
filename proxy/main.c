@@ -1371,7 +1371,7 @@ proxy_demux_packet(io_endpoint_t *source, ni_buffer_t *bp)
 	hdr = ni_buffer_pull_head(bp, DATA_HEADER_SIZE);
 	channel_id = ntohl(hdr->channel);
 
-	ni_debug_wicked("%s: %s channel %4u count %5u",
+	ni_debug_testbus("%s: %s channel %4u count %5u",
 			source->name, __proxy_cmdname(ntohl(hdr->cmd)), channel_id, ntohl(hdr->count));
 
 	if (hdr->cmd == htonl(CHANNEL_OPEN)) {

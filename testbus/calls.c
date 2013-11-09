@@ -270,7 +270,7 @@ __ni_testbus_client_container_add_host(ni_dbus_object_t *container, const char *
 	ni_bool_t result = FALSE;
 
 	ni_assert(container);
-	ni_debug_wicked("%s.addHost(%s, %s)", container->path, role, host_path);
+	ni_debug_testbus("%s.addHost(%s, %s)", container->path, role, host_path);
 
 	ni_dbus_variant_vector_init(args, 2);
 	ni_dbus_variant_set_string(&args[0], role);
@@ -471,7 +471,7 @@ __ni_testbus_host_get_cached_property(const ni_dbus_object_t *host_object, const
 
 	var = ni_dbus_object_get_cached_property(host_object, name, ni_testbus_host_interface());
 	if (var == NULL) {
-		ni_debug_wicked("host %s has no property named %s", host_object->path, name);
+		ni_debug_testbus("host %s has no property named %s", host_object->path, name);
 		return NULL;
 	}
 
@@ -639,7 +639,7 @@ __ni_testbus_host_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *ms
 	if (!signal_name)
 		return;
 
-	ni_debug_wicked("received %s.%s() signal", object_path, signal_name);
+	ni_debug_testbus("received %s.%s() signal", object_path, signal_name);
 	/* Nothing else to be done - the ni_socket_wait should return now and allow
 	 * us to loop back and examine the host list once more */
 }
@@ -801,7 +801,7 @@ __ni_testbus_client_agent_for_host(const ni_dbus_object_t *host, const char *hos
 		ni_error("host %s: no agent running", hostname);
 		return NULL;
 	}
-	ni_debug_wicked("agent bus name for %s is %s", hostname, value);
+	ni_debug_testbus("agent bus name for %s is %s", hostname, value);
 	return ni_testbus_agent_create(value);
 }
 
@@ -919,7 +919,7 @@ ni_testbus_client_agent_download_file(ni_dbus_object_t *agent, const char *path)
 		ni_error("%s: server didn't return size attribute", path);
 		goto out;
 	}
-	ni_debug_wicked("%s: size=%Lu", path, (unsigned long long) size);
+	ni_debug_testbus("%s: size=%Lu", path, (unsigned long long) size);
 
 	result = ni_buffer_new(size);
 	for (offset = 0; offset < size; ) {
@@ -950,7 +950,7 @@ ni_testbus_client_agent_download_file(ni_dbus_object_t *agent, const char *path)
 		offset += count;
 	}
 
-	ni_debug_wicked("%s: downloaded %u bytes", path, ni_buffer_count(result));
+	ni_debug_testbus("%s: downloaded %u bytes", path, ni_buffer_count(result));
 
 out:
 	ni_dbus_variant_destroy(&arg);
@@ -1003,7 +1003,7 @@ ni_testbus_client_agent_upload_file(ni_dbus_object_t *agent, const char *path, c
 		ni_buffer_pull_head(&data, count);
 	}
 
-	ni_debug_wicked("%s: uploaded %u bytes", path, ni_buffer_count(wbuf));
+	ni_debug_testbus("%s: uploaded %u bytes", path, ni_buffer_count(wbuf));
 	return TRUE;
 }
 
@@ -1064,7 +1064,7 @@ ni_testbus_client_download_file(ni_dbus_object_t *file_object)
 	ni_buffer_t *result = NULL;
 	uint64_t offset = 0;
 
-	ni_debug_wicked("ni_testbus_client_download_file(%s)", file_object->path);
+	ni_debug_testbus("ni_testbus_client_download_file(%s)", file_object->path);
 	result = ni_buffer_new(0);
 	while (TRUE) {
 		ni_dbus_variant_t argv[2];
@@ -1098,7 +1098,7 @@ ni_testbus_client_download_file(ni_dbus_object_t *file_object)
 			break;
 	}
 
-	ni_debug_wicked("%s: retrieved %u bytes of data", file_object->path, ni_buffer_count(result));
+	ni_debug_testbus("%s: retrieved %u bytes of data", file_object->path, ni_buffer_count(result));
 out:
 	ni_dbus_variant_destroy(&res);
 	return result;
@@ -1422,7 +1422,7 @@ ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_p
 
 	while (TRUE) {
 		if (wq->done) {
-			ni_debug_wicked("process %s is done", proc_object->path);
+			ni_debug_testbus("process %s is done", proc_object->path);
 			if (exit_info && wq->exit_info)
 				*exit_info = *(wq->exit_info);
 			ni_testbus_waitq_unlink(wq);

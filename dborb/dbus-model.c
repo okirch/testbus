@@ -142,7 +142,7 @@ ni_objectmodel_create_server(void)
 
 		ni_dbus_object_register_service(object, service);
 	}
-	ni_debug_wicked("create server handle, bus_name=%s, root object=%s (class %s, interface %s)",
+	ni_debug_testbus("create server handle, bus_name=%s, root object=%s (class %s, interface %s)",
 			ni_dbus_server_get_local_bus_name(server),
 			object->path, object->class? object->class->name : NULL,
 			ni_objectmodel_global->root_interface_name);

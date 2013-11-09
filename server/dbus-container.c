@@ -193,7 +193,7 @@ __ni_Testbus_Container_getChildByName(ni_dbus_object_t *object, const ni_dbus_me
 		return FALSE;
 	}
 
-	ni_debug_wicked("%s.%s(%s, %s) returns %s", object->path, method->name, class_name, child_name, child_path);
+	ni_debug_testbus("%s.%s(%s, %s) returns %s", object->path, method->name, class_name, child_name, child_path);
 	ni_dbus_message_append_string(reply, child_path);
 	return TRUE;
 }

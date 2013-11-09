@@ -171,7 +171,7 @@ __ni_Testbus_Agent_Filesystem_upload(ni_dbus_object_t *object, const ni_dbus_met
 
 	close(fd);
 
-	ni_debug_wicked("%s: wrote %u bytes at offset %Lu",
+	ni_debug_testbus("%s: wrote %u bytes at offset %Lu",
 			path, written, (unsigned long long) offset);
 	return TRUE;
 

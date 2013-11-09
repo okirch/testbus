@@ -81,7 +81,7 @@ __ni_testbus_file_object_destroy(ni_dbus_object_t *object)
 {
 	ni_testbus_file_t *file;
 
-	ni_debug_wicked("%s(%s)", __func__, object->path);
+	ni_debug_testbus("%s(%s)", __func__, object->path);
 	if ((file = ni_testbus_file_unwrap(object, NULL)) != NULL) {
 		ni_testbus_file_check(file);
 		__ni_testbus_file_unregister(object, file);
@@ -128,7 +128,7 @@ __ni_Testbus_Fileset_createFile(ni_dbus_object_t *object, const ni_dbus_method_t
 		return FALSE;
 	}
 
-	ni_debug_wicked("%s: creating file \"%s\"", object->path, name);
+	ni_debug_testbus("%s: creating file \"%s\"", object->path, name);
 	if ((file = ni_testbus_file_new(name, &context->files, mode)) == NULL) {
 		dbus_set_error(error, DBUS_ERROR_FAILED, "unable to create new file \"%s\"", name);
 		return FALSE;
@@ -182,7 +182,7 @@ __ni_Testbus_Tmpfile_append(ni_dbus_object_t *object, const ni_dbus_method_t *me
 	file->size = ni_buffer_count(file->data);
 	file->iseq++;
 
-	ni_debug_wicked("file %s: appended %u bytes (now %u bytes total)",
+	ni_debug_testbus("file %s: appended %u bytes (now %u bytes total)",
 			file->name, count, ni_buffer_count(file->data));
 	return TRUE;
 }
@@ -214,7 +214,7 @@ __ni_Testbus_Tmpfile_retrieve(ni_dbus_object_t *object, const ni_dbus_method_t *
 
 	ni_dbus_variant_init_byte_array(&res);
 	if (file->data == NULL) {
-		ni_debug_wicked("%s: no data", file->name);
+		ni_debug_testbus("%s: no data", file->name);
 	} else {
 		uint64_t size = ni_buffer_count(file->data);
 		unsigned char *data;
@@ -229,7 +229,7 @@ __ni_Testbus_Tmpfile_retrieve(ni_dbus_object_t *object, const ni_dbus_method_t *
 
 	rv = ni_dbus_message_serialize_variants(reply, 1, &res, error);
 	if (rv)
-		ni_debug_wicked("file %s: retrieved %u bytes", file->name, res.array.len);
+		ni_debug_testbus("file %s: retrieved %u bytes", file->name, res.array.len);
 	ni_dbus_variant_destroy(&res);
 
 	return rv;

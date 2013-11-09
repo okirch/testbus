@@ -212,7 +212,7 @@ void
 ni_testbus_container_destroy(ni_testbus_container_t *container)
 {
 	ni_assert(container->trace_name);
-	ni_debug_wicked("%s(%s)", __func__, container->trace_name);
+	ni_debug_testbus("%s(%s)", __func__, container->trace_name);
 
 	ni_assert(container->trace_name);
 	if (container->parent) {

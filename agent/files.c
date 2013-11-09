@@ -80,7 +80,7 @@ ni_testbus_agent_process_attach_files(ni_process_t *pi, ni_testbus_file_array_t 
 			/* attach to stdin */
 			pi->stdin = open(file->instance_path, O_RDONLY);
 			if (pi->stdin >= 0)
-				ni_debug_wicked("process: attached file %s to stdin", file->name);
+				ni_debug_testbus("process: attached file %s to stdin", file->name);
 			else
 				ni_warn("process: failed to attach file %s to stdin", file->name);
 		}
@@ -101,7 +101,7 @@ ni_testbus_agent_download_file(ni_testbus_file_t *file)
 	if (file->object_path == NULL)
 		return FALSE;
 
-	ni_debug_wicked("need to download file %s (inum %u)", file->name, file->inum);
+	ni_debug_testbus("need to download file %s (inum %u)", file->name, file->inum);
 	file_object = ni_testbus_client_get_and_refresh_object(file->object_path);
 	if (!file_object)
 		return FALSE;
@@ -111,7 +111,7 @@ ni_testbus_agent_download_file(ni_testbus_file_t *file)
 		return FALSE;
 
 	file->size = ni_buffer_count(file->data);
-	ni_debug_wicked("file %s (%s): downloaded %u bytes",
+	ni_debug_testbus("file %s (%s): downloaded %u bytes",
 			file->name, file->object_path, file->size);
 	return TRUE;
 }
@@ -248,7 +248,7 @@ ni_testbus_agent_discard_cached_file(const char *object_path)
 		ni_testbus_file_t *file = global_files.data[i];
 
 		if (ni_string_eq(file->object_path, object_path)) {
-			ni_debug_wicked("file cache: discarding file %s (inum %u)", file->name, file->inum);
+			ni_debug_testbus("file cache: discarding file %s (inum %u)", file->name, file->inum);
 			ni_testbus_file_put(file);
 		} else {
 			global_files.data[j++] = file;

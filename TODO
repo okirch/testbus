@@ -6,14 +6,6 @@ ni_trace remnants?
 Agent:
 	Agent should use well-known proxy socket?
 
-	testbus-client agent-add-capability foo bar baz
-
-	testbus-client agent-setenv foo=bar ...
-
-	testbus-client agent-ready
-
-	Clean up cached files when their container goes away.
-
 	Monitor when the master goes away. Reconnect when that
 	happens.
 
@@ -44,3 +36,9 @@ General:
 		snapshot of a specific /sys or /proc file before and after the
 		test run. Or you may want to grab any syslog messages that were
 		generated during the execution.
+
+	Runlevel handling
+		agent: scan utmp file to see what the current runlevel is
+			send a signal when we find it changes
+
+		client: wait-for-runlevel command

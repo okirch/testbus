@@ -159,7 +159,7 @@ ni_testbus_command_free(ni_testbus_container_t *container)
 void
 ni_testbus_command_release(ni_testbus_container_t *container)
 {
-	ni_debug_wicked("%s(%s)", __func__, container->dbus_object_path);
+	ni_debug_testbus("%s(%s)", __func__, container->dbus_object_path);
 	ni_testbus_container_destroy(container);
 }
 
@@ -236,7 +236,7 @@ ni_testbus_process_free(ni_testbus_container_t *container)
 void
 ni_testbus_process_release(ni_testbus_container_t *container)
 {
-	ni_debug_wicked("%s(%s)", __func__, container->dbus_object_path);
+	ni_debug_testbus("%s(%s)", __func__, container->dbus_object_path);
 	ni_testbus_container_destroy(container);
 }
 
@@ -287,7 +287,7 @@ ni_testbus_process_finalize(ni_testbus_process_t *proc)
 	for (i = 0; i < ofiles.count; ++i) {
 		ni_testbus_file_t *file = ofiles.data[i];
 
-		ni_debug_wicked("instantiating output file %s", file->name);
+		ni_debug_testbus("instantiating output file %s", file->name);
 		(void) ni_testbus_file_new(file->name, &proc->context.files, file->mode);
 		ni_testbus_file_array_remove(array, file);
 	}
