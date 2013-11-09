@@ -61,7 +61,7 @@ enum {
 	NI_TRACE_IPV6		= 0x000080,
 	NI_TRACE_SOCKET		= 0x000100,
 	NI_TRACE_AUTOIP		= 0x000200,
-	NI_TRACE_TESTBUS_XML	= 0x000400,
+//	unused			= 0x000400,
 	NI_TRACE_DBUS		= 0x000800,
 	NI_TRACE_WIRELESS	= 0x001000,
 	NI_TRACE_XML		= 0x002000,
@@ -101,14 +101,6 @@ extern unsigned int	ni_log_level;
 #define ni_debug_lldp(fmt, args...)		__ni_debug(NI_LOG_DEBUG, NI_TRACE_LLDP, fmt, ##args)
 
 #define ni_debug_nanny				ni_debug_application
-
-#define ni_debug_testbus_xml(xml_node, level, fmt, args...) \
-	do { \
-		if (ni_log_level_at(level) && ni_debug & NI_TRACE_TESTBUS_XML) { \
-			ni_trace(fmt, ##args); \
-			xml_node_print_debug(xml_node, NI_TRACE_TESTBUS_XML); \
-		} \
-	} while (0)
 
 #define ni_debug_none(fmt, args...)		do { } while (0)
 

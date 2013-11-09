@@ -19,7 +19,7 @@
 #include "util_priv.h"
 
 #define NI_TRACE_MINI	(NI_TRACE_IFCONFIG | NI_TRACE_READWRITE)
-#define NI_TRACE_MOST	~(NI_TRACE_XPATH | NI_TRACE_TESTBUS_XML | NI_TRACE_DBUS)
+#define NI_TRACE_MOST	~(NI_TRACE_XPATH | NI_TRACE_DBUS)
 #define NI_TRACE_ALL	~0U
 
 unsigned int		ni_debug;
@@ -40,7 +40,6 @@ static const ni_intmap_t	__debug_flags_names[] = {
 	{ "xpath", 	NI_TRACE_XPATH },
 	{ "extension", 	NI_TRACE_EXTENSION },
 	{ "testbus", 	NI_TRACE_TESTBUS },
-	{ "testbus-xml",NI_TRACE_TESTBUS_XML },
 	{ "events", 	NI_TRACE_EVENTS },
 	{ "dhcp", 	NI_TRACE_DHCP },
 	{ "ipv6", 	NI_TRACE_IPV6 },
@@ -69,7 +68,6 @@ static const ni_intmap_t	__debug_flags_descriptions[] = {
 	{ "Parsing and execution of xpath formats", 	NI_TRACE_XPATH },
 	{ "Handling of extension scripts", 		NI_TRACE_EXTENSION },
 	{ "Everything related to testbus applications",	NI_TRACE_TESTBUS },
-	{ "XML arguments and results of testbus calls", NI_TRACE_TESTBUS_XML },
 	{ "Netlink events (daemon only)", 		NI_TRACE_EVENTS },
 	{ "DHCP supplicant", 				NI_TRACE_DHCP },
 	{ "IPv4LL supplicant", 				NI_TRACE_AUTOIP },
