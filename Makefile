@@ -40,6 +40,7 @@ LIBSRCS	= \
 	dborb/global.c \
 	dborb/logging.c \
 	dborb/md5sum.c \
+	dborb/monitor.c \
 	dborb/process.c \
 	dborb/socket.c \
 	dborb/timer.c \
