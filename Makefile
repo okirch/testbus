@@ -179,9 +179,9 @@ depend:
 	$(CC) $(CPPFLAGS) -M $(LIBSRCS) | \
 		sed 's@^\([^.]*\)\.o: dborb/\([-a-z0-9/]*\)\1.c@obj/dborb/\2&@' > .depend
 	$(CC) $(CPPFLAGS) -M $(LIBTBSRCS) | \
-		sed 's@^\([^.]*\)\.o: testbus/\([-a-z0-9/]*\)\1.c@obj/testbus/\2&@' > .depend
+		sed 's@^\([^.]*\)\.o: testbus/\([-a-z0-9/]*\)\1.c@obj/testbus/\2&@' >> .depend
 #	$(CC) $(CPPFLAGS) -M $(LIBSRCS) | \
-#		sed 's@^\([^.]*\)\.o: dborb/\([-a-z0-9/]*\)\1.c@obj/shlib/\2&@' > .depend
+#		sed 's@^\([^.]*\)\.o: dborb/\([-a-z0-9/]*\)\1.c@obj/shlib/\2&@' >> .depend
 	$(CC) $(CPPFLAGS) -M $(SRVSRCS) | sed 's:^[a-z]:obj/server/&:' >> .depend
 	$(CC) $(CPPFLAGS) -M $(CLNTSRCS) | sed 's:^[a-z]:obj/client/&:' >> .depend
 	$(CC) $(CPPFLAGS) -M $(AGNTSRCS) | sed 's:^[a-z]:obj/agent/&:' >> .depend
