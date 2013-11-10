@@ -1278,7 +1278,7 @@ __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t 
 	}
 
 	if (ni_string_eq(signal_name, "processExited")) {
-		ni_testbus_waitq_t *wq;
+		ni_testbus_waitq_t *wq = NULL;
 
 		if (argc < 1 || !ni_dbus_variant_is_dict(&arg)) {
 			ni_error("%s: bad argument for signal %s()", __func__, signal_name);
@@ -1295,7 +1295,9 @@ __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t 
 			}
 		} else if (wq->done) {
 			ni_warn("duplicate signal %s.%s()", object_path, signal_name);
-		} else {
+		}
+
+		if (wq) {
 			wq->exit_info = ni_testbus_process_exit_info_deserialize(&arg);
 			wq->done = TRUE;
 		}

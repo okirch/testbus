@@ -44,6 +44,8 @@ ni_testbus_process_exit_info_serialize(const ni_process_exit_info_t *exit_info, 
 {
 	ni_dbus_variant_init_dict(dict);
 
+	ni_dbus_dict_add_uint32(dict, "how", exit_info->how);
+
 	switch (exit_info->how) {
 	case NI_PROCESS_EXITED:
 		ni_dbus_dict_add_uint32(dict, "exit-code", exit_info->exit.code);
@@ -71,6 +73,10 @@ ni_testbus_process_exit_info_deserialize(const ni_dbus_variant_t *dict)
 
 	exit_info = ni_calloc(1, sizeof(*exit_info));
 
+	exit_info->how = NI_PROCESS_TRANSCENDED;
+	if (ni_dbus_dict_get_uint32(dict, "how", &u32))
+		exit_info->how = u32;
+
 	if (ni_dbus_dict_get_uint32(dict, "exit-code", &u32)) {
 		exit_info->how = NI_PROCESS_EXITED;
 		exit_info->exit.code = u32;
@@ -80,8 +86,6 @@ ni_testbus_process_exit_info_deserialize(const ni_dbus_variant_t *dict)
 		exit_info->crash.signal = u32;
 		if (ni_dbus_dict_get_bool(dict, "core-dumped", &b))
 			exit_info->crash.core_dumped = b;
-	} else {
-		exit_info->how = NI_PROCESS_TRANSCENDED;
 	}
 
 	if (ni_dbus_dict_get_uint32(dict, "stdout-total-bytes", &u32))
