@@ -94,6 +94,15 @@ typedef struct ni_int_range {
 	int			min, max;
 } ni_int_range_t;
 
+/*
+ * offsetof/container_of macros
+ */
+#define ni_offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+#define ni_container_of(ptr, TYPE, MEMBER) ({            \
+		 const typeof( ((TYPE *)0)->MEMBER ) *__mptr = (ptr);    \
+		 (TYPE *)( (char *)__mptr - ni_offsetof(TYPE,MEMBER) );})
+
+
 typedef struct ni_ipv6_cache_info {
 	unsigned int		valid_lft;
 	unsigned int		preferred_lft;
