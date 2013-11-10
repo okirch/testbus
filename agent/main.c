@@ -475,21 +475,31 @@ __ni_testbus_process_context_free(struct __ni_testbus_process_context *ctx)
 }
 
 static void
+__ni_testbus_process_notify(const char *master_object_path, ni_process_exit_info_t *exit_info,
+				struct __ni_testbus_process_context *ctx)
+{
+	ni_dbus_object_t *proc_object;
+
+	proc_object = ni_testbus_client_get_and_refresh_object(master_object_path);
+
+	if (ctx) {
+		ni_testbus_agent_upload_output(proc_object, "stdout", &ctx->stdout.buffers, ctx->stdout.file);
+		ni_testbus_agent_upload_output(proc_object, "stderr", &ctx->stderr.buffers, ctx->stderr.file);
+	}
+
+	ni_testbus_client_process_exit(proc_object, exit_info);
+}
+
+static void
 __ni_testbus_process_exit_notify(ni_process_t *pi)
 {
 	struct __ni_testbus_process_context *ctx = pi->user_data;
 	ni_process_exit_info_t exit_info;
-	ni_dbus_object_t *proc_object;
 
 	ni_debug_testbus("process %s exited", ctx->object_path);
 	ni_process_get_exit_info(pi, &exit_info);
 
-	proc_object = ni_testbus_client_get_and_refresh_object(ctx->object_path);
-
-	ni_testbus_agent_upload_output(proc_object, "stdout", &ctx->stdout.buffers, ctx->stdout.file);
-	ni_testbus_agent_upload_output(proc_object, "stderr", &ctx->stderr.buffers, ctx->stderr.file);
-
-	ni_testbus_client_process_exit(proc_object, &exit_info);
+	__ni_testbus_process_notify(ctx->object_path, &exit_info, ctx);
 
 	__ni_testbus_process_context_free(ctx);
 	pi->user_data = NULL;
@@ -591,13 +601,9 @@ __ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus
 
 		ni_debug_testbus("received signal %s(%s)", signal_name, object_path);
 		if (!__ni_testbus_process_run(pi, object_path, files)) {
-#ifdef notyet
 			ni_process_exit_info_t exit_info = { .how = NI_PROCESS_NONSTARTER };
-#else
-			ni_error("not yet implemented - process startup notification");
-#endif
 
-			/* FIXME: notify master that we failed to fork */
+			__ni_testbus_process_notify(object_path, &exit_info, NULL);
 			ni_testbus_file_array_free(files);
 			ni_process_free(pi);
 		}
