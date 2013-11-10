@@ -108,7 +108,7 @@ main(int argc, char **argv)
 		default:
 		usage:
 			fprintf(stderr,
-				"testbus-agent [options]\n"
+				"testbus-agent [options] [publish-info ...]\n"
 				"This command understands the following options\n"
 				"  --help\n"
 				"  --version\n"
@@ -128,9 +128,18 @@ main(int argc, char **argv)
 				"        Do not background the service.\n"
 				"  --dbus-socket <path>\n"
 				"        Connect to the specified DBus socket rather than the default dbus system bus.\n"
+				"  --allow-shutdown\n"
+				"        When receiving a request to shutdown or reboot, do shutdown the host.\n"
+				"        The default is for testbus-agent to merely exit.\n"
+				"  --publish <path>\n"
+				"        Publish the capabilities and environment variables specified in\n"
+				"        the file specified by <path>.\n"
 				"\n"
-				"Supported commands:\n"
-				"  ... tbd ...\n"
+				"Additional parameters specify environment variables or capabilities to publish:\n"
+				"  capability <name>\n"
+				"        Adds <name> to the list of capabilities supported by this agent\n"
+				"  setenv <name> <value>\n"
+				"        Adds <name> to the list of environment variables and assign <value>\n"
 				);
 			return (c == OPT_HELP ? 0 : 1);
 
