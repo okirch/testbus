@@ -110,6 +110,7 @@ extern void		ni_var_array_destroy(ni_var_array_t *);
 extern ni_var_t *	ni_var_array_get(const ni_var_array_t *, const char *name);
 extern void		ni_var_array_set(ni_var_array_t *, const char *name, const char *value);
 extern void		ni_var_array_sort(ni_var_array_t *);
+extern void		ni_var_array_copy(ni_var_array_t *, const ni_var_array_t *);
 
 extern int		ni_var_array_get_string(ni_var_array_t *, const char *, char **);
 extern int		ni_var_array_get_integer(ni_var_array_t *, const char *, unsigned int *);

@@ -438,6 +438,22 @@ ni_var_array_set(ni_var_array_t *nva, const char *name, const char *value)
 	ni_string_dup(&var->value, value);
 }
 
+void
+ni_var_array_copy(ni_var_array_t *dst, const ni_var_array_t *src)
+{
+	unsigned int i;
+
+	ni_var_array_destroy(dst);
+	__ni_var_array_realloc(dst, src->count);
+	for (i = 0; i < src->count; ++i) {
+		const ni_var_t *sv = &src->data[i];
+		ni_var_t *dv = &dst->data[i];
+
+		ni_string_dup(&dv->name, sv->name);
+		ni_string_dup(&dv->value, sv->value);
+	}
+}
+
 int
 ni_var_array_get_string(ni_var_array_t *nva, const char *name, char **p)
 {
