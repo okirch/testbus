@@ -45,10 +45,6 @@ enum {
 	OPT_FOREGROUND,
 	OPT_DBUS_SOCKET,
 
-	/* FIXME: nuke these */
-	OPT_DRYRUN,
-	OPT_ROOTDIR,
-
 	OPT_RECONNECT,
 	OPT_ALLOW_SHUTDOWN,
 	OPT_PUBLISH,
@@ -68,9 +64,6 @@ static struct option	options[] = {
 	{ "dbus-socket",	required_argument,	NULL,	OPT_DBUS_SOCKET },
 
 	/* specific */
-	{ "dryrun",		no_argument,		NULL,	OPT_DRYRUN },
-	{ "dry-run",		no_argument,		NULL,	OPT_DRYRUN },
-	{ "root-directory",	required_argument,	NULL,	OPT_ROOTDIR },
 	{ "reconnect",		no_argument,		NULL,	OPT_RECONNECT },
 	{ "allow-shutdown",	no_argument,		NULL,	OPT_ALLOW_SHUTDOWN },
 	{ "publish",		required_argument,	NULL,	OPT_PUBLISH },
@@ -89,8 +82,6 @@ static const char *	opt_log_level;
 static const char *	opt_log_target;
 static int		opt_foreground;
 static const char *	opt_state_file;
-int			opt_global_dryrun;
-char *			opt_global_rootdir;
 char *			opt_dbus_socket;
 char *			opt_hostname;
 static ni_bool_t	opt_reconnect;
@@ -183,14 +174,6 @@ main(int argc, char **argv)
 
 		case OPT_DBUS_SOCKET:
 			opt_dbus_socket = optarg;
-			break;
-
-		case OPT_DRYRUN:
-			opt_global_dryrun = 1;
-			break;
-
-		case OPT_ROOTDIR:
-			opt_global_rootdir = optarg;
 			break;
 
 		case OPT_RECONNECT:
