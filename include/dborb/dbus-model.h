@@ -59,7 +59,7 @@ extern ni_bool_t			ni_dbus_objectmodel_bind_properties(const ni_dbus_objectmodel
 
 extern ni_dbus_object_t *		ni_objectmodel_object_by_path(const char *path);
 
-extern void				ni_objectmodel_register_event(ni_event_t, const char *);
-extern dbus_bool_t			ni_objectmodel_event_send_signal(ni_dbus_server_t *, ni_event_t, const ni_uuid_t *);
+extern void				ni_objectmodel_register_event(unsigned int, const char *);
+extern dbus_bool_t			ni_objectmodel_event_send_signal(ni_dbus_server_t *, unsigned int, const ni_uuid_t *);
 
 #endif /* __WICKED_DBUS_ABSTRACT_MODEL_H__ */

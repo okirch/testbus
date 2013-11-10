@@ -638,7 +638,7 @@ static struct {
 } __ni_objectmodel_signals;
 
 void
-ni_objectmodel_register_event(ni_event_t event, const char *signal_name)
+ni_objectmodel_register_event(unsigned int event, const char *signal_name)
 {
 	unsigned int size = (__ni_objectmodel_signals.count + 2) * sizeof(__ni_objectmodel_signals.map[0]);
 	ni_intmap_t *entry;
@@ -654,7 +654,7 @@ ni_objectmodel_register_event(ni_event_t event, const char *signal_name)
 }
 
 const char *
-ni_objectmodel_event_to_signal(ni_event_t event)
+ni_objectmodel_event_to_signal(unsigned int event)
 {
 	ni_intmap_t *map;
 
@@ -667,7 +667,7 @@ ni_objectmodel_event_to_signal(ni_event_t event)
  * Send out an event (not associated with a network device or other object)
  */
 dbus_bool_t
-ni_objectmodel_event_send_signal(ni_dbus_server_t *server, ni_event_t event, const ni_uuid_t *uuid)
+ni_objectmodel_event_send_signal(ni_dbus_server_t *server, unsigned int event, const ni_uuid_t *uuid)
 {
 	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
 	const char *signal_name = NULL;

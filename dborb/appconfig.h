@@ -91,7 +91,7 @@ typedef struct ni_global {
 	char *			config_path;
 	ni_config_t *		config;
 
-	void			(*other_event)(ni_event_t);
+	void			(*other_event)(unsigned int);
 } ni_global_t;
 
 extern ni_global_t	ni_global;

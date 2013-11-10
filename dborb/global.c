@@ -100,7 +100,7 @@ ni_config_statedir(void)
 }
 
 void
-ni_server_listen_other_events(void (*event_handler)(ni_event_t))
+ni_server_listen_other_events(void (*event_handler)(unsigned int))
 {
 	ni_global.other_event = event_handler;
 }

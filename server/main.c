@@ -65,7 +65,6 @@ static ni_dbus_server_t *dbus_server;
 
 static void		ni_testbus_master(void);
 static void		__ni_testbus_dbus_bus_signal_handler(ni_dbus_connection_t *, ni_dbus_message_t *, void *);
-static void		handle_other_event(ni_event_t);
 
 int
 main(int argc, char **argv)
@@ -203,9 +202,6 @@ ni_testbus_master(void)
 	if (!dbus_server)
 		ni_fatal("Cannot create server, giving up.");
 
-	/* Listen for other events */
-	ni_server_listen_other_events(handle_other_event);
-
 	/* sender=org.freedesktop.DBus -> dest=(null destination) path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged */
 	ni_dbus_server_add_signal_handler(dbus_server,
 			"org.freedesktop.DBus",		/* sender*/
@@ -332,12 +328,4 @@ ni_testbus_lookup_wellknown_bus_name(const char *owner)
 	}
 
 	return owner;
-}
-
-static void
-handle_other_event(ni_event_t event)
-{
-	//ni_debug_events("%s(%s)", __func__, ni_event_type_to_name(event));
-	if (dbus_server)
-		ni_objectmodel_event_send_signal(dbus_server, event, NULL);
 }
