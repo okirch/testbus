@@ -57,16 +57,6 @@ typedef union ni_uuid {
 #define NI_UUID_INIT		{ .words = { 0, 0, 0, 0 } }
 
 /*
- * Link layer address
- */
-#define NI_MAXHWADDRLEN		64
-typedef struct ni_hwaddr {
-	unsigned short		type;
-	unsigned short		len;
-	unsigned char		data[NI_MAXHWADDRLEN];
-} ni_hwaddr_t;
-
-/*
  * Range of unsigned values
  */
 typedef struct ni_uint_range {
@@ -102,10 +92,5 @@ typedef struct ni_int_range {
 		 const typeof( ((TYPE *)0)->MEMBER ) *__mptr = (ptr);    \
 		 (TYPE *)( (char *)__mptr - ni_offsetof(TYPE,MEMBER) );})
 
-
-typedef struct ni_ipv6_cache_info {
-	unsigned int		valid_lft;
-	unsigned int		preferred_lft;
-} ni_ipv6_cache_info_t;
 
 #endif /* __WICKED_TYPES_H__ */
