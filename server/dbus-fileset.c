@@ -177,8 +177,7 @@ __ni_Testbus_Tmpfile_append(ni_dbus_object_t *object, const ni_dbus_method_t *me
 		return FALSE;
 	}
 
-	memcpy(ni_buffer_tail(file->data), argv[0].byte_array_value, count);
-	ni_buffer_push_tail(file->data, count);
+	ni_buffer_put(file->data, argv[0].byte_array_value, count);
 	file->size = ni_buffer_count(file->data);
 	file->iseq++;
 
