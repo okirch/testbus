@@ -334,6 +334,8 @@ extern dbus_bool_t		ni_dbus_dict_add_object_path(ni_dbus_variant_t *, const char
 extern dbus_bool_t		ni_dbus_dict_add_double(ni_dbus_variant_t *, const char *, double);
 extern dbus_bool_t		ni_dbus_dict_add_byte_array(ni_dbus_variant_t *, const char *,
 					const unsigned char *byte_array, unsigned int len);
+extern dbus_bool_t		ni_dbus_dict_add_byte_array_buffer(ni_dbus_variant_t *, const char *,
+					const ni_buffer_t *);
 extern dbus_bool_t		ni_dbus_dict_add_string_array(ni_dbus_variant_t *, const char *, const char **, unsigned int len);
 extern ni_dbus_variant_t *	ni_dbus_dict_get(const ni_dbus_variant_t *, const char *);
 extern ni_dbus_variant_t *	ni_dbus_dict_get_entry(const ni_dbus_variant_t *, unsigned int, const char **);
@@ -348,6 +350,7 @@ extern dbus_bool_t		ni_dbus_dict_get_uint64(const ni_dbus_variant_t *, const cha
 extern dbus_bool_t		ni_dbus_dict_get_string(const ni_dbus_variant_t *, const char *, const char **);
 extern dbus_bool_t		ni_dbus_dict_get_object_path(const ni_dbus_variant_t *, const char *, const char **);
 extern dbus_bool_t		ni_dbus_dict_get_double(const ni_dbus_variant_t *, const char *, double *);
+extern ni_buffer_t *		ni_dbus_dict_get_byte_array_buffer(const ni_dbus_variant_t *, const char *);
 extern dbus_bool_t		ni_dbus_dict_is_empty(const ni_dbus_variant_t *);
 
 extern void			ni_dbus_dict_array_init(ni_dbus_variant_t *);

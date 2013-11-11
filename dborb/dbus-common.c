@@ -1388,6 +1388,15 @@ ni_dbus_dict_add_byte_array(ni_dbus_variant_t *dict, const char *key,
 }
 
 dbus_bool_t
+ni_dbus_dict_add_byte_array_buffer(ni_dbus_variant_t *dict, const char *key,
+					const ni_buffer_t *buf)
+{
+	return ni_dbus_dict_add_byte_array(dict, key,
+			(const unsigned char *) ni_buffer_head(buf),
+			ni_buffer_count(buf));
+}
+
+dbus_bool_t
 ni_dbus_dict_add_string_array(ni_dbus_variant_t *dict, const char *key,
 			const char **string_array, unsigned int len)
 {
@@ -1537,6 +1546,20 @@ ni_dbus_dict_get_double(const ni_dbus_variant_t *dict, const char *key, double *
 	if (!(var = ni_dbus_dict_get(dict, key)))
 		return FALSE;
 	return ni_dbus_variant_get_double(var, value);
+}
+
+ni_buffer_t *
+ni_dbus_dict_get_byte_array_buffer(const ni_dbus_variant_t *dict, const char *key)
+{
+	const ni_dbus_variant_t *var;
+	ni_buffer_t *res;
+
+	if (!(var = ni_dbus_dict_get(dict, key)))
+		return FALSE;
+
+	res = ni_buffer_new(var->array.len);
+	ni_buffer_put(res, var->byte_array_value, var->array.len);
+	return res;
 }
 
 dbus_bool_t
