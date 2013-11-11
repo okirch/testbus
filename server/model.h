@@ -41,6 +41,7 @@ extern void		ni_testbus_bind_builtin_test(void);
 extern void		ni_testbus_create_static_objects_test(ni_dbus_server_t *server);
 extern void		ni_testbus_bind_builtin_process(void);
 extern void		ni_testbus_bind_builtin_container(void);
+extern void		ni_testbus_bind_builtin_eventlog(void);
 
 extern void		ni_testbus_record_wellknown_bus_name(const char *, const char *);
 extern const char *	ni_testbus_lookup_wellknown_bus_name(const char *);

@@ -23,17 +23,67 @@ ni_eventlog_free(ni_eventlog_t *log)
 }
 
 void
-ni_eventlog_add_event(ni_eventlog_t *log, const ni_event_class_t *class, unsigned int type, ni_buffer_t *data)
+ni_eventlog_add_event(ni_eventlog_t *log, const ni_monitor_t *source, unsigned int id, ni_buffer_t *data)
 {
+	const ni_event_class_t *class = source->class;
 	ni_event_t *ev;
+	const char *type;
+
+	if (id >= class->max_type || !(type = class->type_names[id])) {
+		ni_error("cannot log event %s%u - no named defined", class->name, id);
+		return;
+	}
 
 	ev = ni_event_array_add(&log->events);
 	ev->sequence = log->seqno++;
-	ev->class = class;
-	ev->type = type;
+	ni_string_dup(&ev->class, class->name);
+	ni_string_dup(&ev->source, source->name);
+	ni_string_dup(&ev->type, type);
 	ev->data = data;
-
 	gettimeofday(&ev->timestamp, NULL);
+}
+
+const ni_event_t *
+ni_eventlog_last(const ni_eventlog_t *log)
+{
+	if (log->events.count <= log->consumed)
+		return NULL;
+	return &log->events.data[log->events.count-1];
+}
+
+const ni_event_t *
+ni_eventlog_consume(ni_eventlog_t *log)
+{
+	const ni_event_t *ev;
+
+	if (log->events.count <= log->consumed)
+		return NULL;
+
+	ev = &log->events.data[log->consumed++];
+	return ev;
+}
+
+void
+ni_eventlog_prune(ni_eventlog_t *log)
+{
+	if (log->consumed < log->events.count)
+		ni_warn("pruning %u unconsumed events from eventlog", log->events.count - log->consumed);
+	ni_event_array_destroy(&log->events);
+	log->consumed = 0;
+}
+
+void
+ni_eventlog_flush(ni_eventlog_t *log)
+{
+	ni_event_array_destroy(&log->events);
+	log->consumed = 0;
+}
+
+unsigned int
+ni_eventlog_pending_count(const ni_eventlog_t *log)
+{
+	ni_assert(log->consumed <= log->events.count);
+	return log->events.count - log->consumed;
 }
 
 void
@@ -69,6 +119,8 @@ ni_event_destroy(ni_event_t *ev)
 {
 	if (ev->data)
 		ni_buffer_free(ev->data);
+	ni_string_free(&ev->class);
+	ni_string_free(&ev->type);
 	memset(ev, 0, sizeof(*ev));
 }
 
@@ -77,6 +129,7 @@ void
 ni_monitor_init(ni_monitor_t *mon, const ni_event_class_t *class, const char *name, ni_eventlog_t *log)
 {
 	ni_string_dup(&mon->name, name);
+	mon->refcount = 1;
 	mon->class = class;
 	mon->log = log;
 }
@@ -84,17 +137,40 @@ ni_monitor_init(ni_monitor_t *mon, const ni_event_class_t *class, const char *na
 void
 ni_monitor_add_event(ni_monitor_t *mon, unsigned int type, ni_buffer_t *data)
 {
-	ni_eventlog_add_event(mon->log, mon->class, type, data);
+	ni_debug_testbus("monitor %s(%s) log event %d: %u bytes of data",
+			mon->name, mon->class->name, type, ni_buffer_count(data));
+	ni_eventlog_add_event(mon->log, mon, type, data);
 }
 
 void
 ni_monitor_free(ni_monitor_t *mon)
 {
+	ni_assert(mon->refcount == 0);
 	if (mon->class->destroy)
 		mon->class->destroy(mon);
 
 	ni_string_free(&mon->name);
 	free(mon);
+}
+
+ni_bool_t
+ni_monitor_poll(ni_monitor_t *mon)
+{
+	if (!mon->class)
+		ni_fatal("%s: no class for monitor %s", __func__, mon->name);
+	if (mon->class->check_for_events == NULL)
+		return FALSE;
+	return mon->class->check_for_events(mon);
+}
+
+/*
+ * Monitor array
+ */
+void
+ni_monitor_array_append(ni_monitor_array_t *array, ni_monitor_t *mon)
+{
+	array->data = ni_realloc(array->data, (array->count + 1) * sizeof(array->data[0]));
+	array->data[array->count++] = ni_monitor_get(mon);
 }
 
 /*

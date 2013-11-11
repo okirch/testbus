@@ -116,6 +116,15 @@
 
 /*
  * Interface:
+ *	Eventlog
+ * Methods:
+ * Compatible with class:
+ *	host -> container
+ */
+#define NI_TESTBUS_EVENTLOG_INTERFACE	NI_TESTBUS_NAMESPACE ".Eventlog"
+
+/*
+ * Interface:
  *	Environment
  * Methods:
  *	setenv(name, value)

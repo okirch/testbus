@@ -6,12 +6,13 @@
 #include "environ.h"
 
 enum {
-	NI_TESTBUS_CONTAINER_HAS_ENV	= 0x0001,
-	NI_TESTBUS_CONTAINER_HAS_CMDS	= 0x0002,
-	NI_TESTBUS_CONTAINER_HAS_FILES	= 0x0004,
-	NI_TESTBUS_CONTAINER_HAS_HOSTS	= 0x0008,
-	NI_TESTBUS_CONTAINER_HAS_TESTS	= 0x0010,
-	NI_TESTBUS_CONTAINER_HAS_PROCS	= 0x0020,
+	NI_TESTBUS_CONTAINER_HAS_ENV		= 0x0001,
+	NI_TESTBUS_CONTAINER_HAS_CMDS		= 0x0002,
+	NI_TESTBUS_CONTAINER_HAS_FILES		= 0x0004,
+	NI_TESTBUS_CONTAINER_HAS_HOSTS		= 0x0008,
+	NI_TESTBUS_CONTAINER_HAS_TESTS		= 0x0010,
+	NI_TESTBUS_CONTAINER_HAS_PROCS		= 0x0020,
+	NI_TESTBUS_CONTAINER_HAS_MONITORS	= 0x0040,
 };
 
 struct ni_testbus_container_ops {
@@ -79,6 +80,7 @@ struct ni_testbus_container {
 	ni_testbus_host_array_t		hosts;
 	ni_testbus_file_array_t		files;
 	ni_testbus_test_array_t		tests;
+	ni_testbus_monitor_array_t	monitors;
 };
 
 typedef struct ni_testbus_container_array ni_testbus_container_array_t;
@@ -127,6 +129,7 @@ extern ni_bool_t	ni_testbus_container_isa_host(const ni_testbus_container_t *);
 extern ni_bool_t	ni_testbus_container_isa_testcase(const ni_testbus_container_t *);
 extern ni_bool_t	ni_testbus_container_isa_command(const ni_testbus_container_t *);
 extern ni_bool_t	ni_testbus_container_isa_process(const ni_testbus_container_t *);
+extern ni_bool_t	ni_testbus_container_isa_monitor(const ni_testbus_container_t *);
 
 extern void		ni_testbus_container_array_append(ni_testbus_container_array_t *, ni_testbus_container_t *);
 extern void		ni_testbus_container_array_destroy(ni_testbus_container_array_t *);
@@ -147,6 +150,12 @@ static inline ni_bool_t
 ni_testbus_container_has_commands(const ni_testbus_container_t *cc)
 {
 	return ni_testbus_container_has_feature(cc, NI_TESTBUS_CONTAINER_HAS_CMDS);
+}
+
+static inline ni_bool_t
+ni_testbus_container_has_monitors(const ni_testbus_container_t *cc)
+{
+	return ni_testbus_container_has_feature(cc, NI_TESTBUS_CONTAINER_HAS_MONITORS);
 }
 
 static inline ni_bool_t

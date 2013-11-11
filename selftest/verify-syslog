@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# Very simple test to verify that the agent is capable of capturing syslog
+# messages.
+#
+
+# TESTBUS_SELFTEST_DEBUG=all
+
+. ${0%/*}/functions
+
+# Override the timeout for claiming the host.
+# Bringing up a VM guest can take some time, especially if it goes
+# through a firstboot stage first.
+TESTBUS_CLAIM_TIMEOUT=240
+
+testbus_init_test $0
+TESTBUS_HOST=`testbus_claim_host`
+
+testbus_run_command --host $TESTBUS_HOST /bin/logger testbus-log-message-foobar
+
+testbus_download_eventlog --host $TESTBUS_HOST >$TESTBUS_TEMPDIR/eventlog
+if ! grep -qs testbus-log-message-foobar $TESTBUS_TEMPDIR/eventlog; then
+	testbus_test_fail "expected our signature log message in eventlog; nothing found"
+fi
+
+testbus_exit

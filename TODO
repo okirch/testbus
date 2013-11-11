@@ -8,6 +8,8 @@ Agent:
 
 	Process handling: act on SIGCHLD rather than monitoring its I/O
 
+	Split code into individual source files: registration, process exec, etc
+
 Server:
 	Remove pid file on exit
 	Fix /org/openSUSE/Testbus/Host/Host* naming

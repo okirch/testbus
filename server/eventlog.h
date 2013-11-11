@@ -1,6 +1,6 @@
 
-#ifndef __TESTBUS_SERVER_HOST_H__
-#define __TESTBUS_SERVER_HOST_H__
+#ifndef __TESTBUS_SERVER_EVENTLOG_H__
+#define __TESTBUS_SERVER_EVENTLOG_H__
 
 #include <dborb/monitor.h>
 #include "container.h"
@@ -48,4 +48,4 @@ ni_testbus_host_put(ni_testbus_host_t *host)
 	ni_testbus_container_put(&host->context);
 }
 
-#endif /* __TESTBUS_SERVER_HOST_H__ */
+#endif /* __TESTBUS_SERVER_EVENTLOG_H__ */

@@ -17,14 +17,15 @@
 #include <dborb/logging.h>
 #include <dborb/xml.h>
 #include <dborb/buffer.h>
-#include <testbus/model.h>
-#include <testbus/client.h>
-#include <testbus/process.h>
 #include <dborb/dbus-errors.h>
 #include <dborb/dbus-service.h>
 #include <dborb/dbus-model.h>
 #include <dborb/socket.h>
 #include <dborb/process.h>
+#include <testbus/model.h>
+#include <testbus/client.h>
+#include <testbus/process.h>
+#include <testbus/monitor.h>
 
 /*
  * Error context - this is an opaque type.
@@ -363,6 +364,27 @@ ni_testbus_client_getenv(ni_dbus_object_t *container, const char *name)
 	return result;
 }
 
+ni_bool_t
+ni_testbus_client_eventlog_append(ni_dbus_object_t *object, const ni_event_t *ev)
+{
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	DBusError error = DBUS_ERROR_INIT;
+	ni_bool_t rv;
+
+	if (!ni_testbus_event_serialize(ev, &arg)) {
+		ni_error("%s: failed to serialize event", __func__);
+		return FALSE;
+	}
+
+	rv = ni_dbus_object_call_variant(object, NI_TESTBUS_EVENTLOG_INTERFACE, "add", 1, &arg, 0, NULL, &error);
+	if (!rv) {
+		ni_dbus_print_error(&error, "%s: failed to add event", object->path);
+		dbus_error_free(&error);
+	}
+
+	ni_dbus_variant_destroy(&arg);
+	return rv;
+}
 
 ni_bool_t
 ni_testbus_client_delete(ni_dbus_object_t *object)

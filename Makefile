@@ -56,7 +56,8 @@ LIBTBSRCS = \
 	testbus/classes.c \
 	testbus/model.c \
 	testbus/file.c \
-	testbus/process.c
+	testbus/process.c \
+	testbus/event.c
 
 SRVSRCS = \
 	server/main.c \
@@ -65,12 +66,14 @@ SRVSRCS = \
 	server/dbus-environ.c \
 	server/dbus-fileset.c \
 	server/dbus-host.c \
+	server/dbus-eventlog.c \
 	server/dbus-test.c \
 	server/dbus-process.c \
 	server/command.c \
 	server/container.c \
 	server/environ.c \
 	server/fileset.c \
+	server/monitor.c \
 	server/host.c \
 	server/root.c \
 	server/test.c
@@ -81,6 +84,8 @@ CLNTSRCS = \
 AGNTSRCS = \
 	agent/main.c \
 	agent/files.c \
+	agent/monitor.c \
+	agent/syslog.c \
 	agent/dbus-filesystem.c
 
 PROXSRCS = \

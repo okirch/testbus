@@ -18,7 +18,7 @@ typedef unsigned char		ni_bool_t;
 #endif
 
 typedef union ni_sockaddr	ni_sockaddr_t;
-typedef struct ni_netconfig	ni_netconfig_t;
+typedef struct ni_netconfig	ni_netconfig_t;		/* FIXME: nuke */
 
 typedef struct ni_dbus_server	ni_dbus_server_t;
 typedef struct ni_dbus_client	ni_dbus_client_t;
@@ -32,6 +32,10 @@ typedef struct ni_script_action	ni_script_action_t;
 typedef struct ni_shellcmd	ni_shellcmd_t;
 typedef struct ni_process	ni_process_t;
 typedef struct ni_process_exit_info  ni_process_exit_info_t;
+
+typedef struct ni_monitor	ni_monitor_t;
+typedef struct ni_event		ni_event_t;
+typedef struct ni_eventlog	ni_eventlog_t;
 
 /*
  * These are used by the XML and XPATH code.

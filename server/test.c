@@ -12,7 +12,8 @@ static struct ni_testbus_container_ops ni_testbus_testcase_ops = {
 				  NI_TESTBUS_CONTAINER_HAS_CMDS |
 				  NI_TESTBUS_CONTAINER_HAS_HOSTS |
 				  NI_TESTBUS_CONTAINER_HAS_TESTS |
-				  NI_TESTBUS_CONTAINER_HAS_FILES,
+				  NI_TESTBUS_CONTAINER_HAS_FILES |
+				  NI_TESTBUS_CONTAINER_HAS_MONITORS,
 	.dbus_name_prefix	= "Test",
 
 	.destroy		= ni_testbus_testcase_destroy,

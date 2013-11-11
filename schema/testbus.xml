@@ -26,6 +26,7 @@
 
 <include name="context.xml"/>
 <include name="host.xml"/>
+<include name="eventlog.xml"/>
 <include name="command.xml"/>
 <include name="environ.xml"/>
 <include name="agent.xml"/>

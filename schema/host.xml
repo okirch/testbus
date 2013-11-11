@@ -8,6 +8,14 @@
     <capabilities class="array" element-type="string" />
   </define>
 
+  <define name="event_t" class="dict">
+    <class type="string" />
+    <type type="string" />
+    <sequence type="uint32" />
+    <timestamp type="uint64" />
+    <data class="array" element-type="byte" />
+  </define>
+
   <method name="run">
     <arguments>
       <!-- This is really an object-path of a Testbus.Command object: -->
@@ -22,6 +30,12 @@
   <method name="addCapability">
     <arguments>
       <role type="string" />
+    </arguments>
+  </method>
+
+  <method name="addEvent">
+    <arguments>
+      <event type="event_t"/>
     </arguments>
   </method>
 

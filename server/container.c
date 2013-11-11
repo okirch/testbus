@@ -6,6 +6,7 @@
 #include "host.h"
 #include "fileset.h"
 #include "command.h"
+#include "monitor.h"
 #include "testcase.h"
 
 static ni_testbus_container_t *		__ni_testbus_global_context;
@@ -41,6 +42,7 @@ ni_testbus_container_init(ni_testbus_container_t *container, const struct ni_tes
 	ni_testbus_env_init(&container->env);
 	ni_testbus_command_array_init(&container->commands);
 	ni_testbus_process_array_init(&container->processes);
+	ni_testbus_monitor_array_init(&container->monitors);
 	ni_testbus_host_array_init(&container->hosts);
 	ni_testbus_file_array_init(&container->files);
 	ni_testbus_test_array_init(&container->tests);
@@ -146,6 +148,9 @@ ni_testbus_container_remove_child(ni_testbus_container_t *container, ni_testbus_
 	} else
 	if (ni_testbus_container_isa_process(container)) {
 		rv = ni_testbus_process_array_remove(&parent->processes, ni_testbus_process_cast(container));
+	} else
+	if (ni_testbus_container_isa_monitor(container)) {
+		rv = ni_testbus_monitor_array_remove(&parent->monitors, ni_testbus_monitor_cast(container));
 	} else {
 		ni_fatal("Don't know how to remove container from parent");
 	}

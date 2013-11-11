@@ -30,6 +30,7 @@
 #include <testbus/file.h>
 
 #include "dbus-filesystem.h"
+#include "monitor.h"
 #include "files.h"
 
 #define APP_IDENTITY		"agent"
@@ -395,6 +396,22 @@ ni_testbus_agent_write_state(const ni_testbus_agent_state_t *state)
 	xml_document_free(doc);
 }
 
+void
+ni_testbus_agent_init_monitors(ni_dbus_object_t *host_object)
+{
+	ni_eventlog_t *log;
+	ni_monitor_t *mon;
+
+	ni_testbus_agent_eventlog_init(host_object);
+
+	log = ni_testbus_agent_eventlog();
+
+	if ((mon = ni_agent_create_syslog_monitor(log)) != NULL) {
+		ni_testbus_agent_register_monitor(mon);
+		ni_monitor_put(mon);
+	}
+}
+
 /*
  * After the process has finished, upload the output
  */
@@ -498,6 +515,11 @@ __ni_testbus_process_exit_notify(ni_process_t *pi)
 
 	ni_debug_testbus("process %s exited", ctx->object_path);
 	ni_process_get_exit_info(pi, &exit_info);
+
+	/* Now poll all event monitors to see whether there are
+	 * new events. Then, push all pending events to the server */
+	ni_testbus_agent_monitors_poll();
+	ni_testbus_agent_eventlog_flush();
 
 	__ni_testbus_process_notify(ctx->object_path, &exit_info, ctx);
 
@@ -790,6 +812,8 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 
 	if (!ni_testbus_agent_add_environment(host_object, &state->environ))
 		ni_fatal("failed to publish agent environment");
+
+	ni_testbus_agent_init_monitors(host_object);
 
 	if (!opt_foreground && ni_server_background(APP_IDENTITY) < 0)
 		ni_fatal("unable to background testbus agent");

@@ -3,6 +3,7 @@
 #include <dborb/dbus-service.h>
 #include <dborb/logging.h>
 #include <dborb/process.h>
+#include <dborb/buffer.h>
 #include <testbus/process.h>
 #include <testbus/file.h>
 
@@ -394,6 +395,7 @@ __ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 	proc = ni_testbus_process_new(&host->context, cmd);
 	ni_testbus_process_apply_context(proc, &cmd->context);
 	ni_testbus_process_apply_context(proc, &host->context);
+	ni_trace("FIXME: not merging monitor information into proc object yet");
 
 	/* Create the DBus object for this process */
 	process_object = ni_testbus_process_wrap(object, proc);

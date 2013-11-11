@@ -12,7 +12,8 @@ static struct ni_testbus_container_ops ni_testbus_host_ops = {
 	.features		= NI_TESTBUS_CONTAINER_HAS_ENV|
 				  NI_TESTBUS_CONTAINER_HAS_CMDS|
 				  NI_TESTBUS_CONTAINER_HAS_PROCS|
-				  NI_TESTBUS_CONTAINER_HAS_FILES,
+				  NI_TESTBUS_CONTAINER_HAS_FILES |
+				  NI_TESTBUS_CONTAINER_HAS_MONITORS,
 
 	.dbus_name_prefix	= "Host",
 
@@ -69,6 +70,8 @@ ni_testbus_host_release(ni_testbus_container_t *container)
 	ni_testbus_host_t *host = ni_testbus_host_cast(container);
 
 	ni_string_free(&host->role);
+	if (host->eventlog)
+		ni_eventlog_flush(host->eventlog);
 }
 
 void
@@ -76,6 +79,12 @@ ni_testbus_host_destroy(ni_testbus_container_t *container)
 {
 	ni_testbus_host_t *host = ni_testbus_host_cast(container);
 
+	if (host->eventlog) {
+		ni_eventlog_free(host->eventlog);
+		host->eventlog = NULL;
+	}
+
+	ni_string_array_destroy(&host->capabilities);
 	ni_string_free(&host->agent_bus_name);
 	ni_string_free(&host->role);
 }

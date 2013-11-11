@@ -1,0 +1,33 @@
+
+<service name="eventlog" interface="org.opensuse.Testbus.Eventlog" object-class="host">
+  <define name="event_t" class="dict">
+    <class type="string" />
+    <type type="string" />
+    <sequence type="uint32" />
+    <timestamp type="uint64" />
+    <data class="array" element-type="byte" />
+  </define>
+
+  <define name="properties" class="dict">
+    <last-seq type="uint32" />
+    <events class="array" element-type="event_t" />
+  </define>
+
+  <method name="add">
+    <arguments>
+      <event type="event_t" />
+    </arguments>
+  </method>
+
+  <method name="purge">
+    <arguments>
+      <upto type="uint32" />
+    </arguments>
+  </method>
+
+  <signal name="eventsAdded">
+    <arguments>
+      <last-seq type="uint32" />
+    </arguments>
+  </signal>
+</service>

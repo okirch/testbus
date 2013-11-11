@@ -552,6 +552,8 @@ ni_dbus_objectmodel_bind_method(const ni_dbus_objectmodel_method_binding_t *b)
 				b->service, b->method.name);
 		return NULL;
 	}
+
+	ni_debug_dbus("successfully bound %s.%s", service->name, method->name);
 	return (ni_dbus_method_t *) method;
 }
 
