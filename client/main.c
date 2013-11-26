@@ -25,6 +25,7 @@
 #include <testbus/model.h>
 #include <testbus/client.h>
 #include <testbus/process.h>
+#include <testbus/monitor.h>
 
 enum {
 	OPT_HELP,
@@ -764,7 +765,7 @@ do_shutdown(int argc, char **argv)
 		{ NULL }
 	};
 	ni_dbus_object_t *host_objects[argc];
-	ni_bool_t opt_reboot;
+	ni_bool_t opt_reboot = FALSE;
 	int c, nhosts = 0;
 
 	optind = 1;
@@ -1471,6 +1472,120 @@ do_run_command(int argc, char **argv)
 	return 0;
 }
 
+/*
+ * Retrieve eventlog
+ */
+static void
+show_events(const ni_dbus_object_t *host_object)
+{
+	const ni_dbus_variant_t *var;
+	unsigned int i;
+
+	var = ni_dbus_object_get_cached_property(host_object, "events", ni_testbus_eventlog_interface());
+	if (var == NULL) {
+		printf("%s: no event log\n", host_object->path);
+		return;
+	}
+
+	for (i = 0; TRUE; ++i) {
+		ni_event_t event = NI_EVENT_INIT;
+		const ni_dbus_variant_t *evdict;
+
+		if (!(evdict = ni_dbus_dict_array_at(var, i)))
+			break;
+		if (!ni_testbus_event_deserialize(evdict, &event)) {
+			ni_error("%s: bad event at index %u", host_object->path, i);
+			break;
+		}
+
+		printf("%3u %lu.%06lu %-12s %-12s %-12s",
+				event.sequence,
+				event.timestamp.tv_sec,
+				event.timestamp.tv_usec,
+				event.class,
+				event.source,
+				event.type);
+		if (event.data)
+			printf(" %s\n", ni_print_suspect(ni_buffer_head(event.data), ni_buffer_count(event.data)));
+		else
+			printf(" (no data)");
+		printf("\n");
+		ni_event_destroy(&event);
+	}
+}
+
+static int
+do_get_events(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_PURGE, };
+	static struct option local_options[] = {
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ "purge", no_argument, NULL, OPT_PURGE },
+		{ NULL }
+	};
+	ni_dbus_object_t *host_objects[argc];
+	ni_bool_t opt_purge = FALSE;
+	int c, i, nhosts = 0;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] get-events object-path ...\n"
+				"\nSupported options:\n"
+				"  --purge\n"
+				"      Purge event log after reading it.\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+
+		case OPT_PURGE:
+			opt_purge = TRUE;
+			break;
+		}
+	}
+
+	if (optind >= argc)
+		goto usage;
+
+	if (optind + 1 == argc && ni_string_eq(argv[optind], "all")) {
+		ni_dbus_object_t *hostlist, *object;
+
+		hostlist = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
+		if (hostlist == NULL) {
+			ni_error("unable to refresh host list");
+			return 1;
+		}
+
+		for (object = hostlist->children; object; object = object->next)
+			show_events(object);
+
+		return 0;
+	}
+
+	while (optind < argc) {
+		const char *path = argv[optind++];
+		ni_dbus_object_t *object;
+
+		object = ni_testbus_client_get_and_refresh_object(path);
+		if (object == NULL) {
+			ni_error("unknown host object %s", path);
+			return 1;
+		}
+		host_objects[nhosts++] = object;
+	}
+
+	for (i = 0; i < nhosts; ++i) {
+		show_events(host_objects[i]);
+	}
+
+	return 0;
+}
+
 ni_buffer_t *
 ni_testbus_read_local_file(const char *filename)
 {
@@ -1508,6 +1623,7 @@ static struct client_command	client_command_table[] = {
 	{ "run-command",	do_run_command,		"Run command/script on one or more hosts"	},
 	{ "setenv",		do_setenv,		"Set environment variable in container"		},
 	{ "getenv",		do_getenv,		"Get container variable"			},
+	{ "get-events",		do_get_events,		"Get the event log"				},
 	{ "shutdown",		do_shutdown,		"Shutdown/reboot agent"				},
 
 	{ NULL, }

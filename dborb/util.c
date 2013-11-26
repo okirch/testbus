@@ -2456,18 +2456,19 @@ ni_print_suspect(const char *str, size_t len)
 	ptr = (unsigned char *)str;
 	for ( pos = 0; len > 0; --len, ++ptr) {
 		switch (*ptr) {
-			case '.': case ':':
-			case '-': case '_':
-			case '+': case '/':
-			case '~': case '=':
-			case '%': case '@':
-				cnt = 1;
+		case '.': case ':':
+		case '-': case '_':
+		case '+': case '/':
+		case '~': case '=':
+		case '%': case '@':
+		case ' ':
+			cnt = 1;
 			break;
-			default:
-				if (isalnum(*ptr))
-					cnt = 1;
-				else
-					cnt = 3;
+		default:
+			if (isalnum(*ptr))
+				cnt = 1;
+			else
+				cnt = 4;
 			break;
 		}
 		if (pos + cnt > end)
@@ -2476,7 +2477,7 @@ ni_print_suspect(const char *str, size_t len)
 		if (cnt == 1) {
 			buf[pos++] = *ptr;
 		} else {
-			snprintf(buf+pos, end - pos, "#%02x", *ptr);
+			snprintf(buf+pos, end - pos, "\\%03o", *ptr);
 			pos += cnt;
 		}
 	}

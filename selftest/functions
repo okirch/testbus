@@ -218,6 +218,14 @@ function testbus_download_file {
 	testbus_call download-file --host $host "$@"
 }
 
+function testbus_download_eventlog {
+
+	testbus_trace "download eventlog $*"
+
+	host=$1; shift
+	testbus_call get-events "$@" $host
+}
+
 function testbus_run_command {
 
 	testbus_trace "run command $*"

@@ -23,6 +23,7 @@ struct ni_event {
 	struct timeval		timestamp;
 	ni_buffer_t *		data;
 };
+#define NI_EVENT_INIT		{ NULL }
 
 typedef struct ni_event_array {
 	unsigned int		count;

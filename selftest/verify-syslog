@@ -18,9 +18,9 @@ TESTBUS_HOST=`testbus_claim_host`
 
 testbus_run_command --host $TESTBUS_HOST /bin/logger testbus-log-message-foobar
 
-testbus_download_eventlog --host $TESTBUS_HOST >$TESTBUS_TEMPDIR/eventlog
+testbus_download_eventlog $TESTBUS_HOST >$TESTBUS_TEMPDIR/eventlog
 if ! grep -qs testbus-log-message-foobar $TESTBUS_TEMPDIR/eventlog; then
-	testbus_test_fail "expected our signature log message in eventlog; nothing found"
+	testbus_fail_test "expected our signature log message in eventlog; nothing found"
 fi
 
 testbus_exit
