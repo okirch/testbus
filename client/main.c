@@ -53,6 +53,7 @@ typedef int		client_command_handler_t(int, char **);
 struct client_command {
 	const char *	name;
 	client_command_handler_t *handler;
+	const char *	description;
 };
 
 static const char *	program_name;
@@ -61,6 +62,7 @@ static const char *	opt_log_target;
 static ni_bool_t	opt_quiet;
 
 static client_command_handler_t *get_client_command(const char *);
+static void		help_client_commands(void);
 
 static ni_buffer_t *	ni_testbus_read_local_file(const char *);
 
@@ -98,8 +100,8 @@ main(int argc, char **argv)
 				"        mainly useful for interactive use.\n"
 				"\n"
 				"Supported commands:\n"
-				"  ...\n"
 				);
+			help_client_commands();
 			return (c == OPT_HELP ? 0 : 1);
 
 		case OPT_VERSION:
@@ -1494,19 +1496,20 @@ ni_testbus_read_local_file(const char *filename)
  * Command table
  */
 static struct client_command	client_command_table[] = {
-	{ "show-xml",		do_show_xml		},
-	{ "delete",		do_delete_object	},
-	{ "create-host",	do_create_host		},
-	{ "remove-host",	do_remove_host		},
-	{ "create-test",	do_create_test		},
-	{ "download-file",	do_download_file	},
-	{ "upload-file",	do_upload_file		},
-	{ "claim-host",		do_claim_host		},
-	{ "create-command",	do_create_command	},
-	{ "run-command",	do_run_command		},
-	{ "setenv",		do_setenv		},
-	{ "getenv",		do_getenv		},
-	{ "shutdown",		do_shutdown		},
+	{ "show-xml",		do_show_xml,		"Show master state as XML"			},
+	{ "delete",		do_delete_object,	"Delete an object"				},
+	{ "create-host",	do_create_host,		"Create a new host object"			},
+	{ "remove-host",	do_remove_host,		"Remove a host from a container"		},
+	{ "create-test",	do_create_test,		"Create a test containt"			},
+	{ "download-file",	do_download_file,	"Download output file from container"		},
+	{ "upload-file",	do_upload_file,		"Upload input file to container"		},
+	{ "claim-host",		do_claim_host,		"Claim a host for a test/container"		},
+	{ "create-command",	do_create_command,	"Create command container"			},
+	{ "run-command",	do_run_command,		"Run command/script on one or more hosts"	},
+	{ "setenv",		do_setenv,		"Set environment variable in container"		},
+	{ "getenv",		do_getenv,		"Get container variable"			},
+	{ "shutdown",		do_shutdown,		"Shutdown/reboot agent"				},
+
 	{ NULL, }
 };
 
@@ -1521,4 +1524,17 @@ get_client_command(const char *name)
 	}
 
 	return NULL;
+}
+
+static void
+help_client_commands(void)
+{
+	struct client_command *cmd;
+
+	for (cmd = client_command_table; cmd->name; ++cmd) {
+		printf("  %s\n"
+		       "        %s\n",
+		       cmd->name,
+		       cmd->description);
+	}
 }
