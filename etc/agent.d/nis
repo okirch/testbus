@@ -1,0 +1,16 @@
+#!/bin/bash
+
+function query_rpm {
+
+	for pkg; do
+		rpm -q $pkg >/dev/null 2>&1 || return 1
+	done
+	return 0
+}
+
+if query_rpm yp-tools ypbind; then
+	echo "capability nis-client"
+fi
+if query_rpm ypserv; then
+	echo "capability nis-server"
+fi
