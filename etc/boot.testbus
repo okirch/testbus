@@ -20,6 +20,9 @@
 #	local files, packages etc.
 ### END INIT INFO
 
+# Needed by trans=virtio
+modprobe 9pnet_virtio
+
 mkdir -p /mnt/testbus
 if ! mount -t 9p testbus /mnt/testbus -o trans=virtio >/dev/null 2>&1; then
 	echo "testbus: no testbus file system found, skipping setup step" >&2
