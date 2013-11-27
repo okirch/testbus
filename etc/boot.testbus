@@ -28,7 +28,7 @@ fi
 
 if [ -x /mnt/testbus/onboot.sh ]; then
 	echo "testbus: running onboot script"
-	/mnt/testbus/onboot.sh
+	/bin/sh /mnt/testbus/onboot.sh
 fi
 
 umount /mnt/testbus
