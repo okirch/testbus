@@ -108,6 +108,38 @@ invalid_args:
 NI_TESTBUS_METHOD_BINDING(Eventlog, add);
 
 /*
+ * Eventlog.purge(seqno)
+ */
+static dbus_bool_t
+__ni_Testbus_Eventlog_purge(ni_dbus_object_t *object, const ni_dbus_method_t *method,
+		unsigned int argc, const ni_dbus_variant_t *argv,
+		ni_dbus_message_t *reply, DBusError *error)
+{
+	ni_eventlog_t *log;
+	uint32_t upto_seq;
+
+	if (!(log = __ni_objectmodel_get_eventlog(object, TRUE, error)))
+		return FALSE;
+
+	if (argc != 1
+	 || !ni_dbus_variant_get_uint32(&argv[0], &upto_seq))
+		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	if (upto_seq == 0) {
+		/* Means: really flush all events */
+		ni_eventlog_flush(log);
+	} else {
+		/* Mark all events up to and including upto_seq as consumed.
+		 */
+		ni_eventlog_consume_upto(log, upto_seq);
+	}
+
+	return TRUE;
+}
+
+NI_TESTBUS_METHOD_BINDING(Eventlog, purge);
+
+/*
   <define name="properties" class="dict">
     <last-seq type="uint32" />
     <events class="array" element-type="event_t" />
@@ -124,7 +156,7 @@ __ni_testbus_eventlog_get_events(const ni_dbus_object_t *object, const ni_dbus_p
 		return FALSE;
 
 	ni_dbus_dict_array_init(result);
-	for (i = 0; i < log->events.count; ++i) {
+	for (i = log->consumed; i < log->events.count; ++i) {
 		ni_event_t *ev = &log->events.data[i];
 
 		ni_testbus_event_serialize(ev, ni_dbus_dict_array_add(result));
@@ -150,5 +182,6 @@ void
 ni_testbus_bind_builtin_eventlog(void)
 {
 	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Eventlog_add_binding);
+	ni_dbus_objectmodel_bind_method(&__ni_Testbus_Eventlog_purge_binding);
 	ni_dbus_objectmodel_bind_properties(&__ni_Testbus_Eventlog_Properties_binding);
 }

@@ -387,6 +387,24 @@ ni_testbus_client_eventlog_append(ni_dbus_object_t *object, const ni_event_t *ev
 }
 
 ni_bool_t
+ni_testbus_client_eventlog_purge(ni_dbus_object_t *object, unsigned int until_seq)
+{
+	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	DBusError error = DBUS_ERROR_INIT;
+	ni_bool_t rv;
+
+	ni_dbus_variant_set_uint32(&arg, until_seq);
+	rv = ni_dbus_object_call_variant(object, NI_TESTBUS_EVENTLOG_INTERFACE, "purge", 1, &arg, 0, NULL, &error);
+	if (!rv) {
+		ni_dbus_print_error(&error, "%s: failed to purge event log", object->path);
+		dbus_error_free(&error);
+	}
+
+	ni_dbus_variant_destroy(&arg);
+	return rv;
+}
+
+ni_bool_t
 ni_testbus_client_delete(ni_dbus_object_t *object)
 {
 	DBusError error = DBUS_ERROR_INIT;

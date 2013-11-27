@@ -57,6 +57,7 @@ ni_eventlog_t *			ni_eventlog_new(void);
 void				ni_eventlog_free(ni_eventlog_t *);
 unsigned int			ni_eventlog_pending_count(const ni_eventlog_t *);
 const ni_event_t *		ni_eventlog_consume(ni_eventlog_t *);
+void				ni_eventlog_consume_upto(ni_eventlog_t *, unsigned int seq);
 void				ni_eventlog_prune(ni_eventlog_t *);
 void				ni_eventlog_flush(ni_eventlog_t *);
 void				ni_eventlog_add_event(ni_eventlog_t *, const ni_monitor_t *source, unsigned int type, ni_buffer_t *data);

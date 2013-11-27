@@ -1476,7 +1476,7 @@ do_run_command(int argc, char **argv)
  * Retrieve eventlog
  */
 static void
-show_events(const ni_dbus_object_t *host_object)
+show_events(const ni_dbus_object_t *host_object, unsigned int *seq_seen)
 {
 	const ni_dbus_variant_t *var;
 	unsigned int i;
@@ -1486,6 +1486,9 @@ show_events(const ni_dbus_object_t *host_object)
 		printf("%s: no event log\n", host_object->path);
 		return;
 	}
+
+	if (seq_seen)
+		*seq_seen = 0;
 
 	for (i = 0; TRUE; ++i) {
 		ni_event_t event = NI_EVENT_INIT;
@@ -1510,6 +1513,10 @@ show_events(const ni_dbus_object_t *host_object)
 		else
 			printf(" (no data)");
 		printf("\n");
+
+		if (seq_seen && *seq_seen < event.sequence)
+			*seq_seen = event.sequence;
+
 		ni_event_destroy(&event);
 	}
 }
@@ -1561,8 +1568,13 @@ do_get_events(int argc, char **argv)
 			return 1;
 		}
 
-		for (object = hostlist->children; object; object = object->next)
-			show_events(object);
+		for (object = hostlist->children; object; object = object->next) {
+			unsigned int seq_seen;
+
+			show_events(object, &seq_seen);
+			if (opt_purge && seq_seen)
+				ni_testbus_client_eventlog_purge(object, seq_seen);
+		}
 
 		return 0;
 	}
@@ -1580,7 +1592,11 @@ do_get_events(int argc, char **argv)
 	}
 
 	for (i = 0; i < nhosts; ++i) {
-		show_events(host_objects[i]);
+		unsigned int seq_seen;
+
+		show_events(host_objects[i], &seq_seen);
+		if (opt_purge && seq_seen)
+			ni_testbus_client_eventlog_purge(host_objects[i], seq_seen);
 	}
 
 	return 0;

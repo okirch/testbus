@@ -64,6 +64,24 @@ ni_eventlog_consume(ni_eventlog_t *log)
 }
 
 void
+ni_eventlog_consume_upto(ni_eventlog_t *log, unsigned int seq)
+{
+	unsigned int i;
+
+	for (i = log->consumed; i < log->events.count; ++i) {
+		ni_event_t *ev = &log->events.data[i];
+
+		if (seq < ev->sequence)
+			break;
+	}
+
+	if (i > log->consumed) {
+		ni_debug_testbus("consumed %u events from eventlog", i - log->consumed);
+		log->consumed = i;
+	}
+}
+
+void
 ni_eventlog_prune(ni_eventlog_t *log)
 {
 	if (log->consumed < log->events.count)
