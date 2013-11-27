@@ -65,10 +65,8 @@ function instance_dir_init {
 	mkdir -p $dir
 	mkdir -p $dir/guestfs
 
-	cat >$dir/guestfs/onboot.sh <<"EOF"
+	instance_onboot <<"EOF"
 #!/bin/bash
-insserv testbus-agent-kvm
-
 dirname=${0%/*}
 if test -f $dirname/ifcfg-eth0; then
 	cp $dirname/ifcfg-eth0 /etc/sysconfig/network
@@ -89,6 +87,18 @@ EOF
 function instance_onboot {
 
 	cat >>$instance_dir/guestfs/onboot.sh
+}
+
+function instance_onboot_finish {
+
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
+	if ls $instance_dir | grep -qs '\.rpm$'; then
+		instance_onboot <<"EOF"
+
+echo "Installing/updating packages"
+rpm -Uvh $dirname/*.rpm
+EOF
+	fi
 }
 
 function instance_dir_add_rpms {

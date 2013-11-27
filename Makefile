@@ -136,6 +136,7 @@ install-bin: $(ALL)
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_BINDIRS))
 	install -m555 $(BINTGTS) $(DESTDIR)/usr/bin
 	install -m555 etc/master.init $(DESTDIR)/etc/init.d/testbus-master
+	install -m555 etc/boot.testbus $(DESTDIR)/etc/init.d/boot.testbus
 	ln -fs ../../etc/init.d/testbus-master $(DESTDIR)/usr/sbin/rctestbus-master
 	install -m555 etc/agent-kvm.init $(DESTDIR)/etc/init.d/testbus-agent-kvm
 	ln -fs ../../etc/init.d/testbus-agent-kvm $(DESTDIR)/usr/sbin/rctestbus-agent-kvm

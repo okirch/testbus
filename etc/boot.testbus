@@ -26,15 +26,6 @@ if ! mount -t 9p testbus /mnt/testbus -o trans=virtio >/dev/null 2>&1; then
 	exit 0
 fi
 
-if ls /mnt/testbus | grep -qs '\.rpm$'; then
-	echo "testbus: installing/updating packages"
-	rpm -Uvh /mnt/testbus/*.rpm 2>&1|tee /mnt/testbus/update.log
-
-	if [ -f /etc/init.d/testbus-agent-kvm ]; then
-		insserv testbus-agent-kvm
-	fi
-fi
-
 if [ -x /mnt/testbus/onboot.sh ]; then
 	echo "testbus: running onboot script"
 	/mnt/testbus/onboot.sh
