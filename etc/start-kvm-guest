@@ -65,7 +65,8 @@ function instance_dir_init {
 	mkdir -p $dir
 	mkdir -p $dir/guestfs
 
-	instance_onboot <<"EOF"
+	# cannot use instance_onboot here; instance_dir is not set yet
+	cat >$dir/guestfs/onboot.sh <<"EOF"
 #!/bin/bash
 dirname=${0%/*}
 if test -f $dirname/ifcfg-eth0; then
@@ -211,6 +212,8 @@ if [ -n "$mac_addr" ]; then
 else
 	instance_macaddr=`printf 52:54:00:12:34:%02x $instance_index`
 fi
+
+instance_onboot_finish
 
 # FIXME: we need to set up the bridge here
 # if ! grep -qs kvmbr0 /etc/qemu-kvm/bridge.conf; then .. add acl entry
