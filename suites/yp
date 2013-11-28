@@ -11,6 +11,7 @@
 ##################################################################
 
 NISDOMAIN=nistest.opensuse.org
+USE_YAST=false
 
 # TESTBUS_SELFTEST_DEBUG=all
 
@@ -28,6 +29,10 @@ function run_client {
 	testbus_run_command --host $NIS_CLIENT "$@"
 }
 
+function run_client_script {
+	testbus_run_command --host $NIS_CLIENT --send-script "$@"
+}
+
 function run_server {
 	testbus_run_command --host $NIS_SERVER "$@"
 }
@@ -40,30 +45,43 @@ testbus_init_group $0
 NIS_SERVER=`testbus_claim_host --role server`
 NIS_CLIENT=`testbus_claim_host --role client`
 
-NIS_SERVER_IP=`testbus_getenv $NIS_SERVER primary_ip`
-NIS_CLIENT_IP=`testbus_getenv $NIS_CLIENT primary_ip`
+NIS_SERVER_IP=`testbus_getenv_nonempty $NIS_SERVER primary_ip`
+NIS_CLIENT_IP=`testbus_getenv_nonempty $NIS_CLIENT primary_ip`
 
-NIS_SERVER_NAME=`testbus_getenv $NIS_SERVER hostname`
-NIS_CLIENT_NAME=`testbus_getenv $NIS_CLIENT hostname`
+NIS_SERVER_NAME=`testbus_getenv_nonempty $NIS_SERVER hostname`
+NIS_CLIENT_NAME=`testbus_getenv_nonempty $NIS_CLIENT hostname`
+
+cat <<EOF
+Claimed hosts
+Server:  $NIS_SERVER_NAME ($NIS_SERVER_IP)
+Client:  $NIS_CLIENT_NAME ($NIS_CLIENT_IP)
+EOF
 
 ##################################################################
 # Initialize NIS server
 ##################################################################
 testbus_init_test server-init
 
-testbus_trace "server: setting nis domain to $NISDOMAIN"
-run_server /bin/domainname $NISDOMAIN
+testbus_trace "server: setting up NIS server"
 
-testbus_trace "server: building default NIS maps"
-run_server /usr/bin/make -C /var/yp
+# I would have loved to use yast2 for this, but right now it always
+# wants _at least_ a pipe on stdout, preferably a tty. If you make it
+# write to anything else, it'll just die quietly.
+if $USE_YAST; then
+	run_server /sbin/yast2 nis-server master domain=$NISDOMAIN yppasswd=yes verbose
+else
+	testbus_trace "server: setting nis domain to $NISDOMAIN"
+	run_server /bin/domainname $NISDOMAIN
 
-testbus_trace "server: starting ypserv"
-run_server /etc/init.d/ypserv start
+	testbus_trace "server: building default NIS maps"
+	run_server /usr/bin/make -C /var/yp
 
-# This is a workaround. There's something wrong with the firewalling
-# code that I don't understand
-run_server /sbin/rcSuSEfirewall2 stop
-run_client /sbin/rcSuSEfirewall2 stop
+	testbus_trace "server: starting ypserv"
+	run_server /etc/init.d/ypserv start
+
+	testbus_trace "server: starting yppasswdd"
+	run_server /etc/init.d/yppasswdd start
+fi
 
 ##################################################################
 # Initialize NIS client
@@ -75,6 +93,25 @@ echo $NISDOMAIN |
 	testbus_upload_file $NIS_CLIENT - /etc/defaultdomain
 echo "domain $NISDOMAIN server $NIS_SERVER_IP" |
 	testbus_upload_file $NIS_CLIENT - /etc/yp.conf
+
+run_client_script - <<EOF
+#!/bin/sh
+
+if ! grep -qs '^+$' /etc/passwd; then
+	echo + >> /etc/passwd
+fi
+if ! grep -qs '^+$' /etc/shadow; then
+	echo + >> /etc/shadow
+fi
+cat /etc/pam.d/common-password
+if ! grep -qs '^password.*pam_unix\.so.*nis' /etc/pam.d/common-password; then
+	sed -i '/^password.*pam_unix\.so/!b;/\<nis\>/b;s/$/ nis debug/' /etc/pam.d/common-password
+fi
+
+cat /etc/pam.d/common-password
+
+exit 0
+EOF
 
 testbus_trace "client: starting ypbind"
 run_client /etc/init.d/ypbind restart
@@ -89,13 +126,6 @@ fi
 # Try NIS host resolution
 ##################################################################
 testbus_init_test nis-hosts
-
-if [ -z "$NIS_SERVER_NAME" ]; then
-	testbus_fail_test "nis server name is empty"
-fi
-if [ -z "$NIS_CLIENT_NAME" ]; then
-	testbus_fail_test "nis client name is empty"
-fi
 
 # Change nsswitch.conf
 testbus_trace "configure client to use NIS for host lookups"
@@ -120,5 +150,68 @@ run_client /bin/ping -c 1 $NIS_CLIENT_NAME
 # Restore nsswitch.conf
 testbus_trace "client side cleanup"
 run_client /bin/mv /etc/nsswitch.conf.save /etc/nsswitch.conf
+
+##################################################################
+# Try NIS user name resolution
+##################################################################
+testbus_init_test nis-users
+
+# Do not change nsswitch.conf - it should have passwd in compat mode
+# by default.
+
+# On the server, generates the hosts.* maps
+testbus_trace "configuring server to generate passwd.* maps"
+run_server /usr/bin/make -C /var/yp/$NISDOMAIN -f /var/yp/Makefile passwd group
+
+# Make sure map dumping in general works
+testbus_trace "make sure passwd and group maps exist"
+run_client /usr/bin/ypcat passwd >/dev/null
+run_client /usr/bin/ypcat passwd.byname >/dev/null
+run_client /usr/bin/ypcat passwd.byuid >/dev/null
+run_client /usr/bin/ypcat group >/dev/null
+run_client /usr/bin/ypcat group.byname >/dev/null
+run_client /usr/bin/ypcat group.bygid >/dev/null
+
+USERNAME="testbus"
+USERPASS="T3stbus@"
+USERUID="666"
+NEWUSERPASS="S0eL1te!"
+
+if $USE_YAST; then
+	run_server /sbin/yast2 users add username=$USERNAME uid=$USERUID password=$USERPASS no_home
+else
+	HASHPASS=`mkpasswd -m sha-256 $USERPASS`
+	run_server /usr/sbin/useradd --uid $USERUID --password $HASHPASS $USERNAME
+	run_server /usr/bin/make -C /var/yp/$NISDOMAIN -f /var/yp/Makefile passwd
+fi
+
+run_client /usr/bin/ypmatch $USERNAME passwd.byname ||
+	testbus_fail_test "User $USERNAME not in NIS maps"
+run_client /usr/bin/ypmatch $USERUID passwd.byuid >/dev/null ||
+	testbus_fail_test "User ID $USERUID not in NIS maps"
+
+# Try nsswitch lookup
+run_client /usr/bin/id $USERNAME
+run_client /usr/bin/groups $USERNAME
+
+# Try to authenticate via PAM
+run_client /bin/pam-test --debug --pam-service login --username testbus --password $USERPASS authenticate
+
+# Try to change the password
+# This seems to be buggy in openSUSE right now
+run_client /bin/pam-test --debug --pam-service passwd --username testbus --old-password $USERPASS --new-password "$NEWUSERPASS" chauthtok authenticate
+
+# Now delete the account
+if $USE_YAST; then
+	run_server /sbin/yast2 users del username=$USERNAME
+else
+	run_server /usr/bin/userdel $USERNAME
+	run_server /usr/bin/make -C /var/yp/$NISDOMAIN -f /var/yp/Makefile passwd
+fi
+
+run_client /usr/bin/ypmatch $USERNAME passwd.byname >/dev/null 2>&1 ||
+	testbus_fail_test "User $USERNAME still in NIS maps after deleting it"
+run_client /usr/bin/ypmatch $USERUID passwd.byuid >/dev/null ||
+	testbus_fail_test "User ID $USERUID still in NIS maps after deleting it"
 
 testbus_exit
