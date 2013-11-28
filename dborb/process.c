@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <limits.h>
 
 #include <dborb/logging.h>
 #include <dborb/socket.h>
@@ -422,6 +423,33 @@ ni_process_sigchild(int sig)
 }
 
 /*
+ * Given the name of a program, find it in our default path
+ */
+const char *
+__ni_process_find_path(const char *name)
+{
+	static const char *	bin_path[] = {
+		"/bin",
+		"/sbin",
+		"/usr/bin",
+		"/usr/sbin",
+		NULL
+	};
+	static char pathbuf[PATH_MAX+1];
+
+	if (strchr(name, '/') == NULL) {
+		const char **path;
+
+		for (path = bin_path; *path; ++path) {
+			snprintf(pathbuf, sizeof(pathbuf), "%ss/%s", *path, name);
+			if (ni_file_executable(pathbuf))
+				return pathbuf;
+		}
+	}
+	return name;
+}
+
+/*
  * Run a subprocess.
  */
 int
@@ -539,6 +567,9 @@ __ni_process_run(ni_process_t *pi)
 		return -1;
 	}
 
+	if (arg0[0] != '/')
+		arg0 = __ni_process_find_path(arg0);
+
 	if (!ni_file_executable(arg0)) {
 		ni_error("Unable to run %s; does not exist or is not executable", arg0);
 		return -1;
@@ -580,6 +611,7 @@ __ni_process_run(ni_process_t *pi)
 		ni_string_array_append(&pi->environ, NULL);
 
 		arg0 = pi->argv.data[0];
+
 		execve(arg0, pi->argv.data, pi->environ.data);
 
 		ni_fatal("%s: cannot execute %s: %m", __func__, arg0);
