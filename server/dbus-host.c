@@ -56,6 +56,11 @@ __ni_testbus_host_set_agent(ni_testbus_host_t *host, const char *owner)
 
 	ni_debug_testbus("host %s owned by %s", host->context.name, owner);
 	ni_string_dup(&host->agent_bus_name, owner);
+
+	if (host->eventlog) {
+		ni_eventlog_free(host->eventlog);
+		host->eventlog = NULL;
+	}
 }
 
 /*
