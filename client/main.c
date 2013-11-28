@@ -305,6 +305,13 @@ __dump_fake_xml(const ni_dbus_variant_t *variant, unsigned int indent, const cha
 			__dump_fake_xml(child, indent + 2, NULL);
 			printf("%*.*s</e>\n", indent, indent, "");
 		}
+	} else if (ni_dbus_variant_is_string_array(variant)) {
+		unsigned int i;
+
+		for (i = 0; i < variant->array.len; ++i) {
+			printf("%*.*s<e>%s</e>\n", indent, indent, "",
+					variant->string_array_value[i]);
+		}
 	} else {
 		ni_error("%s: cannot handle signature \"%s\"", __func__, ni_dbus_variant_signature(variant));
 	}
