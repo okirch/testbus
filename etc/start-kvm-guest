@@ -215,11 +215,16 @@ fi
 
 instance_onboot_finish
 
-# FIXME: we need to set up the bridge here
-# if ! grep -qs kvmbr0 /etc/qemu-kvm/bridge.conf; then .. add acl entry
-# if ! ip link show kvmbr0; then brctl addrbr kvmbr0
-# ifconfig kvmbr0 up
-# ...
+# Bring up kvmbr0 - add an ACL entry to bridge.conf if it does not exist.
+if ! grep -qs kvmbr0 /etc/qemu-kvm/bridge.conf; then
+	echo allow kvmbr0 >> /etc/qemu-kvm/bridge.conf
+fi
+
+if ! ip link show kvmbr0; then
+	brctl addbr kvmbr0
+fi
+
+ifconfig kvmbr0 up
 
 
 echo "------------------"
