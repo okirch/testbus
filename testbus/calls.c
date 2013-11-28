@@ -584,7 +584,7 @@ __ni_testbus_host_is_inuse(const ni_dbus_object_t *host_object, const ni_dbus_ob
 		/* FIXME: we may want to verify whether its owner is the container_object
 		 * we want to assign it to.
 		 */
-		ni_error("host %s already in use (role=%s)", host_object->path, host_role);
+		ni_debug_testbus("host %s already in use (role=%s)", host_object->path, host_role);
 		return TRUE;
 	}
 
