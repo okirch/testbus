@@ -103,12 +103,10 @@ fi
 if ! grep -qs '^+$' /etc/shadow; then
 	echo + >> /etc/shadow
 fi
-cat /etc/pam.d/common-password
+
 if ! grep -qs '^password.*pam_unix\.so.*nis' /etc/pam.d/common-password; then
 	sed -i '/^password.*pam_unix\.so/!b;/\<nis\>/b;s/$/ nis debug/' /etc/pam.d/common-password
 fi
-
-cat /etc/pam.d/common-password
 
 exit 0
 EOF
