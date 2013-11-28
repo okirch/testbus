@@ -1221,16 +1221,13 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 	}
 
 	if (script_file) {
-		FILE *script;
 		ni_buffer_t *data;
 
-		if (!(script = fopen(script_file, "r"))) {
+		data = ni_testbus_read_local_file(script_file);
+		if (data == NULL) {
 			ni_error("cannot send script %s: %m", script_file);
 			return NULL;
 		}
-
-		data = ni_file_read(script);
-		fclose(script);
 
 		ni_testbus_client_command_add_file(cmd_object, "script", data, NI_TESTBUS_FILE_READ | NI_TESTBUS_FILE_EXEC);
 		ni_buffer_free(data);
