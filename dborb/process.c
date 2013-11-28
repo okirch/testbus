@@ -600,7 +600,14 @@ __ni_process_run(ni_process_t *pi)
 			ni_warn("%s: cannot dup stdin descriptor: %m", __func__);
 
 		ni_process_buffer_prepare_writer(&pi->stdout, 1);
-		ni_process_buffer_prepare_writer(&pi->stderr, 2);
+		if (pi->stdout.capture && !pi->stderr.capture) {
+			/* If the client is capturing stdout but not
+			 * stderr, just paste these two together */
+			if (dup2(1, 2) < 0)
+				ni_warn("%s: unable to dup stdout to stderr: %m", __func__);
+		} else {
+			ni_process_buffer_prepare_writer(&pi->stderr, 2);
+		}
 
 		maxfd = getdtablesize();
 		for (fd = 3; fd < maxfd; ++fd)
