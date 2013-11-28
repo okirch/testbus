@@ -729,7 +729,7 @@ __ni_testbus_wait_setup(ni_testbus_client_timeout_t *timeout)
 static void
 __ni_testbus_wait_cancel(ni_testbus_client_timeout_t *timeout)
 {
-	if (timeout->handle) {
+	if (timeout && timeout->handle) {
 		ni_timer_cancel((const ni_timer_t *) timeout->handle);
 		timeout->handle = NULL;
 	}
@@ -783,7 +783,7 @@ ni_testbus_client_claim_host_by_capability(const char *capability, ni_dbus_objec
 			}
 		}
 
-		if (!timeout->handle) {
+		if (!timeout || !timeout->handle) {
 			break;
 		} else {
 			long waitfor = -1;
