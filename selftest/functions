@@ -196,6 +196,18 @@ function testbus_getenv {
 	testbus_call getenv $context "$@"
 }
 
+function testbus_getenv_nonempty {
+
+	ret=`testbus_getenv "$@"`
+	if [ -z "$ret" ]; then
+		testbus_fail_test "Missing or empty environment variable ($@)"
+		return 1
+	fi
+
+	echo "$ret"
+	return 0;
+}
+
 function __testbus_upload_file {
 
 	testbus_trace "upload file $*"
