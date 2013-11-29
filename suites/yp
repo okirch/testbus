@@ -40,7 +40,7 @@ function run_server {
 ##################################################################
 # Start testing
 ##################################################################
-testbus_init_group $0
+testbus_group_begin $0
 
 NIS_SERVER=`testbus_claim_host --role server`
 NIS_CLIENT=`testbus_claim_host --role client`
@@ -60,7 +60,7 @@ EOF
 ##################################################################
 # Initialize NIS server
 ##################################################################
-testbus_init_test server-init
+testbus_test_begin server-init
 
 testbus_trace "server: setting up NIS server"
 
@@ -86,7 +86,7 @@ fi
 ##################################################################
 # Initialize NIS client
 ##################################################################
-testbus_init_test client-init
+testbus_test_begin client-init
 
 testbus_trace "client: uploading config files"
 echo $NISDOMAIN |
@@ -117,13 +117,13 @@ run_client /etc/init.d/ypbind restart
 testbus_trace "client: verify binding"
 bound_to=`run_client /usr/bin/ypwhich`
 if [ -z "$bound_to" -o "$bound_to" != $NIS_SERVER_IP ]; then
-	testbus_fail_test "yp client should be bound to $NIS_SERVER_IP, but bound to $bound_to instead"
+	testbus_test_failure "yp client should be bound to $NIS_SERVER_IP, but bound to $bound_to instead"
 fi
 
 ##################################################################
 # Try NIS host resolution
 ##################################################################
-testbus_init_test nis-hosts
+testbus_test_begin nis-hosts
 
 # Change nsswitch.conf
 testbus_trace "configure client to use NIS for host lookups"
@@ -152,7 +152,7 @@ run_client /bin/mv /etc/nsswitch.conf.save /etc/nsswitch.conf
 ##################################################################
 # Try NIS user name resolution
 ##################################################################
-testbus_init_test nis-users
+testbus_test_begin nis-users
 
 # Do not change nsswitch.conf - it should have passwd in compat mode
 # by default.
@@ -184,9 +184,9 @@ else
 fi
 
 run_client /usr/bin/ypmatch $USERNAME passwd.byname ||
-	testbus_fail_test "User $USERNAME not in NIS maps"
+	testbus_test_failure "User $USERNAME not in NIS maps"
 run_client /usr/bin/ypmatch $USERUID passwd.byuid >/dev/null ||
-	testbus_fail_test "User ID $USERUID not in NIS maps"
+	testbus_test_failure "User ID $USERUID not in NIS maps"
 
 # Try nsswitch lookup
 run_client /usr/bin/id $USERNAME
@@ -208,8 +208,8 @@ else
 fi
 
 run_client /usr/bin/ypmatch $USERNAME passwd.byname >/dev/null 2>&1 ||
-	testbus_fail_test "User $USERNAME still in NIS maps after deleting it"
+	testbus_test_failure "User $USERNAME still in NIS maps after deleting it"
 run_client /usr/bin/ypmatch $USERUID passwd.byuid >/dev/null ||
-	testbus_fail_test "User ID $USERUID still in NIS maps after deleting it"
+	testbus_test_failure "User ID $USERUID still in NIS maps after deleting it"
 
 testbus_exit

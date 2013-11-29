@@ -8,24 +8,24 @@
 
 . ${0%/*}/functions
 
-testbus_init_group $0
+testbus_group_begin $0
 
 TESTBUS_HOST=`testbus_claim_host`
 
-testbus_init_test subtest0
+testbus_test_begin subtest0
 testbus_run_command --host $TESTBUS_HOST /bin/true
 
-testbus_init_test subtest1
+testbus_test_begin subtest1
 testbus_run_command --host $TESTBUS_HOST /bin/true
 
-testbus_finish_test SUCCESS
+testbus_test_success
 
 test -n "$TESTCASE_TEMPDIR" || testbus_exit_fail "Missing tempdir"
 groupfile=$TESTCASE_TEMPDIR/groupfile
 echo 43 > $groupfile
 __testbus_upload_file --context $TESTCASE_HANDLE $groupfile foobar
 
-testbus_init_test subtest2
+testbus_test_begin subtest2
 
 test -n "$TESTCASE_TEMPDIR" || testbus_exit_fail "Missing tempdir"
 testfile=$TESTCASE_TEMPDIR/testfile
@@ -36,15 +36,15 @@ __testbus_upload_file --context $TESTCASE_HANDLE $testfile foobar
 response=`testbus_run_command --host $TESTBUS_HOST /bin/cat "%{file:foobar}"`
 if [ "$response" != "42" ]; then
 	echo "expected answer 42; instead I got \"$response\""
-	testbus_fail_test
+	testbus_test_failure
 fi >&2
 
-testbus_finish_test SUCCESS
+testbus_test_success
 
-testbus_init_group nested-group
-testbus_init_group nested-even-deeper
+testbus_group_begin nested-group
+testbus_group_begin nested-even-deeper
 
-testbus_init_test run
+testbus_test_begin run
 testbus_run_command --host $TESTBUS_HOST /bin/true
 
 # This should clean up everything implicitly

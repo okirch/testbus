@@ -17,20 +17,20 @@ function do_run {
 	response=`testbus_run_command --host $TESTBUS_HOST --send-script $script`
 	if [ "$response" != "42" ]; then
 		echo "expected answer 42; instead I got \"$response\""
-		testbus_fail_test
+		testbus_test_failure "(bad response from script)"
 	else
-		testbus_finish_test SUCCESS
+		testbus_test_success
 	fi >&2
 }
 
-testbus_init_group $0
+testbus_group_begin $0
 
 TESTBUS_HOST=`testbus_claim_host`
 
-testbus_init_test runnable
+testbus_test_begin runnable
 testbus_run_command --host $TESTBUS_HOST /bin/true
 
-testbus_init_test script-exit0
+testbus_test_begin script-exit0
 script=`testbus_new_script foobar`
 cat >$script <<EOF
 #!/bin/bash
@@ -43,7 +43,7 @@ testbus_run_command --host $TESTBUS_HOST --send-script $script
 ##################################################################
 # Run script and capture output
 ##################################################################
-testbus_init_test script-capture-output
+testbus_test_begin script-capture-output
 script=`testbus_new_script foobar`
 cat >$script <<"EOF"
 #!/bin/bash
@@ -57,7 +57,7 @@ do_run $script
 ##################################################################
 # Run script and reference environment variable
 ##################################################################
-testbus_init_test script-getenv
+testbus_test_begin script-getenv
 # Note: we first set answer to a different value, but expect the
 # second setenv to override the first one.
 testbus_setenv answer=17
@@ -79,7 +79,7 @@ do_run $script
 # This setenv goes to the testgroup context
 testbus_setenv answer=17
 
-testbus_init_test subtest4
+testbus_test_begin subtest4
 
 # Now that we've created subtest4, the setenv should go to that context
 testbus_setenv answer=42
@@ -106,7 +106,7 @@ for n in `seq 1 100`; do
 done
 echo >&2
 
-testbus_init_test subtest5
+testbus_test_begin subtest5
 
 # Now that we've created another subtest, the setenv should go to that context
 echo -n "Setting another 100 environment vars" >&2
@@ -132,10 +132,10 @@ do_run $script
 # Run a non-existent command. We expect this to return an
 # error.
 ##################################################################
-testbus_init_test subtest6
+testbus_test_begin subtest6
 
 if testbus_run_command --host $TESTBUS_HOST /this/command/does/not/exist; then
-	testbus_fail_test "Trying to run /this/command/does/not/exist should exit with an error"
+	testbus_test_failure "Trying to run /this/command/does/not/exist should exit with an error"
 fi
 
 testbus_exit

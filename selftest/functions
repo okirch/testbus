@@ -166,7 +166,7 @@ function __testbus_begin_group {
 	unset TESTCASE_NAME
 }
 
-function __testbus_finish_group {
+function __testbus_group_finish {
 
 	__testbus_finish
 
@@ -186,32 +186,32 @@ function __testbus_finish_group {
 	fi
 }
 
-function testbus_init_group {
+function testbus_group_begin {
 
 	__testbus_begin_group "$@"
 }
 
-function testbus_finish_group {
+function testbus_group_finish {
 
 	__testbus_report "$@"
-	__testbus_finish_group
+	__testbus_group_finish
 }
 
 function testbus_finish_all_groups {
 
-	testbus_finish_group "$@"
+	testbus_group_finish "$@"
 	while [ -n "$TESTCASE_NAME" ]; do
-		testbus_finish_group "$@"
+		testbus_group_finish "$@"
 	done
 }
 
-function testbus_init_test {
+function testbus_test_begin {
 
-	testbus_finish_test SUCCESS
+	testbus_test_finish SUCCESS
 	__testbus_begin "$@"
 }
 
-function testbus_finish_test {
+function testbus_test_finish {
 
 	if [ -n "$TESTCASE_NAME" ]; then
 		__testbus_report "$@"
@@ -220,9 +220,14 @@ function testbus_finish_test {
 	return 0
 }
 
-function testbus_fail_test {
+function testbus_test_failure {
 
-	testbus_finish_test FAILED "$@"
+	testbus_test_finish FAILED "$@"
+}
+
+function testbus_test_success {
+
+	testbus_test_finish SUCCESS "$@"
 }
 
 function __testbus_assert_handle {
@@ -272,7 +277,7 @@ function testbus_getenv_nonempty {
 
 	ret=`testbus_getenv "$@"`
 	if [ -z "$ret" ]; then
-		testbus_fail_test "Missing or empty environment variable ($@)"
+		testbus_test_failure "Missing or empty environment variable ($@)"
 		return 1
 	fi
 
@@ -343,7 +348,7 @@ function testbus_exit_fail {
 	trap "" 0 1 2
 
 	if [ -n `__testbus_testcase_name` ]; then
-		testbus_finish_group FAILED "$@"
+		testbus_group_finish FAILED "$@"
 		testbus_finish_all_groups FAILED
 		__testbus_exit
 	fi
