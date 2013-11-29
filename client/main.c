@@ -66,6 +66,7 @@ static client_command_handler_t *get_client_command(const char *);
 static void		help_client_commands(void);
 
 static ni_buffer_t *	ni_testbus_read_local_file(const char *);
+static long		ni_testbus_write_local_file(const char *, const ni_buffer_t *);
 
 int
 main(int argc, char **argv)
@@ -900,7 +901,7 @@ do_download_file(int argc, char **argv)
 			return 1;
 		}
 
-		written = ni_file_write_path(local_path, data);
+		written = ni_testbus_write_local_file(local_path, data);
 		ni_buffer_free(data);
 
 		if (written < 0) {
@@ -1604,6 +1605,14 @@ do_get_events(int argc, char **argv)
 	}
 
 	return 0;
+}
+
+long
+ni_testbus_write_local_file(const char *filename, const ni_buffer_t *data)
+{
+	if (!ni_string_eq(filename, "-"))
+		return ni_file_write_path(filename, data);
+	return ni_file_write(stdout, data);
 }
 
 ni_buffer_t *
