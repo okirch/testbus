@@ -19,7 +19,7 @@ function do_run {
 		echo "expected answer 42; instead I got \"$response\""
 		testbus_fail_test
 	else
-		testbus_finish_test
+		testbus_finish_test SUCCESS
 	fi >&2
 }
 
@@ -27,10 +27,10 @@ testbus_init_group $0
 
 TESTBUS_HOST=`testbus_claim_host`
 
-testbus_init_test subtest0
+testbus_init_test runnable
 testbus_run_command --host $TESTBUS_HOST /bin/true
 
-testbus_init_test subtest1
+testbus_init_test script-exit0
 script=`testbus_new_script foobar`
 cat >$script <<EOF
 #!/bin/bash
@@ -43,7 +43,7 @@ testbus_run_command --host $TESTBUS_HOST --send-script $script
 ##################################################################
 # Run script and capture output
 ##################################################################
-testbus_init_test subtest2
+testbus_init_test script-capture-output
 script=`testbus_new_script foobar`
 cat >$script <<"EOF"
 #!/bin/bash
@@ -57,7 +57,7 @@ do_run $script
 ##################################################################
 # Run script and reference environment variable
 ##################################################################
-testbus_init_test subtest3
+testbus_init_test script-getenv
 # Note: we first set answer to a different value, but expect the
 # second setenv to override the first one.
 testbus_setenv answer=17

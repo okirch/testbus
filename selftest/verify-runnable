@@ -19,13 +19,13 @@ if testbus_run_command --host $TESTBUS_HOST /bin/false; then
 	exit 1
 fi
 
-expect=$TESTBUS_TEMPDIR/expect
+expect=$TESTCASE_TEMPDIR/expect
 /usr/bin/wc < /etc/hosts > $expect
 
-stdout=$TESTBUS_TEMPDIR/stdout
+stdout=$TESTCASE_TEMPDIR/stdout
 testbus_run_command --host $TESTBUS_HOST --send-stdin /usr/bin/wc < /etc/hosts >$stdout
 
-diff=$TESTBUS_TEMPDIR/diff
+diff=$TESTCASE_TEMPDIR/diff
 if ! diff -bu $stdout $expect >$diff; then
 	echo "Command output differs between local host and SUT"
 	echo "---"
@@ -34,11 +34,11 @@ if ! diff -bu $stdout $expect >$diff; then
 	exit 1
 fi >&2
 
-testbus_call show-xml --raw > $TESTBUS_TEMPDIR/xml-tree-after
-if cmp -s $TESTBUS_TEMPDIR/xml-tree-before $TESTBUS_TEMPDIR/xml-tree-after; then
+testbus_call show-xml --raw > $TESTCASE_TEMPDIR/xml-tree-after
+if cmp -s $TESTCASE_TEMPDIR/xml-tree-before $TESTCASE_TEMPDIR/xml-tree-after; then
 	echo "Testbus object tree not clean after test run"
 	echo "Differences before/after"
-	diff -u $TESTBUS_TEMPDIR/xml-tree-before $TESTBUS_TEMPDIR/xml-tree-after
+	diff -u $TESTCASE_TEMPDIR/xml-tree-before $TESTCASE_TEMPDIR/xml-tree-after
 	exit 1
 fi >&2
 

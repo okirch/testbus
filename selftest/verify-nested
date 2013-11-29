@@ -18,18 +18,34 @@ testbus_run_command --host $TESTBUS_HOST /bin/true
 testbus_init_test subtest1
 testbus_run_command --host $TESTBUS_HOST /bin/true
 
-testbus_init_test subtest2
-groupfile=$TESTBUS_TEMPDIR/groupfile
-testfile=$TESTBUS_TEMPDIR/testfile
+testbus_finish_test SUCCESS
+
+test -n "$TESTCASE_TEMPDIR" || testbus_exit_fail "Missing tempdir"
+groupfile=$TESTCASE_TEMPDIR/groupfile
 echo 43 > $groupfile
+__testbus_upload_file --context $TESTCASE_HANDLE $groupfile foobar
+
+testbus_init_test subtest2
+
+test -n "$TESTCASE_TEMPDIR" || testbus_exit_fail "Missing tempdir"
+testfile=$TESTCASE_TEMPDIR/testfile
 echo 42 > $testfile
 
-__testbus_upload_file --context $TESTBUS_GROUP_HANDLE $groupfile foobar
-__testbus_upload_file --context $TESTBUS_TEST_HANDLE $testfile foobar
+__testbus_upload_file --context $TESTCASE_HANDLE $testfile foobar
+
 response=`testbus_run_command --host $TESTBUS_HOST /bin/cat "%{file:foobar}"`
 if [ "$response" != "42" ]; then
 	echo "expected answer 42; instead I got \"$response\""
 	testbus_fail_test
 fi >&2
 
+testbus_finish_test SUCCESS
+
+testbus_init_group nested-group
+testbus_init_group nested-even-deeper
+
+testbus_init_test run
+testbus_run_command --host $TESTBUS_HOST /bin/true
+
+# This should clean up everything implicitly
 testbus_exit

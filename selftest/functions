@@ -38,7 +38,17 @@ fi
 TESTBUS_GLOBAL_STATUS=SUCCESS
 TESTBUS_GROUP_STATUS=SUCCESS
 
+declare -a TESTBUS_NAME_STACK
+declare -a TESTBUS_HANDLE_STACK
+declare -a TESTBUS_TEMPDIR_STACK
+declare -a TESTBUS_FAILED_LIST
+
+declare -i TESTBUS_TEST_COUNT
+declare -i TESTBUS_FAILED_COUNT
+
 TESTGROUP_NAME=default
+TESTBUS_TEST_COUNT=0
+TESTBUS_FAILED_COUNT=0
 
 function testbus_call {
 
@@ -56,85 +66,156 @@ function __testbus_make_name {
 	basename $myname| tr - _
 }
 
-function testbus_init_group {
+function __testbus_testcase_name {
 
-	TESTGROUP_NAME=`__testbus_make_name $1`; shift
-
-	TESTBUS_GROUP_HANDLE=`testbus_call create-test $TESTGROUP_NAME`
-	TESTBUS_GROUP_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
-	TESTBUS_GROUP_STATUS=SUCCESS
-}
-
-function testbus_finish_group {
-
-	# testbus_call show-xml --raw
-	
-	testbus_finish_test $*
-	if [ -n "$TESTBUS_GROUP_TEMPDIR" ]; then
-		rm -rf $TESTBUS_GROUP_TEMPDIR
-		unset TESTBUS_GROUP_TEMPDIR
-	fi
-
-	if [ -n "$TESTBUS_GROUP_HANDLE" ]; then
-		testbus_call delete $TESTBUS_GROUP_HANDLE
-		unset TESTBUS_GROUP_HANDLE
-	fi
-
-	if [ "$TESTBUS_GROUP_STATUS" != "SUCCESS" ]; then
-		echo "One or more tests in group $TESTGROUP_NAME failed"
-		TESTBUS_GLOBAL_STATUS=FAILED
-	fi
-
-	unset TESTGROUP_NAME
-}
-
-function testbus_init_test {
-
-	testbus_finish_test
-
-	TESTCASE_NAME=`__testbus_make_name $1`; shift
-
-	if [ -z "$TESTBUS_GROUP_TEMPDIR" ]; then
-		TESTBUS_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
+	if [ -n "$TESTCASE_NAME" ]; then
+		echo $TESTCASE_NAME
 	else
-		TESTBUS_TEMPDIR=$TESTBUS_GROUP_TEMPDIR/$TESTCASE_NAME
-		mkdir -p $TESTBUS_TEMPDIR
-	fi
-
-	testbus_call show-xml --raw > $TESTBUS_TEMPDIR/xml-tree-before
-
-	if [ -z "$TESTBUS_GROUP_HANDLE" ]; then
-		TESTBUS_TEST_HANDLE=`testbus_call create-test $TESTCASE_NAME`
-	else
-		TESTBUS_TEST_HANDLE=`testbus_call create-test --context $TESTBUS_GROUP_HANDLE $TESTCASE_NAME`
+		let depth=${#TESTBUS_NAME_STACK[*]}
+		if [ $depth -ne 0 ]; then
+			echo ${TESTBUS_NAME_STACK[$depth-1]}
+		fi
 	fi
 }
 
-function testbus_finish_test {
+function __testbus_report {
 
-	status=${1:-SUCCESS}
+	status=${1:-NOSTATUS}
 	shift || true
 
-	if [ -n "$TESTBUS_TEMPDIR" ]; then
-		rm -rf $TESTBUS_TEMPDIR
-		unset TESTBUS_TEMPDIR
+	name=`__testbus_testcase_name`
+	if [ -z "$name" ]; then
+		name="default"
 	fi
-
-	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
-		testbus_call delete $TESTBUS_TEST_HANDLE
-		unset TESTBUS_TEST_HANDLE
-	fi
-	if [ -n "$TESTCASE_NAME" ]; then
-		echo -n "$TESTCASE_NAME: $status"
+		
+	{
+		echo -n "### TESTRESULT $name: $status"
 		if [ -n "$*" ]; then
 			echo -n " ($*)"
 		fi
 		echo
-	fi >&2
-	unset TESTCASE_NAME
+	} >&2
 
 	if [ "$status" != "SUCCESS" ]; then
-		TESTBUS_GROUP_STATUS=FAILED
+		# FIXME: we should save a tarball of the failed test(s)
+		TESTBUS_FAILED_LIST+=("$TESTCASE_NAME($status)")
+		TESTBUS_FAILED_COUNT+=1
+		TESTBUS_GLOBAL_STATUS=FAILED
+	fi
+}
+
+function __testbus_begin {
+
+	newname=`__testbus_make_name $1`; shift
+
+	let depth=${#TESTBUS_NAME_STACK[*]}
+	if [ $depth -eq 0 ]; then
+		TESTCASE_NAME=$newname
+		TESTCASE_HANDLE=`testbus_call create-test $newname`
+		if [ $? -ne 0 ]; then
+			testbus_exit_fail "Unable to create test handle for test $TESTCASE_NAME"
+		fi
+		TESTCASE_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
+	else
+		let top=$depth-1
+		TESTCASE_NAME="${TESTBUS_NAME_STACK[$top]}.$newname"
+		TESTCASE_HANDLE=`testbus_call create-test --context ${TESTBUS_HANDLE_STACK[$top]} $newname`
+		if [ $? -ne 0 ]; then
+			testbus_exit_fail "Unable to create test handle for test $TESTCASE_NAME"
+		fi
+		TESTCASE_TEMPDIR=${TESTBUS_TEMPDIR_STACK[$top]}/$newname
+		mkdir -p $TESTCASE_TEMPDIR
+	fi
+
+	echo "### TESTBEGIN $TESTCASE_NAME"
+	testbus_call show-xml --raw > $TESTCASE_TEMPDIR/xml-tree-before
+}
+
+function __testbus_finish {
+
+	if [ -n "$TESTCASE_TEMPDIR" ]; then
+		rm -rf $TESTCASE_TEMPDIR
+		unset TESTCASE_TEMPDIR
+	fi
+
+	if [ -n "$TESTCASE_HANDLE" ]; then
+		testbus_call delete $TESTCASE_HANDLE
+		unset TESTCASE_HANDLE
+	fi
+
+	if [ -n "$TESTCASE_NAME" ]; then
+		unset TESTCASE_NAME
+	fi
+
+	let depth=${#TESTBUS_NAME_STACK[*]}
+	if [ $depth -ne 0 ]; then
+		let top=$depth-1
+		TESTCASE_HANDLE=${TESTBUS_HANDLE_STACK[$top]}
+		TESTCASE_TEMPDIR=${TESTBUS_TEMPDIR_STACK[$top]}
+	fi
+}
+
+function __testbus_begin_group {
+
+	__testbus_begin "$@"
+
+	TESTBUS_NAME_STACK+=($TESTCASE_NAME)
+	TESTBUS_HANDLE_STACK+=($TESTCASE_HANDLE)
+	TESTBUS_TEMPDIR_STACK+=($TESTCASE_TEMPDIR)
+
+	unset TESTCASE_NAME
+}
+
+function __testbus_finish_group {
+
+	__testbus_finish
+
+	let depth=${#TESTBUS_NAME_STACK[*]}
+	if [ $depth -ne 0 ]; then
+		let top=$depth-1
+		TESTCASE_NAME=${TESTBUS_NAME_STACK[$top]}
+		TESTCASE_HANDLE=${TESTBUS_HANDLE_STACK[$top]}
+		TESTCASE_TEMPDIR=${TESTBUS_TEMPDIR_STACK[$top]}
+		unset TESTBUS_NAME_STACK[$top]
+		unset TESTBUS_HANDLE_STACK[$top]
+		unset TESTBUS_TEMPDIR_STACK[$top]
+	else
+		unset TESTCASE_NAME
+		unset TESTCASE_HANDLE
+		unset TESTCASE_TEMPDIR
+	fi
+}
+
+function testbus_init_group {
+
+	__testbus_begin_group "$@"
+}
+
+function testbus_finish_group {
+
+	__testbus_report "$@"
+	__testbus_finish_group
+}
+
+function testbus_finish_all_groups {
+
+	testbus_finish_group "$@"
+	while [ -n "$TESTCASE_NAME" ]; do
+		testbus_finish_group "$@"
+	done
+}
+
+function testbus_init_test {
+
+	testbus_finish_test SUCCESS
+	__testbus_begin "$@"
+}
+
+function testbus_finish_test {
+
+	if [ -n "$TESTCASE_NAME" ]; then
+		__testbus_report "$@"
+		__testbus_finish
 	fi
 	return 0
 }
@@ -144,13 +225,9 @@ function testbus_fail_test {
 	testbus_finish_test FAILED "$@"
 }
 
-function __testbus_test_context {
+function __testbus_assert_handle {
 
-	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
-		echo $TESTBUS_TEST_HANDLE
-	elif [ -n "$TESTBUS_GROUP_HANDLE" ]; then
-		echo $TESTBUS_GROUP_HANDLE
-	else
+	if [ -z "$TESTCASE_HANDLE" ]; then
 		echo "$1: cannot call this function outside a test" >&2
 		exit 1
 	fi
@@ -160,11 +237,11 @@ function testbus_claim_host {
 
 	testbus_trace "claim host $*"
 
-	context=`__testbus_test_context $0`
+	__testbus_assert_handle $FUNCNAME
 	if test -n "$TESTBUS_CLAIM_TIMEOUT"; then
-		testbus_call claim-host --timeout $TESTBUS_CLAIM_TIMEOUT "$@" $context
+		testbus_call claim-host --timeout $TESTBUS_CLAIM_TIMEOUT "$@" $TESTCASE_HANDLE
 	else
-		testbus_call claim-host "$@" $context
+		testbus_call claim-host "$@" $TESTCASE_HANDLE
 	fi
 }
 
@@ -172,14 +249,8 @@ function testbus_setenv {
 
 	testbus_trace "setenv $*"
 
-	if [ -n "$TESTBUS_TEST_HANDLE" ]; then
-		testbus_call setenv $TESTBUS_TEST_HANDLE "$@"
-	elif [ -n "$TESTBUS_GROUP_HANDLE" ]; then
-		testbus_call setenv $TESTBUS_GROUP_HANDLE "$@"
-	else
-		echo "No context to setenv for" >&2
-		exit 1
-	fi
+	__testbus_assert_handle $FUNCNAME
+	testbus_call setenv $TESTCASE_HANDLE "$@"
 }
 
 function testbus_getenv {
@@ -190,7 +261,8 @@ function testbus_getenv {
 	/org/opensuse/Testbus/*)
 		context=$1; shift;;
 	*)
-		context=`__testbus_test_context $0`;;
+		__testbus_assert_handle $FUNCNAME
+		context=$TESTCASE_HANDLE;;
 	esac
 
 	testbus_call getenv $context "$@"
@@ -241,48 +313,52 @@ function testbus_download_eventlog {
 function testbus_run_command {
 
 	testbus_trace "run command $*"
-	testbus_call run-command --context $TESTBUS_TEST_HANDLE "$@"
+
+	__testbus_assert_handle $FUNCNAME
+	testbus_call run-command --context $TESTCASE_HANDLE "$@"
 }
 
 function __testbus_exit {
 
-	if [ "$TESTBUS_GLOBAL_STATUS" = "SUCCESS" ]; then
-		echo "All tests completed successfully"
-		return 0
+	if [ "$TESTBUS_FAILED_COUNT" -eq 0 ]; then
+		echo "### SUMMARY: All tests completed successfully"
+		exit 0
 	else
-		echo "Not all tests succeeded"
-		return 1
-	fi
+		echo "### SUMMARY: $TESTBUS_FAILED_COUNT tests failed"
+		echo "### SUMMARY: List of failed tests: ${TESTBUS_FAILED_LIST[@]}"
+		exit 1
+	fi >&2
 }
 
 function testbus_exit {
 
 	trap "" 0 1 2
 
-	testbus_finish_group SUCCESS
-	__testbus_exit >&2
-	exit $?
+	testbus_finish_all_groups SUCCESS
+	__testbus_exit
 }
 
 function testbus_exit_fail {
 
-	testbus_finish_group FAILED
-	__testbus_exit >&2
+	trap "" 0 1 2
+
+	if [ -n `__testbus_testcase_name` ]; then
+		testbus_finish_group FAILED "$@"
+		testbus_finish_all_groups FAILED
+		__testbus_exit
+	fi
 }
 
 function testbus_new_script {
 
 	name=${1:-script}; shift
 
-	if [ -n "$TESTBUS_TEMPDIR" ]; then
-		dir=$TESTBUS_TEMPDIR
-	elif [ -n "$TESTBUS_GROUP_TEMPDIR" ]; then
-		dir=$TESTBUS_GROUP_TEMPDIR
-	else
+	if [ -z "$TESTCASE_TEMPDIR" ]; then
 		echo "testbus_new_script called without a tempdir" >&2
+		return 1
 	fi
 
-	script="$dir/$name"
+	script="$TESTCASE_TEMPDIR/$name"
 	touch $script
 	chmod 755 $script
 
@@ -326,4 +402,3 @@ function testbus_start_kvm {
 
 trap "testbus_exit_fail" 0 1 2
 testbus_trace "Succesfully sourced testbus functions"
-set -e
