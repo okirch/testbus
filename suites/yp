@@ -25,16 +25,24 @@ mkdir -p $TMPDIR
 # through a firstboot stage first.
 TESTBUS_CLAIM_TIMEOUT=240
 
-function run_client {
+function __run_client {
 	testbus_run_command --host $NIS_CLIENT "$@"
 }
 
+function run_client {
+	__run_client "$@" || testbus_test_failure
+}
+
 function run_client_script {
-	testbus_run_command --host $NIS_CLIENT --send-script "$@"
+	run_client --host $NIS_CLIENT --send-script "$@"
+}
+
+function __run_server {
+	testbus_run_command --host $NIS_SERVER "$@"
 }
 
 function run_server {
-	testbus_run_command --host $NIS_SERVER "$@"
+	__run_server "$@" || testbus_test_failure
 }
 
 ##################################################################
