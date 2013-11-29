@@ -93,7 +93,7 @@ function instance_onboot {
 function instance_onboot_finish {
 
 	test -d "$instance_dir" || fatal "$0: instance dir not set"
-	if ls $instance_dir | grep -qs '\.rpm$'; then
+	if ls $instance_dir/guestfs | grep -qs '\.rpm$'; then
 		instance_onboot <<"EOF"
 
 echo "Installing/updating packages"
@@ -105,8 +105,12 @@ EOF
 function instance_dir_add_rpms {
 
 	test -d "$instance_dir" || fatal "$0: instance dir not set"
-	for pkg; do
-		cp -v "$pkg" $instance_dir/guestfs
+	for src; do
+		if [ -d "$src" ]; then
+			cp -v "$src"/*.rpm $instance_dir/guestfs
+		else
+			cp -v "$src" $instance_dir/guestfs
+		fi
 	done
 }
 
