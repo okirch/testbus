@@ -51,7 +51,10 @@ function run_server {
 testbus_group_begin $0
 
 NIS_SERVER=`testbus_claim_host --role server`
+test -n "$NIS_SERVER" || testbus_exit_fail "unable to claim NIS server"
+
 NIS_CLIENT=`testbus_claim_host --role client`
+test -n "$NIS_CLIENT" || testbus_exit_fail "unable to claim NIS client"
 
 NIS_SERVER_IP=`testbus_getenv_nonempty $NIS_SERVER primary_ip`
 NIS_CLIENT_IP=`testbus_getenv_nonempty $NIS_CLIENT primary_ip`

@@ -84,7 +84,10 @@ function server_write_exports {
 testbus_group_begin $0
 
 NFS_SERVER=`testbus_claim_host --role server`
+test -n "$NFS_SERVER" || testbus_exit_fail "unable to claim NFS server"
+
 NFS_CLIENT=`testbus_claim_host --role client`
+test -n "$NFS_CLIENT" || testbus_exit_fail "unable to claim NFS client"
 
 NFS_SERVER_IP=`testbus_getenv_nonempty $NFS_SERVER primary_ip`
 NFS_CLIENT_IP=`testbus_getenv_nonempty $NFS_CLIENT primary_ip`
