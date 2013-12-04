@@ -12,34 +12,59 @@ testbus_group_begin $0
 
 TESTBUS_HOST=`testbus_claim_host`
 
+# Create a test and allow the next testbus_test_begin call to
+# finish it implicitly
 testbus_test_begin subtest0
 testbus_run_command --host $TESTBUS_HOST /bin/true
 
+# Create a test and finish it explicitly
 testbus_test_begin subtest1
 testbus_run_command --host $TESTBUS_HOST /bin/true
-
 testbus_test_success
+testbus_test_finish
 
-test -n "$TESTCASE_TEMPDIR" || testbus_exit_fail "Missing tempdir"
-groupfile=$TESTCASE_TEMPDIR/groupfile
+##################################################################
+# Verify that files assigned to a nested test context override
+# files attached to a group context.
+##################################################################
+function verify_file {
+
+	filename=$1
+	expected=$2
+
+	response=`testbus_run_command --host $TESTBUS_HOST /bin/cat "%{file:$filename}"`
+	if [ "$response" != "$expected" ]; then
+		testbus_test_failure "expected answer \"$expected\"; instead I got \"$response\""
+	else
+		testbus_test_success
+	fi
+}
+
+# Upload a file to the group context, tag name "foobar"
+groupfile=`testbus_new_tempfile groupfile`
+test -n "$groupfile" || testbus_exit_fail "Could not create temp file"
 echo 43 > $groupfile
-__testbus_upload_file --context $TESTCASE_HANDLE $groupfile foobar
+__testbus_upload_file --context $TESTGROUP_HANDLE $groupfile foobar
 
+# Create a test context and upload another file, using the same tag name
 testbus_test_begin subtest2
 
-test -n "$TESTCASE_TEMPDIR" || testbus_exit_fail "Missing tempdir"
-testfile=$TESTCASE_TEMPDIR/testfile
-echo 42 > $testfile
+echo 42 | 
+__testbus_upload_file --context $TESTCASE_HANDLE - foobar
 
-__testbus_upload_file --context $TESTCASE_HANDLE $testfile foobar
+#testfile=`testbus_new_tempfile testfile`
+#test -n "$testfile" || testbus_exit_fail "Could not create temp file"
+#echo 42 > $testfile
+#
+#__testbus_upload_file --context $TESTCASE_HANDLE $testfile foobar
 
-response=`testbus_run_command --host $TESTBUS_HOST /bin/cat "%{file:foobar}"`
-if [ "$response" != "42" ]; then
-	echo "expected answer 42; instead I got \"$response\""
-	testbus_test_failure
-fi >&2
+verify_file foobar 42
 
-testbus_test_success
+testbus_test_finish
+
+# Verify that the group file is still accessible in the parent context
+testbus_test_begin subtest3
+verify_file foobar 43
 
 testbus_group_begin nested-group
 testbus_group_begin nested-even-deeper

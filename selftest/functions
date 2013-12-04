@@ -37,6 +37,7 @@ fi
 # Anything below this line is not user serviceable. Hands off, please.
 TESTBUS_GLOBAL_STATUS=SUCCESS
 TESTBUS_GROUP_STATUS=SUCCESS
+TESTCASE_IS_GROUP=true
 
 declare -a TESTBUS_NAME_STACK
 declare -a TESTBUS_HANDLE_STACK
@@ -46,7 +47,7 @@ declare -a TESTBUS_FAILED_LIST
 declare -i TESTBUS_TEST_COUNT
 declare -i TESTBUS_FAILED_COUNT
 
-TESTGROUP_NAME=default
+TESTGROUP_NAME=""
 TESTBUS_TEST_COUNT=0
 TESTBUS_FAILED_COUNT=0
 
@@ -57,7 +58,12 @@ function testbus_call {
 
 function testbus_trace {
 
-	echo "$@" >&2
+	echo "::: $@" >&2
+}
+
+function testbus_trace_internal {
+
+	: testbus_trace "$@"
 }
 
 function __testbus_make_name {
@@ -71,10 +77,7 @@ function __testbus_testcase_name {
 	if [ -n "$TESTCASE_NAME" ]; then
 		echo $TESTCASE_NAME
 	else
-		let depth=${#TESTBUS_NAME_STACK[*]}
-		if [ $depth -ne 0 ]; then
-			echo ${TESTBUS_NAME_STACK[$depth-1]}
-		fi
+		echo $TESTGROUP_NAME
 	fi
 }
 
@@ -82,6 +85,11 @@ function __testbus_report {
 
 	status=${1:-NOSTATUS}
 	shift || true
+
+	if [ -n "$TESTCASE_STATUS" ]; then
+		return 0
+	fi
+	TESTCASE_STATUS=$status
 
 	name=`__testbus_testcase_name`
 	if [ -z "$name" ]; then
@@ -104,34 +112,122 @@ function __testbus_report {
 	fi
 }
 
-function __testbus_begin {
+function __testbus_stack_top {
+
+	let depth=${#TESTBUS_NAME_STACK[*]}
+	if [ $depth -ne 0 ]; then
+		echo ${TESTBUS_HANDLE_STACK[$depth-1]}
+	fi
+}
+
+function __testbus_group_new {
 
 	newname=`__testbus_make_name $1`; shift
 
-	let depth=${#TESTBUS_NAME_STACK[*]}
-	if [ $depth -eq 0 ]; then
-		TESTCASE_NAME=$newname
-		TESTCASE_HANDLE=`testbus_call create-test $newname`
+	if [ -z "$TESTGROUP_NAME" ]; then
+		TESTGROUP_NAME=$newname
+		TESTGROUP_HANDLE=`testbus_call create-test $newname`
 		if [ $? -ne 0 ]; then
-			testbus_exit_fail "Unable to create test handle for test $TESTCASE_NAME"
+			testbus_exit_fail "Unable to create test handle for test $TESTGROUP_NAME"
 		fi
-		TESTCASE_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
+		TESTGROUP_TEMPDIR=`mktemp -d /tmp/testbusXXXXXX`
 	else
-		let top=$depth-1
-		TESTCASE_NAME="${TESTBUS_NAME_STACK[$top]}.$newname"
-		TESTCASE_HANDLE=`testbus_call create-test --context ${TESTBUS_HANDLE_STACK[$top]} $newname`
+		TESTBUS_NAME_STACK+=($TESTGROUP_NAME)
+		TESTBUS_HANDLE_STACK+=($TESTGROUP_HANDLE)
+		TESTBUS_TEMPDIR_STACK+=($TESTGROUP_TEMPDIR)
+
+		TESTGROUP_NAME="$TESTGROUP_NAME.$newname"
+		TESTGROUP_HANDLE=`testbus_call create-test --context $TESTGROUP_HANDLE $newname`
 		if [ $? -ne 0 ]; then
-			testbus_exit_fail "Unable to create test handle for test $TESTCASE_NAME"
+			testbus_exit_fail "Unable to create test handle for test $TESTGROUP_NAME"
 		fi
-		TESTCASE_TEMPDIR=${TESTBUS_TEMPDIR_STACK[$top]}/$newname
-		mkdir -p $TESTCASE_TEMPDIR
+		TESTGROUP_TEMPDIR=$TESTGROUP_TEMPDIR/$newname
+		mkdir -p $TESTGROUP_TEMPDIR
 	fi
+
+	# Make the group and tempdir handle available
+	TESTCASE_HANDLE=$TESTGROUP_HANDLE
+	TESTCASE_TEMPDIR=$TESTGROUP_TEMPDIR
+
+	unset TESTCASE_STATUS
+
+	echo "### TESTBEGIN $TESTGROUP_NAME"
+	testbus_call show-xml --raw > $TESTGROUP_TEMPDIR/xml-tree-before
+
+	testbus_trace_internal "$FUNCNAME: leave name=$TESTGROUP_NAME handle=$TESTCASE_HANDLE"
+}
+
+function __testbus_group_delete {
+
+	testbus_trace_internal "$FUNCNAME: enter name=$TESTGROUP_NAME handle=$TESTGROUP_HANDLE"
+
+	if [ -n "$TESTGROUP_TEMPDIR" ]; then
+		rm -rf $TESTGROUP_TEMPDIR
+		unset TESTGROUP_TEMPDIR
+	fi
+
+	if [ -n "$TESTGROUP_HANDLE" ]; then
+		testbus_trace_internal "delete $TESTGROUP_HANDLE"
+		testbus_call delete $TESTGROUP_HANDLE
+		unset TESTGROUP_HANDLE
+	fi
+
+	if [ -n "$TESTGROUP_NAME" ]; then
+		unset TESTGROUP_NAME
+	fi
+
+	let depth=${#TESTBUS_NAME_STACK[*]}
+	if [ $depth -ne 0 ]; then
+		let top=$depth-1
+		TESTGROUP_NAME=${TESTBUS_NAME_STACK[$top]}
+		TESTGROUP_HANDLE=${TESTBUS_HANDLE_STACK[$top]}
+		TESTGROUP_TEMPDIR=${TESTBUS_TEMPDIR_STACK[$top]}
+
+		unset TESTBUS_NAME_STACK[$top]
+		unset TESTBUS_HANDLE_STACK[$top]
+		unset TESTBUS_TEMPDIR_STACK[$top]
+	else
+		unset TESTGROUP_NAME
+		unset TESTGROUP_HANDLE
+		unset TESTGROUP_TEMPDIR
+	fi
+
+	# Make the group and tempdir handle available
+	TESTCASE_HANDLE=$TESTGROUP_HANDLE
+	TESTCASE_TEMPDIR=$TESTGROUP_TEMPDIR
+
+	testbus_trace_internal "$FUNCNAME: leave name=$TESTGROUP_NAME handle=$TESTGROUP_HANDLE"
+}
+
+function __testbus_test_new {
+
+	newname=`__testbus_make_name $1`; shift
+
+	if [ -z "$TESTGROUP_NAME" ]; then
+		__testbus_group_new default
+	fi
+
+	testbus_trace_internal "$FUNCNAME: enter name=$newname parent=$TESTGROUP_NAME handle=$TESTGROUP_HANDLE"
+
+	TESTCASE_NAME="$TESTGROUP_NAME.$newname"
+	TESTCASE_HANDLE=`testbus_call create-test --context $TESTGROUP_HANDLE $newname`
+	if [ $? -ne 0 ]; then
+		testbus_exit_fail "Unable to create test handle for test $TESTCASE_NAME"
+	fi
+	TESTCASE_TEMPDIR=$TESTGROUP_TEMPDIR/$newname
+	mkdir -p $TESTCASE_TEMPDIR
+
+	unset TESTCASE_STATUS
 
 	echo "### TESTBEGIN $TESTCASE_NAME"
 	testbus_call show-xml --raw > $TESTCASE_TEMPDIR/xml-tree-before
+
+	testbus_trace_internal "$FUNCNAME: leave name=$TESTCASE_NAME handle=$TESTCASE_HANDLE"
 }
 
-function __testbus_finish {
+function __testbus_test_delete {
+
+	testbus_trace_internal "$FUNCNAME: enter name=$TESTCASE_NAME handle=$TESTCASE_HANDLE"
 
 	if [ -n "$TESTCASE_TEMPDIR" ]; then
 		rm -rf $TESTCASE_TEMPDIR
@@ -139,6 +235,7 @@ function __testbus_finish {
 	fi
 
 	if [ -n "$TESTCASE_HANDLE" ]; then
+		testbus_trace_internal "delete $TESTCASE_HANDLE"
 		testbus_call delete $TESTCASE_HANDLE
 		unset TESTCASE_HANDLE
 	fi
@@ -147,106 +244,111 @@ function __testbus_finish {
 		unset TESTCASE_NAME
 	fi
 
-	let depth=${#TESTBUS_NAME_STACK[*]}
-	if [ $depth -ne 0 ]; then
-		let top=$depth-1
-		TESTCASE_HANDLE=${TESTBUS_HANDLE_STACK[$top]}
-		TESTCASE_TEMPDIR=${TESTBUS_TEMPDIR_STACK[$top]}
-	fi
-}
-
-function __testbus_begin_group {
-
-	__testbus_begin "$@"
-
-	TESTBUS_NAME_STACK+=($TESTCASE_NAME)
-	TESTBUS_HANDLE_STACK+=($TESTCASE_HANDLE)
-	TESTBUS_TEMPDIR_STACK+=($TESTCASE_TEMPDIR)
-
-	unset TESTCASE_NAME
-}
-
-function __testbus_group_finish {
-
-	__testbus_finish
-
-	let depth=${#TESTBUS_NAME_STACK[*]}
-	if [ $depth -ne 0 ]; then
-		let top=$depth-1
-		TESTCASE_NAME=${TESTBUS_NAME_STACK[$top]}
-		TESTCASE_HANDLE=${TESTBUS_HANDLE_STACK[$top]}
-		TESTCASE_TEMPDIR=${TESTBUS_TEMPDIR_STACK[$top]}
-		unset TESTBUS_NAME_STACK[$top]
-		unset TESTBUS_HANDLE_STACK[$top]
-		unset TESTBUS_TEMPDIR_STACK[$top]
-	else
-		unset TESTCASE_NAME
-		unset TESTCASE_HANDLE
-		unset TESTCASE_TEMPDIR
-	fi
+	testbus_trace_internal "$FUNCNAME: leave"
 }
 
 function testbus_group_begin {
 
-	__testbus_begin_group "$@"
+	testbus_test_finish
+	__testbus_group_new "$@"
 }
 
 function testbus_group_finish {
 
+	testbus_trace_internal "$FUNCNAME: enter group=$TESTGROUP_NAME status=$@"
+	testbus_test_finish
 	__testbus_report "$@"
-	__testbus_group_finish
+	__testbus_group_delete
+	testbus_trace_internal "$FUNCNAME: leave group=$TESTGROUP_NAME"
 }
 
 function testbus_finish_all_groups {
 
-	testbus_group_finish "$@"
-	while [ -n "$TESTCASE_NAME" ]; do
+	while [ -n "$TESTGROUP_NAME" ]; do
 		testbus_group_finish "$@"
 	done
 }
 
 function testbus_test_begin {
 
-	testbus_test_finish SUCCESS
-	__testbus_begin "$@"
+	testbus_test_finish
+	__testbus_test_new "$@"
+
+	TESTCASE_IS_GROUP=false
 }
 
 function testbus_test_finish {
 
 	if [ -n "$TESTCASE_NAME" ]; then
-		__testbus_report "$@"
-		__testbus_finish
+		testbus_trace_internal "$FUNCNAME name=$TESTCASE_NAME"
+		if [ -z "$TESTCASE_STATUS" ]; then
+			__testbus_report SUCCESS
+		fi
+		__testbus_test_delete
 	fi
-	return 0
+}
+
+function testbus_report {
+
+	if [ -z "$TESTCASE_STATUS" ]; then
+		__testbus_report "$@"
+	fi
 }
 
 function testbus_test_failure {
 
-	testbus_test_finish FAILED "$@"
+	testbus_report FAILED "$@"
 }
 
 function testbus_test_success {
 
-	testbus_test_finish SUCCESS "$@"
+	testbus_report SUCCESS "$@"
+}
+
+function __testbus_set_handle {
+
+	local var h
+
+	caller=$1
+	var=$2
+	if [ -z "$caller" -o -z "$var" ]; then
+		echo "$FUNCNAME: missing caller or variable name" >&1
+		exit 1
+	fi
+
+	h="$TESTCASE_HANDLE"
+	if [ -z "$h" ]; then
+		h="$TESTGROUP_HANDLE"
+		if [ -z "$h" ]; then
+			echo "$caller: cannot call this function outside a test context" >&2
+			exit 1
+		fi
+	fi
+	eval $var="$h"
+	return 0
 }
 
 function __testbus_assert_handle {
 
+	caller=$1
 	if [ -z "$TESTCASE_HANDLE" ]; then
-		echo "$1: cannot call this function outside a test" >&2
+		echo "$caller: cannot call this function outside a test" >&2
 		exit 1
 	fi
 }
 
 function testbus_claim_host {
 
+	local th
+
 	testbus_trace "claim host $*"
 
-	__testbus_assert_handle $FUNCNAME
+	__testbus_set_handle $FUNCNAME th
+
 	if test -n "$TESTBUS_CLAIM_TIMEOUT"; then
-		testbus_call claim-host --timeout $TESTBUS_CLAIM_TIMEOUT "$@" $TESTCASE_HANDLE
+		testbus_call claim-host --timeout $TESTBUS_CLAIM_TIMEOUT "$@" $th
 	else
-		testbus_call claim-host "$@" $TESTCASE_HANDLE
+		testbus_call claim-host "$@" $th
 	fi
 }
 
@@ -317,10 +419,12 @@ function testbus_download_eventlog {
 
 function testbus_run_command {
 
+	local th
+
 	testbus_trace "run command $*"
 
-	__testbus_assert_handle $FUNCNAME
-	testbus_call run-command --context $TESTCASE_HANDLE "$@"
+	__testbus_set_handle $FUNCNAME th
+	testbus_call run-command --context $th "$@"
 }
 
 function __testbus_exit {
@@ -354,20 +458,38 @@ function testbus_exit_fail {
 	fi
 }
 
-function testbus_new_script {
+function testbus_new_tempfile {
 
-	name=${1:-script}; shift
+	local dir name mode
 
-	if [ -z "$TESTCASE_TEMPDIR" ]; then
-		echo "testbus_new_script called without a tempdir" >&2
+	name=$1
+	mode=$2
+
+	if [ -z "$name" ]; then
+		echo "$FUNCNAME: no name argument given" >&2
 		return 1
 	fi
 
-	script="$TESTCASE_TEMPDIR/$name"
-	touch $script
-	chmod 755 $script
+	dir="$TESTCASE_TEMPDIR"
+	if [ -z "$dir" ]; then
+		dir="$TESTGROUP_TEMPDIR"
+		if [ -z "$dir" ]; then
+			echo "$FUNCNAME: no tempdir in this context" >&2
+			return 1
+		fi
+	fi
 
-	echo "$script"
+	filename="$dir/$name"
+	rm -f $filename
+	touch $filename
+	chmod ${mode:-644} $filename
+
+	echo $filename
+}
+
+function testbus_new_script {
+
+	testbus_new_tempfile ${1:-script} 755
 }
 
 function testbus_start_kvm {
