@@ -120,6 +120,7 @@ else
 	# This is icky:
 	__run_server /sbin/rpcbind || true
 
+	run_server /bin/rm -rf /srv/nfs/dir{1,2,3,4}
 	run_server /bin/mkdir -p /srv/nfs/dir{1,2,3,4}
 	testbus_trace "server: starting nfs-server"
 	run_server /etc/init.d/nfsserver start
@@ -134,8 +135,6 @@ EOF
 
 server_update_hosts "$NFS_CLIENT_IP	$NFS_CLIENT_NAME nfs-client.testbus.opensuse.org"
 
-testbus_trace "Befor next test-begin"
-
 ##################################################################
 # Initialize NFS server
 ##################################################################
@@ -145,6 +144,9 @@ client_update_hosts "$NFS_SERVER_IP	$NFS_SERVER_NAME nfs-server.testbus.opensuse
 run_client /usr/sbin/showmount -e nfs-server.testbus.opensuse.org
 
 run_client /bin/mkdir -p /mnt/nfs{1,2,3,4}
+
+# A simple start is not enough to make it start all helper services
+run_client /etc/init.d/nfs force-start
 
 testbus_test_success
 
@@ -225,6 +227,10 @@ mount_should_succeed nfsvers2		/srv/nfs/dir1	/mnt/nfs1 nfsvers=2
 mount_should_succeed nfsvers3		/srv/nfs/dir1	/mnt/nfs1 nfsvers=3
 mount_should_succeed nfsvers2-nolock	/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,nolock
 mount_should_succeed nfsvers3-nolock	/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,nolock
+mount_should_succeed nfsvers2-tcp	/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,tcp
+mount_should_succeed nfsvers3-tcp	/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,tcp
+mount_should_succeed nfsvers2-udp	/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,udp
+mount_should_succeed nfsvers3-udp	/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,udp
 
 testbus_group_begin non-exported
 mount_should_fail unexported		/srv/nfs/dir4	/mnt/nfs4
@@ -466,14 +472,22 @@ EOF
 # Test NFSv2
 ##################################################################
 testbus_group_begin nfsv2
-nfs_test_allfunc vers=2,nolock
+nfs_test_allfunc vers=2,tcp
+testbus_group_finish SUCCESS
+
+testbus_group_begin nfsv2-udp
+nfs_test_allfunc vers=2,udp
 testbus_group_finish SUCCESS
 
 ##################################################################
 # Test NFSv3
 ##################################################################
 testbus_group_begin nfsv3
-nfs_test_allfunc vers=3,nolock
+nfs_test_allfunc vers=3,tcp
+testbus_group_finish SUCCESS
+
+testbus_group_begin nfsv3-udp
+nfs_test_allfunc vers=3,udp
 testbus_group_finish SUCCESS
 
 ##################################################################
