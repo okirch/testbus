@@ -15,6 +15,7 @@ USE_YAST=false
 # TESTBUS_SELFTEST_DEBUG=all
 
 . /usr/share/testbus/functions
+. $0.functions
 
 TMPDIR=/tmp/testbus-yp
 mkdir -p $TMPDIR
@@ -23,63 +24,6 @@ mkdir -p $TMPDIR
 # Bringing up a VM guest can take some time, especially if it goes
 # through a firstboot stage first.
 TESTBUS_CLAIM_TIMEOUT=240
-
-function __run_client {
-	testbus_run_command --host $NFS_CLIENT "$@"
-}
-
-function run_client {
-
-	if !  __run_client "$@"; then
-		testbus_test_failure
-		return 1;
-	fi
-	return 0
-}
-
-function run_client_script {
-	run_client --host $NFS_CLIENT --send-script "$@"
-}
-
-function __run_server {
-	testbus_run_command --host $NFS_SERVER "$@"
-}
-
-function run_server {
-	if ! __run_server "$@"; then
-		testbus_test_failure
-		return 1
-	fi
-	return 0
-}
-
-function server_update_hosts {
-
-	hostfile="$TESTCASE_TEMPDIR/hosts.server"
-	testbus_download_file $NFS_SERVER /etc/hosts $hostfile
-	echo "$*" >> $hostfile
-	testbus_upload_file $NFS_SERVER $hostfile /etc/hosts
-}
-
-function client_update_hosts {
-
-	hostfile="$TESTCASE_TEMPDIR/hosts.client"
-	testbus_download_file $NFS_CLIENT /etc/hosts $hostfile
-	echo "$*" >> $hostfile
-	testbus_upload_file $NFS_CLIENT $hostfile /etc/hosts
-}
-
-function server_write_exports {
-
-	testbus_upload_file $NFS_SERVER "$@" /etc/exports
-	run_server /etc/init.d/nfsserver reload
-
-	echo "exports file now:"
-	testbus_download_file $NFS_SERVER /etc/exports -
-
-	echo "visible on client side:"
-	run_client /usr/sbin/showmount -e $NFS_SERVER_IP
-}
 
 ##################################################################
 # Start testing
@@ -118,35 +62,29 @@ if $USE_YAST; then
 	testbus_exit_failure "not implemented"
 else
 	# This is icky:
-	__run_server /sbin/rpcbind || true
+	__nfs_run_server /sbin/rpcbind || true
 
-	run_server /bin/rm -rf /srv/nfs/dir{1,2,3,4}
-	run_server /bin/mkdir -p /srv/nfs/dir{1,2,3,4}
+	nfs_run_server /bin/rm -rf /srv/nfs/dir{1,2,3,4}
+	nfs_run_server /bin/mkdir -p /srv/nfs/dir{1,2,3,4}
 	testbus_trace "server: starting nfs-server"
-	run_server /etc/init.d/nfsserver start
-	run_server /sbin/chkconfig nfsserver on
+	nfs_run_server /etc/init.d/nfsserver start
+	nfs_run_server /sbin/chkconfig nfsserver on
 fi
 
-server_write_exports - <<EOF
-/srv/nfs/dir1	*(ro)
-/srv/nfs/dir2	*(rw,no_root_squash)
-/srv/nfs/dir3	*(rw)
-EOF
-
-server_update_hosts "$NFS_CLIENT_IP	$NFS_CLIENT_NAME nfs-client.testbus.opensuse.org"
+nfs_server_update_hosts "$NFS_CLIENT_IP	$NFS_CLIENT_NAME nfs-client.testbus.opensuse.org"
 
 ##################################################################
 # Initialize NFS server
 ##################################################################
 testbus_test_begin client-init
 
-client_update_hosts "$NFS_SERVER_IP	$NFS_SERVER_NAME nfs-server.testbus.opensuse.org"
-run_client /usr/sbin/showmount -e nfs-server.testbus.opensuse.org
+nfs_client_update_hosts "$NFS_SERVER_IP	$NFS_SERVER_NAME nfs-server.testbus.opensuse.org"
+nfs_run_client /usr/sbin/showmount -e nfs-server.testbus.opensuse.org
 
-run_client /bin/mkdir -p /mnt/nfs{1,2,3,4}
+nfs_run_client /bin/mkdir -p /mnt/nfs{1,2,3,4}
 
 # A simple start is not enough to make it start all helper services
-run_client /etc/init.d/nfs force-start
+nfs_run_client /etc/init.d/nfs force-start
 
 testbus_test_success
 
@@ -155,180 +93,47 @@ testbus_test_success
 ##################################################################
 testbus_group_begin mount-tests
 
-function mount_should_succeed {
-
-	local testname server_dir client_dir options
-
-	testname=$1
-	server_dir=$2
-	client_dir=$3
-	shift 3
-
-	options=
-	if [ -n "$*" ]; then
-		options="-o $*"
-	fi
-
-	testbus_test_begin $testname
-	if __run_client /bin/mount $NFS_SERVER_IP:$server_dir $client_dir $options; then
-		if ! __run_client /bin/grep " $client_dir" /proc/mounts; then
-			testbus_test_failure "Directory was not mounted (which is bad), but mount(8) reported success (which is even worse)"
-		else
-			testbus_test_success
-		fi
-	else
-		if __run_client /bin/grep " $client_dir" /proc/mounts; then
-			testbus_test_failure "Directory was mounted (which is good), but mount(8) reported an error"
-		else
-			testbus_test_failure "This mount attempt should have succeeded"
-		fi
-	fi
-	run_client /bin/umount $client_dir
-}
-
-function mount_should_fail {
-
-	local testname server_dir client_dir options
-
-	testname=$1
-	server_dir=$2
-	client_dir=$3
-	shift 3
-
-	options=
-	if [ -n "$*" ]; then
-		options="-o $*"
-	fi
-
-	testbus_test_begin $testname
-	if __run_client /bin/mount $NFS_SERVER_IP:$server_dir $client_dir $options; then
-		if ! __run_client /bin/grep " $client_dir" /proc/mounts; then
-			testbus_test_failure "Directory was not mounted (which is good), but mount(8) reported success"
-		else
-			testbus_test_failure "This mount attempt should have failed"
-		fi
-	else
-		if __run_client /bin/grep " $client_dir" /proc/mounts; then
-			testbus_test_failure "Directory was mounted (which is bad), even though mount(8) reported an error"
-		else
-			testbus_test_success
-		fi
-	fi
-	run_client /bin/umount $client_dir
-}
+nfs_server_write_exports - <<EOF
+/srv/nfs/dir1	*(ro)
+/srv/nfs/dir2	*(rw,no_root_squash)
+/srv/nfs/dir3	*(rw)
+EOF
 
 testbus_test_begin byname
-run_client /bin/mount $NFS_SERVER_NAME:/srv/nfs/dir1 /mnt/nfs1
-run_client /bin/umount /mnt/nfs1
+nfs_run_client /bin/mount $NFS_SERVER_NAME:/srv/nfs/dir1 /mnt/nfs1
+nfs_run_client /bin/umount /mnt/nfs1
 
-mount_should_succeed byaddr		/srv/nfs/dir1	/mnt/nfs1
-mount_should_succeed nfsv2		/srv/nfs/dir1	/mnt/nfs1 vers=2
-mount_should_succeed nfsvers2		/srv/nfs/dir1	/mnt/nfs1 nfsvers=2
-mount_should_succeed nfsvers3		/srv/nfs/dir1	/mnt/nfs1 nfsvers=3
-mount_should_succeed nfsvers2-nolock	/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,nolock
-mount_should_succeed nfsvers3-nolock	/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,nolock
-mount_should_succeed nfsvers2-tcp	/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,tcp
-mount_should_succeed nfsvers3-tcp	/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,tcp
-mount_should_succeed nfsvers2-udp	/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,udp
-mount_should_succeed nfsvers3-udp	/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,udp
+nfs_mount_should_succeed byaddr			/srv/nfs/dir1	/mnt/nfs1
+nfs_mount_should_succeed nfsv2			/srv/nfs/dir1	/mnt/nfs1 vers=2
+nfs_mount_should_succeed nfsvers2		/srv/nfs/dir1	/mnt/nfs1 nfsvers=2
+nfs_mount_should_succeed nfsvers3		/srv/nfs/dir1	/mnt/nfs1 nfsvers=3
+nfs_mount_should_succeed nfsvers2-nolock	/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,nolock
+nfs_mount_should_succeed nfsvers3-nolock	/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,nolock
+nfs_mount_should_succeed nfsvers2-tcp		/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,tcp
+nfs_mount_should_succeed nfsvers3-tcp		/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,tcp
+nfs_mount_should_succeed nfsvers2-udp		/srv/nfs/dir1	/mnt/nfs1 nfsvers=2,udp
+nfs_mount_should_succeed nfsvers3-udp		/srv/nfs/dir1	/mnt/nfs1 nfsvers=3,udp
 
 testbus_group_begin non-exported
-mount_should_fail unexported		/srv/nfs/dir4	/mnt/nfs4
+nfs_mount_should_fail unexported		/srv/nfs/dir4	/mnt/nfs4
 
 # These are "exported" for the NFSv4 virtual file handle space,
 # but should these really be available to NFSv2/v3 clients as well?
-mount_should_fail nfsv4-fhspace1	/srv/nfs	/mnt/nfs4
-mount_should_fail nfsv4-fhspace2	/srv		/mnt/nfs4
+nfs_mount_should_fail nfsv4-fhspace1		/srv/nfs	/mnt/nfs4
+nfs_mount_should_fail nfsv4-fhspace2		/srv		/mnt/nfs4
 testbus_group_finish SUCCESS
 
 testbus_group_finish SUCCESS
 
 
 ##################################################################
-# Functions that help repeated testing with different options
+# Verify that ro/rw and root_squash flags work as expected
 ##################################################################
-function nfs_test_readonly {
-
-	server_dir=$1
-	client_dir=$2
-
-	testbus_test_begin readonly
-	run_server /bin/rm -f $server_dir/readonly-test
-	run_client /bin/mount $NFS_SERVER_NAME:$server_dir $client_dir
-	__run_client /bin/touch $client_dir/readonly-test &&
-		testbus_test_failure "file system should be read-only, but succeeded in creating file"
-	run_client /bin/umount $client_dir
-
-	testbus_test_success
-}
-
-function nfs_test_readwrite {
-
-	server_dir=$1
-	client_dir=$2
-
-	testbus_test_begin readwrite
-	run_server /bin/rm -f $server_dir/readwrite-test
-	run_client /bin/mount $NFS_SERVER_NAME:$server_dir $client_dir
-	__run_client /bin/touch $client_dir/readwrite-test ||
-		testbus_test_failure "file system should be read-write, but was unable to create the file"
-	run_client /bin/umount $client_dir
-
-	testbus_test_success
-}
-
-function nfs_test_rootsquash {
-
-	server_dir=$1
-	client_dir=$2
-	squash_id=${3:-65534}
-
-	file=any/rootsquash-test
-
-	testbus_test_begin rootsquash
-	run_server /bin/mkdir -m 01777 -p $server_dir/any
-	run_server /bin/rm -f $server_dir/$file
-	run_client /bin/mount $NFS_SERVER_NAME:$server_dir $client_dir
-	if run_client /bin/touch $client_dir/$file; then
-		owner=`__run_client /bin/stat -c %%u $client_dir/$file`
-		if [ $? -ne 0 ]; then
-			testbus_test_failure "failed to run stat command on client"
-		elif [ "$owner" -ne $squash_id ]; then
-			testbus_test_failure "file system should have root-squashing enabled. new file has owner uid=\"$owner\" (expected $squash_id)"
-		fi
-	fi
-	run_client /bin/umount $client_dir
-
-	testbus_test_success
-}
-
-function nfs_test_norootsquash {
-
-	server_dir=$1
-	client_dir=$2
-
-	testbus_test_begin norootsquash
-	run_server /bin/rm -f $server_dir/rootsquash-test
-	run_client /bin/mount $NFS_SERVER_NAME:$server_dir $client_dir
-	if run_client /bin/touch $client_dir/rootsquash-test; then
-		owner=`__run_client /bin/stat -c %%u $client_dir/rootsquash-test`
-		if [ $? -ne 0 ]; then
-			testbus_test_failure "failed to run stat command on client"
-		elif [ "$owner" -ne 0 ]; then
-			testbus_test_failure "file system should have no root-squashing enabled. new file has owner uid=\"$owner\""
-		fi
-	fi
-	run_client /bin/umount $client_dir
-
-	testbus_test_success
-}
-
 testbus_group_begin export-flags
 
-nfs_test_readonly /srv/nfs/dir1 /mnt/nfs1
-nfs_test_readwrite /srv/nfs/dir2 /mnt/nfs2
-nfs_test_norootsquash /srv/nfs/dir2 /mnt/nfs2
-nfs_test_rootsquash /srv/nfs/dir3 /mnt/nfs3
+nfs_test_export_flags_setup
+
+nfs_test_all_versions nfs_test_export_flags
 
 testbus_group_finish SUCCESS
 
@@ -338,7 +143,7 @@ testbus_group_finish SUCCESS
 ##################################################################
 testbus_group_begin netmask-exports
 
-server_write_exports - <<EOF
+nfs_server_write_exports - <<EOF
 /srv/nfs/dir1	*(ro)
 /srv/nfs/dir1	10.0.0.0/8(rw,no_root_squash)
 EOF
@@ -346,7 +151,7 @@ EOF
 nfs_test_norootsquash /srv/nfs/dir1 /mnt/nfs1
 
 # And now the other way around
-server_write_exports - <<EOF
+nfs_server_write_exports - <<EOF
 /srv/nfs/dir1	10.0.0.0/8(ro) *(rw,no_root_squash)
 EOF
 
@@ -359,7 +164,7 @@ testbus_group_finish SUCCESS
 ##################################################################
 testbus_group_begin domain-wildcard
 
-server_write_exports - <<EOF
+nfs_server_write_exports - <<EOF
 /srv/nfs/dir1	*(ro)
 /srv/nfs/dir1	*.testbus.opensuse.org(rw,no_root_squash)
 EOF
@@ -369,133 +174,14 @@ nfs_test_norootsquash /srv/nfs/dir1 /mnt/nfs1
 testbus_group_finish SUCCESS
 
 ##################################################################
-# Test squashid
+# Run a standard set of tests exercising different operations
+# of the NFS protocol, for each NFS protocol version
 ##################################################################
-testbus_group_begin squashid
+testbus_group_begin fileops
 
-server_write_exports - <<EOF
-/srv/nfs/dir1	*(rw,root_squash,anonuid=60000)
-EOF
-
-nfs_test_rootsquash /srv/nfs/dir1 /mnt/nfs1 60000
+nfs_test_fileops_setup
+nfs_test_all_versions nfs_test_fileops
 
 testbus_group_finish SUCCESS
-
-##################################################################
-# Exercise the NFS protocol
-##################################################################
-function nfs_test_writefile {
-
-	dir=$1; shift
-	tf=$dir/testfile
-
-	testbus_test_begin writefile
-	run_client /bin/dd if=/dev/zero of=$tf bs=1k count=4k
-	run_client /bin/rm -f $tf
-	testbus_test_success
-}
-
-function nfs_test_chown {
-
-	dir=$1; shift
-	tf=$dir/testfile
-
-	testbus_test_begin chown
-	run_client /bin/touch $tf
-	run_client /bin/chown --changes nobody $tf
-	run_client /bin/rm -f $tf
-	testbus_test_success
-}
-
-function nfs_test_chmod {
-
-	dir=$1; shift
-	tf=$dir/testfile
-
-	testbus_test_begin chmod
-	run_client /bin/touch $tf
-	run_client /bin/chmod --changes 0600 $tf
-	run_client /bin/rm -f $tf
-	testbus_test_success
-}
-
-function nfs_test_sillyrename {
-
-	dir=$1; shift
-	tf=$dir/testfile
-
-	testbus_test_begin sillyrename
-	run_client --send-script - $tf <<"EOF"
-#!/bin/bash
-
-tf=$1
-echo frankzappa >$tf
-
-{
-	rm -f $tf || exit 1
-
-	input=`cat`
-	if [ "$input" != "frankzappa" ]; then
-		echo "Tried to read from deleted file, but failed"
-		exit 1
-	fi
-	exit 0
-} <$tf
-
-EOF
-	testbus_test_success
-}
-
-function nfs_test_allfunc {
-
-	options="$@"
-
-	server_dir=/srv/nfs/dir1
-	client_dir=/mnt/nfs1
-
-	if run_client /bin/mount $NFS_SERVER_NAME:$server_dir $client_dir -o $options; then
-		nfs_test_writefile $client_dir
-		nfs_test_chown $client_dir
-		nfs_test_chmod $client_dir
-		nfs_test_sillyrename $client_dir
-		run_client /bin/umount $client_dir
-	else
-		echo "Skipping NFS tests for this set of options" >&2
-	fi
-}
-
-server_write_exports - <<EOF
-/srv/nfs/dir1	*(rw,no_root_squash)
-EOF
-
-##################################################################
-# Test NFSv2
-##################################################################
-testbus_group_begin nfsv2
-nfs_test_allfunc vers=2,tcp
-testbus_group_finish SUCCESS
-
-testbus_group_begin nfsv2-udp
-nfs_test_allfunc vers=2,udp
-testbus_group_finish SUCCESS
-
-##################################################################
-# Test NFSv3
-##################################################################
-testbus_group_begin nfsv3
-nfs_test_allfunc vers=3,tcp
-testbus_group_finish SUCCESS
-
-testbus_group_begin nfsv3-udp
-nfs_test_allfunc vers=3,udp
-testbus_group_finish SUCCESS
-
-##################################################################
-# Test NFSv4
-##################################################################
-testbus_group_begin nfsv4
-nfs_test_allfunc vers=4
-testbus_group_finish SUCCESS
-
 
 testbus_exit
