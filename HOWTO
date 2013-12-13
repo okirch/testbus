@@ -1,0 +1,34 @@
+
+Using testbus
+
+In order to use testbus, all you need to do is
+
+ a)	select a "controller" flavor to install test nodes, bring
+	them up and tear them down.
+
+	For KVM, this would be
+	 ln -s /usr/bin/testbus-control-kvm /usr/bin/testbus-control
+
+	[This step is needed if you want to do this manually; the RPMs
+	provided already do this for you]
+
+ b)	write a script that calls testbus-control to create several
+ 	nodes, and install it in /usr/share/testbus/suites/foobar.run
+
+	#!/bin/bash
+
+	image=$1
+	testbus-control start node1 $image
+	testbus-control start node2 $image
+	testbus-control start node3 $image
+
+	# This is the set of tests themselves
+	/usr/share/testbus/suites/foobar
+
+	testbus-control stop node1
+	testbus-control stop node2
+	testbus-control stop node3
+
+ c)	write the test suite itself
+ 	Please consult the sample suites for an overview of how to do
+	this.
