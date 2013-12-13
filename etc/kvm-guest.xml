@@ -1,0 +1,36 @@
+<domain type='kvm'>
+  <name>@instance_name@</name>
+  <memory unit="GiB">1</memory>
+  <vcpu>2</vcpu>
+  <os>
+    <type>hvm</type>
+  </os>
+  <clock sync="localtime"/>
+  <devices>
+    <emulator>/usr/bin/qemu-kvm</emulator>
+    <disk type='file' device='disk'>
+      <source file='@instance_image@'/>
+      <target dev='hda'/>
+      <driver type='qcow2' />
+      <boot order='1'/>
+    </disk>
+
+    <interface type='network'>
+      <source network='testbus'/>
+      <mac address='@instance_macaddr@'/>
+      <model type='virtio' />
+    </interface>
+
+    <graphics type='vnc' port='-1' keymap='de'/>
+
+    <filesystem type='mount' accessmode='passthrough'>
+      <source dir="@instance_dir@/guestfs" />
+      <target dir='testbus'/>
+    </filesystem>
+
+    <channel type='unix'>
+      <source mode='connect' path='@instance_socket@' />
+      <target type='virtio' name='org.opensuse.Testbus.0'/>
+    </channel>
+  </devices>
+</domain>

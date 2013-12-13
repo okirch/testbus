@@ -1,0 +1,5 @@
+<config>
+  <statedir path="/var/lib/testbus" mode="0755"/>
+
+  <schema name="schema/testbus.xml"/>
+</config>

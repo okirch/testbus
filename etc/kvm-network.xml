@@ -1,0 +1,15 @@
+<network>
+  <name>testbus</name>
+  <bridge name='vnet0' stp='on' forwardDelay='0' />
+
+  <!-- Not doing any forwarding for now, just set up a private bridge network -->
+  <!-- 
+  <forward dev='eth0'/>
+  <ip address='192.168.100.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.100.128' end='192.168.100.254' />
+    </dhcp>
+  </ip>
+   -->
+
+</network>

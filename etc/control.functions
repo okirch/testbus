@@ -1,0 +1,314 @@
+#!/bin/bash
+#
+# Start a KVM instance with DBus forwarding; optionally installing
+# some additional RPMs inside.
+#
+# For instance, you invoke it as
+#
+# start-kvm \
+#	--add-rpm testbus-agent-kvm-0.1-0.x86_64.rpm \
+#	client sle11-image.qcow2
+#
+# Note that start-kvm always copies the provided image, so changes are
+# never retained across restarts.
+#
+
+INSTANCE_BASE_DIR=/var/run/testbus
+
+function fatal {
+
+	echo "Fatal error: $@" >&2
+	exit 1
+}
+
+##################################################################
+# Initialize a test node instance
+# This takes two arguments, an instance tag and the image to use
+# with this instance.
+#
+# Creates the instance directory and copies the image to it.
+#
+# Also sets the following shell variables:
+#  instance_tag
+#  instance_image
+#  instance_index
+##################################################################
+function instance_init {
+
+	if [ $# -ne 2 ]; then
+		fatal "Bad number of non-option arguments. Expected <tag> <image-path>"
+	fi
+
+	instance_tag=$1
+	instance_image=$2
+
+	instance_dir_init $instance_tag
+	instance_dir_add_image $instance_image
+
+	# The controller script may call instance_dir_add_rpms before
+	# initializing the instance. Make sure those RPMs get copied
+	# to the instance dir now.
+	if [ -n "$instance_rpm_list" ]; then
+		instance_dir_install_rpms $instance_rpm_list
+		unset instance_rpm_list
+	fi
+
+	instance_index=`instance_pick_index`
+}
+
+function instance_init_for_stop {
+
+	if [ $# -ne 1 ]; then
+		fatal "Bad number of non-option arguments. Expected <tag>"
+	fi
+
+	instance_tag=$1
+	instance_dir="$INSTANCE_BASE_DIR/$tag.d"
+}
+
+function instance_dir_init {
+
+	local tag
+
+	tag=$1
+
+	test -n "$tag" || fatal "cannot build instance_dir_path: empty tag name"
+	instance_dir="$INSTANCE_BASE_DIR/$tag.d"
+
+	rm -rf $instance_dir
+	mkdir -p $instance_dir
+	mkdir -p $instance_dir/guestfs
+
+	# cannot use instance_onboot here; instance_dir is not set yet
+	cat >$instance_dir/guestfs/onboot.sh <<"EOF"
+#!/bin/bash
+dirname=${0%/*}
+if test -f $dirname/ifcfg-eth0; then
+	cp $dirname/ifcfg-eth0 /etc/sysconfig/network
+fi
+EOF
+	chmod 555 $instance_dir/guestfs/onboot.sh
+}
+
+##################################################################
+# Add RPMs to the instance
+##################################################################
+function instance_dir_add_rpms {
+
+	if [ -n "$instance_dir" -a -d "$instance_dir" ]; then
+		instance_dir_install_rpms "$@"
+	else
+		instance_rpm_list="$instance_rpm_list $*"
+	fi
+}
+
+function instance_dir_install_rpms {
+
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
+	for src; do
+		if [ -d "$src" ]; then
+			cp -v "$src"/*.rpm $instance_dir/guestfs
+		else
+			cp -v "$src" $instance_dir/guestfs
+		fi
+	done
+}
+
+function instance_dir_add_image {
+
+	local img
+
+	img=$1; shift
+
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
+
+	case $img in
+	/*)
+		cp --sparse=always --reflink=auto -v $img $instance_dir/image || exit 1
+		: ;;
+	http:*|ftp:*)
+		curl -o $instance_dir/image $img || exit 1
+		: ;;
+	*)
+		# FIXME: should support zypp:/* urls here
+		echo "Don't know how to copy image from $img" >&2
+		exit 1;;
+	esac
+}
+
+##################################################################
+# Start/stop a dbus proxy.
+# The caller is responsible for providing us with the right
+# socket path.
+##################################################################
+function instance_proxy_init {
+
+	instance_socket=$1
+}
+
+function instance_proxy_start {
+
+	test -n "$instance_tag" || fatal "$0: instance tag not set"
+	test -n "$instance_socket" || fatal "$0: instance socket not set"
+
+	dbus-proxy \
+		--identity "testbus-$instance_tag" \
+		--downstream unix-mux:$instance_socket
+}
+
+function instance_proxy_stop {
+
+	test -n "$instance_tag" || fatal "$0: instance tag not set"
+	dbus-proxy --kill="testbus-$instance_tag"
+}
+
+
+##################################################################
+# This is just a convenience function for use with here scripts.
+# Use as
+#  instance_onboot<<-EOF
+# ... stuff that should get added to the onboot script
+# EOF
+##################################################################
+function instance_onboot {
+
+	cat >>$instance_dir/guestfs/onboot.sh
+}
+
+function instance_onboot_finish {
+
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
+	if ls $instance_dir/guestfs | grep -qs '\.rpm$'; then
+		instance_onboot <<"EOF"
+
+echo "Installing/updating packages"
+rpm -Uvh $dirname/*.rpm
+EOF
+	fi
+}
+
+function instance_pick_index {
+
+	index_list=`
+	for dir in $INSTANCE_BASE_DIR/*.d; do
+		if [ -f $dir/index ]; then
+			cat $dir/index
+		fi
+	done |  sort -n`
+
+	free_index=2
+	for next_used in $index_list; do
+		if [ $next_used -lt $free_index ]; then
+			continue;
+		fi
+		if [ $next_used -gt $free_index ]; then
+			break
+		fi
+		let free_index=$free_index+1
+	done
+
+	echo "$free_index" > $instance_dir/index
+	echo "$free_index"
+}
+
+##################################################################
+# Hostname
+# The hostname is being configured by writing it to a file in
+# the instance directory, from where it's picked up by the guest.
+##################################################################
+function instance_hostname_init_defaults {
+
+	instance_hostname="instance$instance_index.testbus"
+}
+
+function instance_hostname_config {
+
+	hostname=$1; shift
+	ipaddr=$1; shift
+
+	alias_list=
+	for tag; do
+		alias_list="$alias_list $tag.testbus"
+	done
+
+	instance_onboot <<EOF
+echo $hostname >/etc/HOSTNAME
+hostname ${hostname%%.*}
+
+echo "$ipaddr $hostname $alias_list" >> /etc/hosts
+EOF
+}
+
+##################################################################
+# Hostname
+# The hostname is being configured by creating a sysconfig file in
+# the instance directory, from where it's picked up by the guest.
+##################################################################
+function instance_network_init_defaults {
+
+	instance_ipaddr="10.0.0.$instance_index"
+	instance_ipmask="8"
+
+	if [ -z "$instance_macaddr" ]; then
+		instance_macaddr=`printf 52:54:00:12:34:%02x $instance_index`
+	fi
+}
+
+function instance_network_config {
+
+	local ifname ipaddr
+
+	ifname=$1; shift
+	ipaddr=$1
+
+	cat >$instance_dir/guestfs/ifcfg-$ifname <<-EOF
+BOOTPROTO=static
+STARTMODE=auto
+IPADDR=$ipaddr
+EOF
+}
+
+##################################################################
+# Configuration output functions
+##################################################################
+function instance_config_report {
+
+	cat <<-EOF
+	------------------
+	Starting KVM instance $instance_tag
+	Base image:      $instance_image
+	RPMs to install: ${rpm_list:-none}
+	MAC Address:     $instance_macaddr
+	IP Address:      $instance_ipaddr/$instance_ipmask
+	Hostname:        $instance_hostname
+	------------------
+EOF
+
+}
+
+function instance_config_write {
+
+	local template suffix
+
+	test -n "$1" || fatal "$FUNCNAME: missing template name"
+	template=$1; shift
+
+	suffix=${template##*/}
+	case $suffix in
+	*.*)	suffix=".${suffix##*.}";;
+	*)	suffix="";
+	esac
+
+	instance_config=$instance_dir/config$suffix
+
+	cat $template | sed \
+		-e "s|@instance_name@|$instance_tag|g" \
+		-e "s|@instance_dir@|$instance_dir|g" \
+		-e "s|@instance_image@|$instance_dir/image|g" \
+		-e "s|@instance_macaddr@|$instance_macaddr|g" \
+		-e "s|@instance_hostname@|$instance_hostname|g" \
+		-e "s|@instance_ipaddr@|$instance_ipaddr|g" \
+		-e "s|@instance_ipmask@|$instance_ipmask|g" \
+		-e "s|@instance_socket@|$instance_socket|g" \
+		> $instance_config
+}

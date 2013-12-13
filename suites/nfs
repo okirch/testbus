@@ -83,6 +83,9 @@ nfs_run_client /usr/sbin/showmount -e nfs-server.testbus.opensuse.org
 
 nfs_run_client /bin/mkdir -p /mnt/nfs{1,2,3,4}
 
+# This is icky:
+__nfs_run_server /sbin/rpcbind || true
+
 # A simple start is not enough to make it start all helper services
 nfs_run_client /etc/init.d/nfs force-start
 

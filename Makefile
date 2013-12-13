@@ -109,7 +109,8 @@ AGNTOBJS= $(addprefix obj/,$(AGNTSRCS:.c=.o))
 PROXY	= dbus-proxy
 PROXOBJS= $(addprefix obj/,$(PROXSRCS:.c=.o))
 
-BINTGTS	= $(MASTER) $(CLIENT) $(AGENT) $(PROXY)
+BINTGTS	= $(MASTER) $(CLIENT) $(AGENT) $(PROXY) \
+	  testbus-control-kvm
 LIBTGTS	= $(LIBDBORB) $(LIBTESTBUS)
 ALL	= $(LIBTGTS) $(BINTGTS)
 LIBDEPS	= $(LIBDBORB) $(LIBTESTBUS)
@@ -125,12 +126,13 @@ INSTALL_DATADIRS = \
 	/etc/testbus/agent.d \
 	/usr/share/testbus \
 	/usr/share/testbus/schema \
+	/usr/share/testbus/suites \
 	/var/run/testbus \
 	/var/lib/testbus
 
 all:	$(ALL)
 
-install: install-bin install-data
+install: install-bin install-data install-suites
 
 install-bin: $(ALL)
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_BINDIRS))
@@ -140,17 +142,22 @@ install-bin: $(ALL)
 	ln -fs ../../etc/init.d/testbus-master $(DESTDIR)/usr/sbin/rctestbus-master
 	install -m555 etc/agent-kvm.init $(DESTDIR)/etc/init.d/testbus-agent-kvm
 	ln -fs ../../etc/init.d/testbus-agent-kvm $(DESTDIR)/usr/sbin/rctestbus-agent-kvm
-	install -m555 etc/start-kvm-guest $(DESTDIR)/usr/sbin/testbus-kvm-guest
 
-install-data: etc/org.opensuse.Testbus.conf
+install-data: etc/config.xml etc/org.opensuse.Testbus.conf etc/kvm-network.xml etc/kvm-guest.xml
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
-	install -m644 etc/config.xml $(DESTDIR)/etc/testbus/config.xml
+	install -m644 etc/config.xml $(DESTDIR)/etc/testbus
+	install -m644 etc/kvm-network.xml $(DESTDIR)/etc/testbus
+	install -m644 etc/kvm-guest.xml $(DESTDIR)/etc/testbus
 	install -m555 selftest/functions $(DESTDIR)/usr/share/testbus
+	install -m555 etc/*.functions $(DESTDIR)/usr/share/testbus
 	install -m644 schema/*.xml $(DESTDIR)/usr/share/testbus/schema
 	install -m755 etc/agent.d/* $(DESTDIR)/etc/testbus/agent.d
 	# This is special - dbus-daemon does weird things if we install the file directly.
 	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/org.opensuse.Testbus.conf.new
 	mv $(DESTDIR)/etc/dbus-1/system.d/org.opensuse.Testbus.conf{.new,}
+
+install-suites:
+	install -m555 suites/* $(DESTDIR)/usr/share/testbus/suites
 
 distclean clean::
 	rm -rf obj core vgcore.*

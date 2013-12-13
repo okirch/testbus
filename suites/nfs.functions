@@ -72,7 +72,7 @@ function nfs_test_with_options {
 	fi
 	shift 2
 
-	testbus_group_begin $group_name
+	testbus_group_begin $testgroup_name
 	eval $@ $mount_options
 	testbus_group_finish SUCCESS
 }
@@ -106,14 +106,14 @@ function nfs_mount_should_succeed {
 	fi
 
 	testbus_test_begin $testname
-	if __run_client /bin/mount $NFS_SERVER_IP:$server_dir $client_dir $options; then
-		if ! __run_client /bin/grep " $client_dir" /proc/mounts; then
+	if __nfs_run_client /bin/mount $NFS_SERVER_IP:$server_dir $client_dir $options; then
+		if ! __nfs_run_client /bin/grep " $client_dir" /proc/mounts; then
 			testbus_test_failure "Directory was not mounted (which is bad), but mount(8) reported success (which is even worse)"
 		else
 			testbus_test_success
 		fi
 	else
-		if __run_client /bin/grep " $client_dir" /proc/mounts; then
+		if __nfs_run_client /bin/grep " $client_dir" /proc/mounts; then
 			testbus_test_failure "Directory was mounted (which is good), but mount(8) reported an error"
 		else
 			testbus_test_failure "This mount attempt should have succeeded"
@@ -137,14 +137,14 @@ function nfs_mount_should_fail {
 	fi
 
 	testbus_test_begin $testname
-	if __run_client /bin/mount $NFS_SERVER_IP:$server_dir $client_dir $options; then
-		if ! __run_client /bin/grep " $client_dir" /proc/mounts; then
+	if __nfs_run_client /bin/mount $NFS_SERVER_IP:$server_dir $client_dir $options; then
+		if ! __nfs_run_client /bin/grep " $client_dir" /proc/mounts; then
 			testbus_test_failure "Directory was not mounted (which is good), but mount(8) reported success"
 		else
 			testbus_test_failure "This mount attempt should have failed"
 		fi
 	else
-		if __run_client /bin/grep " $client_dir" /proc/mounts; then
+		if __nfs_run_client /bin/grep " $client_dir" /proc/mounts; then
 			testbus_test_failure "Directory was mounted (which is bad), even though mount(8) reported an error"
 		else
 			testbus_test_success
@@ -205,7 +205,7 @@ function __nfs_test_rootsquash {
 
 	server_dir=$1
 	client_dir=$2
-	squash_id=${3:-65534}
+	squash_id=$3
 	shift 3
 
 	file=any/rootsquash-test
@@ -231,7 +231,7 @@ function __nfs_test_rootsquash {
 
 function nfs_test_rootsquash {
 
-	__nfs_test_rootsquash rootsquash "$@"
+	__nfs_test_rootsquash rootsquash 65534 "$@"
 }
 
 function nfs_test_squashid {
