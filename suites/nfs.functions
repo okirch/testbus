@@ -162,7 +162,7 @@ function nfs_test_mount {
 	client_dir=$2
 	shift 2
 
-	nfs_run_client /bin/mount $NFS_SERVER_NAME:$server_dir $client_dir "$@
+	nfs_run_client /bin/mount $NFS_SERVER_NAME:$server_dir $client_dir "$@"
 }
 
 function nfs_test_readonly {
