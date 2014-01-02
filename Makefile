@@ -132,7 +132,7 @@ INSTALL_DATADIRS = \
 
 all:	$(ALL)
 
-install: install-bin install-data install-suites
+install: install-bin install-data
 
 install-bin: $(ALL)
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_BINDIRS))
