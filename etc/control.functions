@@ -1,16 +1,12 @@
 #!/bin/bash
 #
-# Start a KVM instance with DBus forwarding; optionally installing
-# some additional RPMs inside.
+# This file contains common helper functions for testbus controllers
+# (ie the scripts for creating test system instances).
 #
-# For instance, you invoke it as
-#
-# start-kvm \
-#	--add-rpm testbus-agent-kvm-0.1-0.x86_64.rpm \
-#	client sle11-image.qcow2
-#
-# Note that start-kvm always copies the provided image, so changes are
-# never retained across restarts.
+# When creating an instance, we start by creating a directory below
+# $INSTANCE_BASE_DIR, and populate it with various files.
+# Some of these files are very specific to the virtualization flavor
+# used, but some are quite generic.
 #
 
 INSTANCE_BASE_DIR=/var/run/testbus
