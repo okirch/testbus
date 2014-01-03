@@ -441,7 +441,7 @@ __ni_process_find_path(const char *name)
 		const char **path;
 
 		for (path = bin_path; *path; ++path) {
-			snprintf(pathbuf, sizeof(pathbuf), "%ss/%s", *path, name);
+			snprintf(pathbuf, sizeof(pathbuf), "%s/%s", *path, name);
 			if (ni_file_executable(pathbuf))
 				return pathbuf;
 		}
