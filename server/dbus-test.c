@@ -63,7 +63,7 @@ __ni_Testbus_Testset_createTest(ni_dbus_object_t *object, const ni_dbus_method_t
 	if (!ni_testbus_identifier_valid(name, error))
 		return FALSE;
 
-	if (ni_testbus_container_get_test_by_name(context, name) != NULL) {
+	if (ni_testbus_container_get_test_by_name(context, name, FALSE) != NULL) {
 		dbus_set_error(error, NI_DBUS_ERROR_NAME_EXISTS, "test case with this name already exists");
 		return FALSE;
 	}

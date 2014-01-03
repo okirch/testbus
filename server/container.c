@@ -421,7 +421,7 @@ ni_testbus_container_remove_test(ni_testbus_container_t *container, ni_testbus_t
 
 
 ni_testbus_testcase_t *
-ni_testbus_container_get_test_by_name(ni_testbus_container_t *container, const char *name)
+ni_testbus_container_get_test_by_name(ni_testbus_container_t *container, const char *name, ni_bool_t globally)
 {
 	for (; container; container = container->parent) {
 		ni_testbus_testcase_t *test;
@@ -431,6 +431,9 @@ ni_testbus_container_get_test_by_name(ni_testbus_container_t *container, const c
 			if (test)
 				return test;
 		}
+
+		if (!globally)
+			break;
 	}
 	return NULL;
 }
