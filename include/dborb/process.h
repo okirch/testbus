@@ -72,6 +72,8 @@ struct ni_process {
 	ni_string_array_t	argv;
 	ni_string_array_t	environ;
 
+	ni_bool_t		use_terminal;
+
 	int			stdin;
 	ni_process_buffer_t	stdout, stderr;
 

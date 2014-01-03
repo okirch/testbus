@@ -17,6 +17,7 @@ CFLAGS	= $(CWARNFLAGS) $(CCOPT) $(CPPFLAGS)
 LINK	= -L. -ltestbus -ldborb \
 	  -L/$(ARCHLIB) -ldbus-1 \
 	  -lgcrypt \
+	  -lutil \
 	  -ldl
 CWARNFLAGS= -Wall -Werror
 

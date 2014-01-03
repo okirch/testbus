@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <limits.h>
+#include <pty.h>
 
 #include <dborb/logging.h>
 #include <dborb/socket.h>
@@ -151,11 +152,30 @@ ni_process_buffer_open_pipe(struct ni_process_buffer *pb)
 	if (pb->capture) {
 		/* Our code in socket.c is only able to deal with sockets for now; */
 		if (socketpair(AF_UNIX, SOCK_STREAM, 0, pb->fdpair) < 0) {
-			ni_error("%s: unable to create stdout pipe: %m", __func__);
+			ni_error("%s: unable to create process pipe: %m", __func__);
 			return FALSE;
 		}
 	}
 
+	return TRUE;
+}
+
+static ni_bool_t
+ni_process_buffer_open_pty(struct ni_process_buffer *pb)
+{
+	if (pb->capture) {
+		char namebuf[PATH_MAX+1];
+		int master, slave;
+
+		if (openpty(&master, &slave, namebuf, NULL, NULL) < 0) {
+			ni_error("%s: unable to create pty for process: %m", __func__);
+			return FALSE;
+		}
+
+		ni_debug_extension("opened pty %s", namebuf);
+		pb->fdpair[0] = master;
+		pb->fdpair[1] = slave;
+	}
 	return TRUE;
 }
 
@@ -455,23 +475,21 @@ __ni_process_find_path(const char *name)
 int
 ni_process_run(ni_process_t *pi)
 {
-	int rv;
+	if (pi->use_terminal) {
+		if (!ni_process_buffer_open_pty(&pi->stdout))
+			return -1;
 
-	if (!ni_process_buffer_open_pipe(&pi->stdout))
+		ni_error("%s: terminal support not yet implemented", __func__);
 		return -1;
+	} else {
+		if (!ni_process_buffer_open_pipe(&pi->stdout))
+			return -1;
 
-	if (!ni_process_buffer_open_pipe(&pi->stderr))
-		return -1;
-
-	rv = __ni_process_run(pi);
-	if (rv >= 0) {
-		/* Set up a socket to receive the redirected output of the
-		 * subprocess. */
-		ni_process_buffer_prepare_reader(&pi->stdout, pi);
-		ni_process_buffer_prepare_reader(&pi->stderr, pi);
+		if (!ni_process_buffer_open_pipe(&pi->stderr))
+			return -1;
 	}
 
-	return rv;
+	return __ni_process_run(pi);
 }
 
 int
@@ -556,6 +574,35 @@ ni_process_run_and_capture_output(ni_process_t *pi, ni_buffer_t *out_buffer)
 }
 #endif
 
+static void
+ni_process_prepare_stdio(ni_process_t *pi)
+{
+	int fd, maxfd;
+
+	if ((fd = pi->stdin) < 0) {
+		if ((fd = open("/dev/null", O_RDONLY)) < 0)
+			ni_warn("%s: unable to open /dev/null: %m", __func__);
+	}
+
+	close(0);
+	if (fd >= 0 && dup2(fd, 0) < 0)
+		ni_warn("%s: cannot dup stdin descriptor: %m", __func__);
+
+	ni_process_buffer_prepare_writer(&pi->stdout, 1);
+	if (pi->stdout.capture && !pi->stderr.capture) {
+		/* If the client is capturing stdout but not
+		 * stderr, just paste these two together */
+		if (dup2(1, 2) < 0)
+			ni_warn("%s: unable to dup stdout to stderr: %m", __func__);
+	} else {
+		ni_process_buffer_prepare_writer(&pi->stderr, 2);
+	}
+
+	maxfd = getdtablesize();
+	for (fd = 3; fd < maxfd; ++fd)
+		close(fd);
+}
+
 int
 __ni_process_run(ni_process_t *pi)
 {
@@ -584,34 +631,10 @@ __ni_process_run(ni_process_t *pi)
 	pi->pid = pid;
 
 	if (pid == 0) {
-		int maxfd;
-		int fd;
-
 		if (chdir("/") < 0)
 			ni_warn("%s: unable to chdir to /: %m", __func__);
 
-		if ((fd = pi->stdin) < 0) {
-			if ((fd = open("/dev/null", O_RDONLY)) < 0)
-				ni_warn("%s: unable to open /dev/null: %m", __func__);
-		}
-
-		close(0);
-		if (fd >= 0 && dup2(fd, 0) < 0)
-			ni_warn("%s: cannot dup stdin descriptor: %m", __func__);
-
-		ni_process_buffer_prepare_writer(&pi->stdout, 1);
-		if (pi->stdout.capture && !pi->stderr.capture) {
-			/* If the client is capturing stdout but not
-			 * stderr, just paste these two together */
-			if (dup2(1, 2) < 0)
-				ni_warn("%s: unable to dup stdout to stderr: %m", __func__);
-		} else {
-			ni_process_buffer_prepare_writer(&pi->stderr, 2);
-		}
-
-		maxfd = getdtablesize();
-		for (fd = 3; fd < maxfd; ++fd)
-			close(fd);
+		ni_process_prepare_stdio(pi);
 
 		/* NULL terminate argv and env lists */
 		ni_string_array_append(&pi->argv, NULL);
@@ -623,6 +646,11 @@ __ni_process_run(ni_process_t *pi)
 
 		ni_fatal("%s: cannot execute %s: %m", __func__, arg0);
 	}
+
+	/* Set up a socket to receive the redirected output of the
+	 * subprocess. */
+	ni_process_buffer_prepare_reader(&pi->stdout, pi);
+	ni_process_buffer_prepare_reader(&pi->stderr, pi);
 
 	return 0;
 }
