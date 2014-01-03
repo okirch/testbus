@@ -7,6 +7,7 @@
 struct ni_testbus_command {
 	ni_string_array_t		argv;
 	ni_testbus_container_t		context;
+	ni_bool_t			use_terminal;
 };
 
 struct ni_testbus_process {

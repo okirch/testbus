@@ -1,0 +1,50 @@
+#!/bin/bash
+#
+# Very simple test to verify that the basic functionality works
+#
+# For this to work, you need to run both master and agent on your local
+# host.
+#
+
+. ${0%/*}/functions
+
+testbus_test_begin $0
+
+TESTBUS_HOST=`testbus_claim_host`
+
+testbus_test_begin simple
+testbus_run_command --host $TESTBUS_HOST --use-terminal /usr/bin/tty
+
+testbus_test_begin verify
+result=`testbus_run_command --host $TESTBUS_HOST --use-terminal /usr/bin/tty`
+case $result in
+/dev/pts/*)
+	echo "Seems to be a good pts tty";;
+/dev/*)
+	echo "Unsuspected tty name $result, but still okay";;
+*)
+	testbus_test_failure "Bad response from tty(1)";;
+esac
+
+# Currently, we do not handle stdin attachment in the terminal case. However,
+# we should at least make sure we're not throwing an error.
+# The application inside the terminal may still hang forever.
+testbus_test_begin stdin
+testbus_run_command --host $TESTBUS_HOST --use-terminal --send-stdin /bin/true < /dev/null
+
+testbus_test_begin nulstdin
+testbus_run_command --host $TESTBUS_HOST --use-terminal /usr/bin/wc
+
+testbus_test_begin realstdin
+answer=`testbus_run_command --host $TESTBUS_HOST --use-terminal --send-stdin /usr/bin/wc </etc/hosts | tail -1 | tr -d '\012\015'`
+expect=`/usr/bin/wc </etc/hosts | tail -1`
+
+set -- $answer; answer="$*"
+set -- $expect; expect="$*"
+if [ "$expect" != "$answer" ]; then
+	testbus_test_failure "wc yielded a different result in guest versus host"
+	echo "Expected output: <<$expect>>" >&2
+	echo "Received output: <<$answer>>" >&2
+fi
+
+testbus_exit

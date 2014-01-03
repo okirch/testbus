@@ -40,7 +40,7 @@ extern ni_buffer_t *		ni_testbus_client_download_file(ni_dbus_object_t *);
 extern ni_bool_t		ni_testbus_agent_add_capability(ni_dbus_object_t *, const char *);
 extern ni_bool_t		ni_testbus_agent_add_capabilities(ni_dbus_object_t *, const ni_string_array_t *);
 extern ni_bool_t		ni_testbus_agent_add_environment(ni_dbus_object_t *, const ni_var_array_t *);
-extern ni_dbus_object_t *	ni_testbus_client_create_command(ni_dbus_object_t *, const ni_string_array_t *);
+extern ni_dbus_object_t *	ni_testbus_client_create_command(ni_dbus_object_t *, const ni_string_array_t *, ni_bool_t use_terminal);
 extern ni_bool_t		ni_testbus_client_command_add_file(ni_dbus_object_t *, const char *, const ni_buffer_t *, unsigned int);
 extern ni_dbus_object_t *	ni_testbus_client_host_run(ni_dbus_object_t *, const ni_dbus_object_t *);
 extern ni_bool_t		ni_testbus_client_host_shutdown(ni_dbus_object_t *, ni_bool_t reboot_flag);

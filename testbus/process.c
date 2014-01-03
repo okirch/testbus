@@ -11,6 +11,7 @@ ni_testbus_process_serialize(const ni_process_t *pi, ni_dbus_variant_t *dict)
 	ni_dbus_variant_init_dict(dict);
 	ni_dbus_dict_add_string_array(dict, "argv", (const char **) pi->argv.data, pi->argv.count);
 	ni_dbus_dict_add_string_array(dict, "env", (const char **) pi->environ.data, pi->environ.count);
+	ni_dbus_dict_add_bool(dict, "use-terminal", pi->use_terminal);
 
 	return TRUE;
 }
@@ -20,6 +21,7 @@ ni_testbus_process_deserialize(const ni_dbus_variant_t *dict)
 {
 	const ni_dbus_variant_t *e;
 	ni_process_t *pi;
+	dbus_bool_t bval;
 
 	/* Create a new process instance, and set the default environment. */
 	pi = ni_process_new(TRUE);
@@ -31,6 +33,9 @@ ni_testbus_process_deserialize(const ni_dbus_variant_t *dict)
 	if (!(e = ni_dbus_dict_get(dict, "env"))
 	 || !ni_dbus_variant_get_string_array(e, &pi->environ))
 		goto failed;
+
+	if (ni_dbus_dict_get_bool(dict, "use-terminal", &bval))
+		pi->use_terminal = bval;
 
 	return pi;
 

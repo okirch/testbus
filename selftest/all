@@ -2,6 +2,7 @@
 # the agent is running.
 agent
 runnable
+tty
 nested
 runstress
 scripts

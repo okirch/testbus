@@ -43,7 +43,7 @@ ni_objectmodel_get_testbus_command(const ni_dbus_object_t *object, ni_bool_t wri
 }
 
 /*
- * CommandQueue.createCommand(argv[])
+ * CommandQueue.createCommand(argv[], opt-dict)
  *
  */
 static dbus_bool_t
@@ -55,13 +55,17 @@ __ni_Testbus_CommandQueue_createCommand(ni_dbus_object_t *object, const ni_dbus_
 	ni_string_array_t cmd_argv = NI_STRING_ARRAY_INIT;
 	ni_dbus_object_t *command_object;
 	ni_testbus_command_t *command;
+	ni_bool_t use_terminal = FALSE;
 
 	if ((context = ni_testbus_container_unwrap(object, error)) == NULL)
 		return FALSE;
 
-	if (argc != 1
+	if (argc != 2
 	 || !ni_dbus_variant_get_string_array(&argv[0], &cmd_argv))
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
+
+	if (ni_dbus_dict_get(&argv[1], "use-terminal"))
+		use_terminal = TRUE;
 
 	/* Create the new command and place it on the queue */
 	command = ni_testbus_command_new(context, &cmd_argv);
@@ -71,6 +75,8 @@ __ni_Testbus_CommandQueue_createCommand(ni_dbus_object_t *object, const ni_dbus_
 		dbus_set_error(error, DBUS_ERROR_FAILED, "unable to create new command");
 		return FALSE;
 	}
+
+	command->use_terminal = use_terminal;
 
 	/* Register this object */
 	command_object = ni_testbus_command_wrap(object, command);

@@ -336,6 +336,8 @@ ni_testbus_host_signal_process_scheduled(ni_dbus_object_t *host_object, ni_dbus_
 		return FALSE;
 	}
 
+	pi->use_terminal = proc->command->use_terminal;
+
 	ni_dbus_variant_vector_init(argv, 2);
 
 	if (!ni_testbus_process_serialize(pi, &argv[0])) {

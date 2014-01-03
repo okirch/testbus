@@ -1,7 +1,7 @@
 /*
  * Execute the requested process (almost) as if it were a setuid process.
  *
- * Copyright (C) 2002-2012 Olaf Kirch <okir@suse.de>
+ * Copyright (C) 2002-2014 Olaf Kirch <okir@suse.de>
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -10,11 +10,13 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/poll.h>
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
 #include <limits.h>
 #include <pty.h>
+#include <utmp.h>
 
 #include <dborb/logging.h>
 #include <dborb/socket.h>
@@ -23,10 +25,13 @@
 #include "util_priv.h"
 
 static int				__ni_process_run(ni_process_t *);
-static ni_socket_t *			__ni_process_get_output(ni_process_t *, int);
 static void				__ni_process_flush_buffer(ni_process_t *, struct ni_process_buffer *);
 static void				__ni_process_fill_exit_info(ni_process_t *);
 static const ni_string_array_t *	__ni_default_environment(void);
+
+static ni_socket_t *			__ni_process_connect_stdin(ni_process_t *pi, int fd);
+static ni_socket_t *			__ni_process_connect_stdout(ni_process_t *pi, int fd);
+static ni_socket_t *			__ni_process_connect_stderr(ni_process_t *pi, int fd);
 
 static inline ni_bool_t
 __ni_shellcmd_parse(ni_string_array_t *argv, const char *command)
@@ -214,14 +219,27 @@ ni_process_buffer_attach_child(struct ni_process_buffer *pb, int destfd)
 static ni_bool_t
 ni_process_buffer_attach_parent(struct ni_process_buffer *pb, ni_process_t *pi)
 {
+	if (pb->capture && pb->fdpair[0] < 0) {
+		ni_warn("%s: cannot attach i/o buffer - not open", __func__);
+		return FALSE;
+	}
+
 	if (pb->capture) {
-		ni_assert(pb->fdpair[0] >= 0);
-
-		pb->socket = __ni_process_get_output(pi, pb->fdpair[0]);
+		if (pb == &pi->stdin)
+			pb->socket = __ni_process_connect_stdin(pi, pb->fdpair[0]);
+		else if (pb == &pi->stdout)
+			pb->socket = __ni_process_connect_stdout(pi, pb->fdpair[0]);
+		else if (pb == &pi->stderr)
+			pb->socket = __ni_process_connect_stderr(pi, pb->fdpair[0]);
+		else
+			ni_fatal("bug in %s", __func__);
 		ni_socket_activate(pb->socket);
-		close(pb->fdpair[1]);
+		pb->fdpair[0] = -1;
 
-		pb->fdpair[0] = pb->fdpair[1] = -1;
+		if (pb != &pi->stdin) {
+			close(pb->fdpair[1]);
+			pb->fdpair[1] = -1;
+		}
 	}
 
 	return TRUE;
@@ -498,8 +516,13 @@ ni_process_run(ni_process_t *pi)
 		if (!ni_process_buffer_open_pty(&pi->stdout))
 			return -1;
 
-		ni_error("%s: terminal support not yet implemented", __func__);
-		return -1;
+		if (pi->stderr.capture)
+			ni_warn("cannot capture separate stderr in terminal mode");
+		ni_process_buffer_destroy(&pi->stderr);
+
+		/* stdin needs a copy of the pty master. */
+		pi->stdin.fdpair[0] = dup(pi->stdout.fdpair[0]);
+		pi->stdin.capture = TRUE;
 	} else {
 		if (!ni_process_buffer_open_pipe(&pi->stdout))
 			return -1;
@@ -598,6 +621,18 @@ ni_process_prepare_stdio(ni_process_t *pi)
 {
 	int fd, maxfd;
 
+	if (pi->use_terminal) {
+		if (login_tty(pi->stdout.fdpair[1]) >= 0)
+			return;
+
+		ni_warn("Failed to set up pty slave as controlling tty: %m");
+
+		/* Fall through and connect all stdio to /dev/null */
+		ni_process_buffer_destroy(&pi->stdin);
+		ni_process_buffer_destroy(&pi->stdout);
+		ni_process_buffer_destroy(&pi->stderr);
+	}
+
 	ni_process_buffer_attach_child(&pi->stdin, 0);
 	ni_process_buffer_attach_child(&pi->stdout, 1);
 
@@ -661,6 +696,7 @@ __ni_process_run(ni_process_t *pi)
 
 	/* Set up a socket to receive the redirected output of the
 	 * subprocess. */
+	ni_process_buffer_attach_parent(&pi->stdin, pi);
 	ni_process_buffer_attach_parent(&pi->stdout, pi);
 	ni_process_buffer_attach_parent(&pi->stderr, pi);
 
@@ -767,13 +803,11 @@ __ni_process_fill_exit_info(ni_process_t *pi)
 /*
  * Connect the subprocess output to our I/O handling loop
  */
-static void		__ni_process_output_recv(ni_socket_t *sock);
-
 static void
 __ni_process_flush_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
 {
-	if (pb->socket)
-		__ni_process_output_recv(pb->socket);
+	if (pb->socket && pb->socket->receive)
+		pb->socket->receive(pb->socket);
 	if (pb->wbuf) {
 		if (pi->read_callback)
 			pi->read_callback(pi, pb);
@@ -799,22 +833,17 @@ __ni_process_buffer_for_socket(ni_socket_t *sock)
 }
 
 static void
-__ni_process_output_recv(ni_socket_t *sock)
+__ni_process_output_recv(ni_socket_t *sock, ni_process_t *pi, struct ni_process_buffer *pb)
 {
-	ni_process_t *pi = sock->user_data;
-	struct ni_process_buffer *pb;
 	ni_buffer_t *wbuf;
 	int cnt;
-
-	if (!(pb = __ni_process_buffer_for_socket(sock)))
-		ni_fatal("%s: don't know this socket", __func__);
 
 repeat:
 	if (pb->wbuf == NULL)
 		pb->wbuf = ni_buffer_new(4096);
 	wbuf = pb->wbuf;
 
-	cnt = recv(sock->__fd, ni_buffer_tail(wbuf), ni_buffer_tailroom(wbuf), MSG_DONTWAIT);
+	cnt = read(sock->__fd, ni_buffer_tail(wbuf), ni_buffer_tailroom(wbuf));
 	if (cnt >= 0) {
 		ni_bool_t notify = FALSE, repeat = FALSE;
 
@@ -836,6 +865,82 @@ repeat:
 }
 
 static void
+__ni_process_input_send(ni_socket_t *sock, ni_process_t *pi, struct ni_process_buffer *pb)
+{
+	ni_buffer_t *bp;
+	int cnt, have;
+	unsigned char nulbuf[1024];
+	void *data;
+
+	/* There may be a file attached - read the next chunk from it */
+	if (pb->wbuf == NULL && pb->fdpair[1] >= 0) {
+		bp = ni_buffer_new(8192);
+		cnt = read(pb->fdpair[1], ni_buffer_tail(bp), ni_buffer_tailroom(bp));
+		if (cnt == 0) {
+			close(pb->fdpair[1]);
+			pb->fdpair[1] = -1;
+			ni_buffer_free(bp);
+		} else if (cnt < 0) {
+			ni_error("%s: file read error: %m", __func__);
+			ni_buffer_free(bp);
+		} else {
+			ni_buffer_push_tail(bp, cnt);
+			pb->wbuf = bp;
+		}
+	}
+
+	if ((bp = pb->wbuf) != NULL) {
+		data = ni_buffer_head(bp);
+		have = ni_buffer_count(bp);
+	} else {
+		/* for correct operation, we would get the termios struct and copy
+		 * the VEOF character.
+		 * For now, we assume we're on a well-behaved system where that is Ctrl-D */
+		memset(nulbuf, 0x04, sizeof(nulbuf));
+		have = sizeof(nulbuf);
+		data = nulbuf;
+	}
+
+	cnt = write(sock->__fd, data, have);
+	if (cnt >= 0) {
+		if (bp) {
+			ni_buffer_pull_head(bp, cnt);
+			if (ni_buffer_count(bp) == 0) {
+				pb->wbuf = NULL;
+				ni_buffer_free(bp);
+			}
+		}
+	} else if (errno != EWOULDBLOCK) {
+		ni_error("write error on subprocess pipe: %m");
+		ni_socket_deactivate(sock);
+	}
+}
+
+static void
+__ni_process_stdin_send(ni_socket_t *sock)
+{
+	ni_process_t *pi = sock->user_data;
+
+	__ni_process_input_send(sock, pi, &pi->stdin);
+}
+
+static void
+__ni_process_stdout_recv(ni_socket_t *sock)
+{
+	ni_process_t *pi = sock->user_data;
+
+	__ni_process_output_recv(sock, pi, &pi->stdout);
+}
+
+static void
+__ni_process_stderr_recv(ni_socket_t *sock)
+{
+	ni_process_t *pi = sock->user_data;
+
+	__ni_process_output_recv(sock, pi, &pi->stderr);
+}
+
+static void
 __ni_process_output_hangup(ni_socket_t *sock)
 {
 	ni_process_t *pi = sock->user_data;
@@ -854,15 +959,45 @@ __ni_process_output_hangup(ni_socket_t *sock)
 }
 
 static ni_socket_t *
-__ni_process_get_output(ni_process_t *pi, int fd)
+__ni_process_connect_stdin(ni_process_t *pi, int fd)
 {
 	ni_socket_t *sock;
 
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+		ni_warn("fcntl(O_NONBLOCK) failed: %m");
+
 	sock = ni_socket_wrap(fd, SOCK_STREAM);
-	sock->receive = __ni_process_output_recv;
+	sock->transmit = __ni_process_stdin_send;
+	sock->poll_flags = POLLOUT;
+
+	sock->user_data = pi;
+	return sock;
+}
+
+static ni_socket_t *
+__ni_process_connect_output(ni_process_t *pi, int fd, void (*recv_fn)(ni_socket_t *))
+{
+	ni_socket_t *sock;
+
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+		ni_warn("fcntl(O_NONBLOCK) failed: %m");
+
+	sock = ni_socket_wrap(fd, SOCK_STREAM);
+	sock->receive = recv_fn;
 	sock->handle_hangup = __ni_process_output_hangup;
 
 	sock->user_data = pi;
 	return sock;
 }
 
+static ni_socket_t *
+__ni_process_connect_stdout(ni_process_t *pi, int fd)
+{
+	return __ni_process_connect_output(pi, fd, __ni_process_stdout_recv);
+}
+
+static ni_socket_t *
+__ni_process_connect_stderr(ni_process_t *pi, int fd)
+{
+	return __ni_process_connect_output(pi, fd, __ni_process_stderr_recv);
+}

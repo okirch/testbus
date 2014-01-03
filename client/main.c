@@ -1195,7 +1195,7 @@ __samefile(int fd1, int fd2)
  * Helper function for creating a command
  */
 static ni_dbus_object_t *
-__do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, ni_bool_t send_stdin, ni_bool_t send_script)
+__do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, ni_bool_t send_stdin, ni_bool_t send_script, ni_bool_t use_terminal)
 {
 	ni_string_array_t command_argv = NI_STRING_ARRAY_INIT;
 	ni_dbus_object_t *cmd_object;
@@ -1210,7 +1210,7 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
 	for (index = 0; index < argc; ++index)
 		ni_string_array_append(&command_argv, argv[index]);
 
-	cmd_object = ni_testbus_client_create_command(container_object, &command_argv);
+	cmd_object = ni_testbus_client_create_command(container_object, &command_argv, use_terminal);
 	ni_string_array_destroy(&command_argv);
 
 	if (send_stdin) {
@@ -1337,7 +1337,7 @@ do_create_command(int argc, char **argv)
 	if (optind > argc - 1)
 		goto usage;
 
-	cmd_object = __do_create_command(container_object, argc - optind, argv + optind, FALSE, FALSE);
+	cmd_object = __do_create_command(container_object, argc - optind, argv + optind, FALSE, FALSE, FALSE);
 	if (cmd_object == NULL)
 		return 1;
 
@@ -1351,12 +1351,13 @@ do_create_command(int argc, char **argv)
 static int
 do_run_command(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT };
+	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT, OPT_USE_TERMINAL };
 	static struct option local_options[] = {
 		{ "host", required_argument, NULL, OPT_HOSTPATH },
 		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ "send-stdin", no_argument, NULL, OPT_SEND_STDIN },
 		{ "send-script", no_argument, NULL, OPT_SEND_SCRIPT },
+		{ "use-terminal", no_argument, NULL, OPT_USE_TERMINAL },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
@@ -1365,6 +1366,7 @@ do_run_command(int argc, char **argv)
 	const char *opt_contextpath = NULL;
 	ni_bool_t opt_send_stdin = FALSE;
 	ni_bool_t opt_send_script = FALSE;
+	ni_bool_t opt_use_terminal = FALSE;
 	ni_process_exit_info_t exit_info;
 	int c;
 
@@ -1401,6 +1403,10 @@ do_run_command(int argc, char **argv)
 		case OPT_SEND_SCRIPT:
 			opt_send_script = TRUE;
 			break;
+
+		case OPT_USE_TERMINAL:
+			opt_use_terminal = TRUE;
+			break;
 		}
 	}
 
@@ -1428,7 +1434,7 @@ do_run_command(int argc, char **argv)
 	if (optind > argc - 1)
 		goto usage;
 
-	cmd_object = __do_create_command(ctxt_object, argc - optind, argv + optind, opt_send_stdin, opt_send_script);
+	cmd_object = __do_create_command(ctxt_object, argc - optind, argv + optind, opt_send_stdin, opt_send_script, opt_use_terminal);
 	if (!cmd_object)
 		return 1;
 

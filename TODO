@@ -41,3 +41,7 @@ General:
 			send a signal when we find it changes
 
 		client: wait-for-runlevel command
+
+
+	ni_process_t: rename "capture" and "wbuf" members
+		rename fdpair[] member

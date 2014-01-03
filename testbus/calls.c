@@ -1153,22 +1153,29 @@ out_fail:
  * Create a command
  */
 ni_dbus_object_t *
-ni_testbus_client_create_command(ni_dbus_object_t *container_object, const ni_string_array_t *cmd_args)
+ni_testbus_client_create_command(ni_dbus_object_t *container_object, const ni_string_array_t *cmd_args, ni_bool_t use_terminal)
 {
 	DBusError error = DBUS_ERROR_INIT;
-	ni_dbus_variant_t arg = NI_DBUS_VARIANT_INIT;
+	ni_dbus_variant_t argv[2];
 	ni_dbus_variant_t res = NI_DBUS_VARIANT_INIT;
 	ni_dbus_object_t *result = NULL;
 
-	ni_dbus_variant_set_string_array(&arg, (const char **) cmd_args->data, cmd_args->count);
-	if (!ni_dbus_object_call_variant(container_object, NULL, "createCommand", 1, &arg, 1, &res, &error)) {
+	ni_dbus_variant_vector_init(argv, 2);
+
+	ni_dbus_variant_set_string_array(&argv[0], (const char **) cmd_args->data, cmd_args->count);
+	ni_dbus_variant_init_dict(&argv[1]);
+
+	if (use_terminal)
+		ni_dbus_dict_add_bool(&argv[1], "use-terminal", TRUE);
+
+	if (!ni_dbus_object_call_variant(container_object, NULL, "createCommand", 2, argv, 1, &res, &error)) {
 		ni_dbus_print_error(&error, "%s.run(): failed", container_object->path);
 		dbus_error_free(&error);
 	} else {
 		result = __ni_testbus_handle_path_result(&res, "createCommand");
 	}
 
-	ni_dbus_variant_destroy(&arg);
+	ni_dbus_variant_vector_destroy(argv, 2);
 	ni_dbus_variant_destroy(&res);
 	return result;
 }

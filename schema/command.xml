@@ -3,6 +3,9 @@
   <method name="createCommand">
     <arguments>
       <argv class="array" element-type="string" />
+      <options class="dict">
+        <use-terminal type="boolean" />
+      </options>
     </arguments>
   </method>
 </service>

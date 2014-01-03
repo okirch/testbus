@@ -54,7 +54,9 @@ ni_socket_activate(ni_socket_t *sock)
 	__ni_sockets[__ni_socket_count++] = sock;
 	sock->refcount++;
 	sock->active = 1;
-	sock->poll_flags = POLLIN;
+
+	if (sock->poll_flags == 0)
+		sock->poll_flags = POLLIN;
 }
 
 static inline void
