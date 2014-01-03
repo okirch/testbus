@@ -78,8 +78,7 @@ ni_testbus_agent_process_attach_files(ni_process_t *pi, ni_testbus_file_array_t 
 
 		if (ni_string_eq(file->name, "stdin")) {
 			/* attach to stdin */
-			pi->stdin = open(file->instance_path, O_RDONLY);
-			if (pi->stdin >= 0)
+			if (ni_process_attach_input_path(pi, file->instance_path))
 				ni_debug_testbus("process: attached file %s to stdin", file->name);
 			else
 				ni_warn("process: failed to attach file %s to stdin", file->name);

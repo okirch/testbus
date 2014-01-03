@@ -180,36 +180,39 @@ ni_process_buffer_open_pty(struct ni_process_buffer *pb)
 }
 
 static ni_bool_t
-ni_process_buffer_prepare_writer(struct ni_process_buffer *pb, int destfd)
+ni_process_buffer_attach_child(struct ni_process_buffer *pb, int destfd)
 {
+	static const char *fdname[3] = { "stdin", "stdout", "stderr" };
+	int fd = -1;
+
+	ni_assert(0 <= destfd && destfd <= 2);
 	if (pb->capture) {
 		ni_assert(pb->fdpair[1] >= 0);
 
-		if (dup2(pb->fdpair[1], destfd) < 0)
-			goto failed;
-	} else {
-		int fd;
-
-		if ((fd = open("/dev/null", O_RDONLY)) < 0) {
+		fd = pb->fdpair[1];
+		pb->fdpair[1] = -1;
+	}
+	
+	if (fd < 0) {
+		if ((fd = open("/dev/null", O_RDWR)) < 0) {
 			ni_warn("%s: unable to open /dev/null: %m", __func__);
 			return FALSE;
 		}
-		if (fd != destfd) {
-			if (dup2(fd, destfd) < 0)
-				goto failed;
-			close(fd);
+	}
+
+	if (fd != destfd) {
+		if (dup2(fd, destfd) < 0) {
+			ni_warn("%s: cannot dup fd to %s: %m", __func__, fdname[destfd]);
+			return FALSE;
 		}
+		close(fd);
 	}
 
 	return TRUE;
-
-failed:
-	ni_warn("%s: cannot dup %s descriptor: %m", __func__, destfd == 1? "stdout" : "stderr");
-	return FALSE;
 }
 
 static ni_bool_t
-ni_process_buffer_prepare_reader(struct ni_process_buffer *pb, ni_process_t *pi)
+ni_process_buffer_attach_parent(struct ni_process_buffer *pb, ni_process_t *pi)
 {
 	if (pb->capture) {
 		ni_assert(pb->fdpair[0] >= 0);
@@ -252,8 +255,8 @@ ni_process_new(ni_bool_t use_default_env)
 	ni_process_t *pi;
 
 	pi = xcalloc(1, sizeof(*pi));
-	pi->stdin = -1;
 
+	ni_process_buffer_init(&pi->stdin, pi);
 	ni_process_buffer_init(&pi->stdout, pi);
 	ni_process_buffer_init(&pi->stderr, pi);
 
@@ -297,6 +300,24 @@ ni_process_new_shellcmd(ni_shellcmd_t *proc)
 	return pi;
 }
 
+ni_bool_t
+ni_process_attach_input_path(ni_process_t *pi, const char *filename)
+{
+	int fd;
+
+	ni_process_buffer_destroy(&pi->stdin);
+	fd = open(filename, O_RDONLY);
+	if (fd < 0) {
+		ni_error("cannot open \"%s\": %m", filename);
+		return FALSE;
+	}
+
+	pi->stdin.fdpair[1] = fd;
+	pi->stdin.capture = TRUE;	/* capture is a misnomer */
+	return TRUE;
+}
+
+
 void
 ni_process_free(ni_process_t *pi)
 {
@@ -305,6 +326,7 @@ ni_process_free(ni_process_t *pi)
 			ni_error("Unable to kill process %d (%s): %m", pi->pid, pi->process->command);
 	}
 
+	ni_process_buffer_destroy(&pi->stdin);
 	ni_process_buffer_destroy(&pi->stdout);
 	ni_process_buffer_destroy(&pi->stderr);
 
@@ -312,9 +334,6 @@ ni_process_free(ni_process_t *pi)
 		ni_tempstate_finish(pi->temp_state);
 		pi->temp_state = NULL;
 	}
-
-	if (pi->stdin >= 0)
-		close(pi->stdin);
 
 	ni_string_array_destroy(&pi->argv);
 	ni_string_array_destroy(&pi->environ);
@@ -579,23 +598,16 @@ ni_process_prepare_stdio(ni_process_t *pi)
 {
 	int fd, maxfd;
 
-	if ((fd = pi->stdin) < 0) {
-		if ((fd = open("/dev/null", O_RDONLY)) < 0)
-			ni_warn("%s: unable to open /dev/null: %m", __func__);
-	}
+	ni_process_buffer_attach_child(&pi->stdin, 0);
+	ni_process_buffer_attach_child(&pi->stdout, 1);
 
-	close(0);
-	if (fd >= 0 && dup2(fd, 0) < 0)
-		ni_warn("%s: cannot dup stdin descriptor: %m", __func__);
-
-	ni_process_buffer_prepare_writer(&pi->stdout, 1);
 	if (pi->stdout.capture && !pi->stderr.capture) {
 		/* If the client is capturing stdout but not
 		 * stderr, just paste these two together */
 		if (dup2(1, 2) < 0)
 			ni_warn("%s: unable to dup stdout to stderr: %m", __func__);
 	} else {
-		ni_process_buffer_prepare_writer(&pi->stderr, 2);
+		ni_process_buffer_attach_child(&pi->stderr, 2);
 	}
 
 	maxfd = getdtablesize();
@@ -649,8 +661,8 @@ __ni_process_run(ni_process_t *pi)
 
 	/* Set up a socket to receive the redirected output of the
 	 * subprocess. */
-	ni_process_buffer_prepare_reader(&pi->stdout, pi);
-	ni_process_buffer_prepare_reader(&pi->stderr, pi);
+	ni_process_buffer_attach_parent(&pi->stdout, pi);
+	ni_process_buffer_attach_parent(&pi->stderr, pi);
 
 	return 0;
 }
