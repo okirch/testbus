@@ -146,8 +146,8 @@ ni_process_buffer_init(struct ni_process_buffer *pb, ni_process_t *pi)
 {
 	memset(pb, 0, sizeof(*pb));
 	pb->low_water_mark = 4096;
-	pb->fdpair[0] = -1;
-	pb->fdpair[1] = -1;
+	pb->master_fd = -1;
+	pb->slave_fd = -1;
 	pb->process = pi;
 }
 
@@ -155,11 +155,16 @@ static ni_bool_t
 ni_process_buffer_open_pipe(struct ni_process_buffer *pb)
 {
 	if (pb->capture) {
+		int fdpair[2];
+
 		/* Our code in socket.c is only able to deal with sockets for now; */
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, pb->fdpair) < 0) {
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, fdpair) < 0) {
 			ni_error("%s: unable to create process pipe: %m", __func__);
 			return FALSE;
 		}
+
+		pb->master_fd = fdpair[0];
+		pb->slave_fd = fdpair[1];
 	}
 
 	return TRUE;
@@ -178,8 +183,8 @@ ni_process_buffer_open_pty(struct ni_process_buffer *pb)
 		}
 
 		ni_debug_extension("opened pty %s", namebuf);
-		pb->fdpair[0] = master;
-		pb->fdpair[1] = slave;
+		pb->master_fd = master;
+		pb->slave_fd = slave;
 	}
 	return TRUE;
 }
@@ -192,10 +197,10 @@ ni_process_buffer_attach_child(struct ni_process_buffer *pb, int destfd)
 
 	ni_assert(0 <= destfd && destfd <= 2);
 	if (pb->capture) {
-		ni_assert(pb->fdpair[1] >= 0);
+		ni_assert(pb->slave_fd >= 0);
 
-		fd = pb->fdpair[1];
-		pb->fdpair[1] = -1;
+		fd = pb->slave_fd;
+		pb->slave_fd = -1;
 	}
 	
 	if (fd < 0) {
@@ -219,26 +224,26 @@ ni_process_buffer_attach_child(struct ni_process_buffer *pb, int destfd)
 static ni_bool_t
 ni_process_buffer_attach_parent(struct ni_process_buffer *pb, ni_process_t *pi)
 {
-	if (pb->capture && pb->fdpair[0] < 0) {
+	if (pb->capture && pb->master_fd < 0) {
 		ni_warn("%s: cannot attach i/o buffer - not open", __func__);
 		return FALSE;
 	}
 
 	if (pb->capture) {
 		if (pb == &pi->stdin)
-			pb->socket = __ni_process_connect_stdin(pi, pb->fdpair[0]);
+			pb->socket = __ni_process_connect_stdin(pi, pb->master_fd);
 		else if (pb == &pi->stdout)
-			pb->socket = __ni_process_connect_stdout(pi, pb->fdpair[0]);
+			pb->socket = __ni_process_connect_stdout(pi, pb->master_fd);
 		else if (pb == &pi->stderr)
-			pb->socket = __ni_process_connect_stderr(pi, pb->fdpair[0]);
+			pb->socket = __ni_process_connect_stderr(pi, pb->master_fd);
 		else
 			ni_fatal("bug in %s", __func__);
 		ni_socket_activate(pb->socket);
-		pb->fdpair[0] = -1;
+		pb->master_fd = -1;
 
 		if (pb != &pi->stdin) {
-			close(pb->fdpair[1]);
-			pb->fdpair[1] = -1;
+			close(pb->slave_fd);
+			pb->slave_fd = -1;
 		}
 	}
 
@@ -255,13 +260,13 @@ ni_process_buffer_destroy(struct ni_process_buffer *pb)
 	if (pb->wbuf)
 		ni_buffer_free(pb->wbuf);
 
-	if (pb->fdpair[0] >= 0) {
-		close(pb->fdpair[0]);
-		pb->fdpair[0] = -1;
+	if (pb->master_fd >= 0) {
+		close(pb->master_fd);
+		pb->master_fd = -1;
 	}
-	if (pb->fdpair[1] >= 0) {
-		close(pb->fdpair[1]);
-		pb->fdpair[1] = -1;
+	if (pb->slave_fd >= 0) {
+		close(pb->slave_fd);
+		pb->slave_fd = -1;
 	}
 
 	ni_process_buffer_init(pb, NULL);
@@ -330,7 +335,7 @@ ni_process_attach_input_path(ni_process_t *pi, const char *filename)
 		return FALSE;
 	}
 
-	pi->stdin.fdpair[1] = fd;
+	pi->stdin.slave_fd = fd;
 	pi->stdin.capture = TRUE;	/* capture is a misnomer */
 	return TRUE;
 }
@@ -521,7 +526,7 @@ ni_process_run(ni_process_t *pi)
 		ni_process_buffer_destroy(&pi->stderr);
 
 		/* stdin needs a copy of the pty master. */
-		pi->stdin.fdpair[0] = dup(pi->stdout.fdpair[0]);
+		pi->stdin.master_fd = dup(pi->stdout.master_fd);
 		pi->stdin.capture = TRUE;
 	} else {
 		if (!ni_process_buffer_open_pipe(&pi->stdout))
@@ -622,7 +627,7 @@ ni_process_prepare_stdio(ni_process_t *pi)
 	int fd, maxfd;
 
 	if (pi->use_terminal) {
-		if (login_tty(pi->stdout.fdpair[1]) >= 0)
+		if (login_tty(pi->stdout.slave_fd) >= 0)
 			return;
 
 		ni_warn("Failed to set up pty slave as controlling tty: %m");
@@ -873,12 +878,12 @@ __ni_process_input_send(ni_socket_t *sock, ni_process_t *pi, struct ni_process_b
 	void *data;
 
 	/* There may be a file attached - read the next chunk from it */
-	if (pb->wbuf == NULL && pb->fdpair[1] >= 0) {
+	if (pb->wbuf == NULL && pb->slave_fd >= 0) {
 		bp = ni_buffer_new(8192);
-		cnt = read(pb->fdpair[1], ni_buffer_tail(bp), ni_buffer_tailroom(bp));
+		cnt = read(pb->slave_fd, ni_buffer_tail(bp), ni_buffer_tailroom(bp));
 		if (cnt == 0) {
-			close(pb->fdpair[1]);
-			pb->fdpair[1] = -1;
+			close(pb->slave_fd);
+			pb->slave_fd = -1;
 			ni_buffer_free(bp);
 		} else if (cnt < 0) {
 			ni_error("%s: file read error: %m", __func__);

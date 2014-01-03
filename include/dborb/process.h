@@ -25,7 +25,7 @@ struct ni_shellcmd {
 typedef struct ni_process_buffer ni_process_buffer_t;
 struct ni_process_buffer {
 	ni_bool_t		capture;		/* misnomer, as we also use a buffer for stdin */
-	int			fdpair[2];
+	int			master_fd, slave_fd;
 	ni_socket_t *		socket;
 	ni_buffer_t *		wbuf;
 	unsigned int		low_water_mark;
