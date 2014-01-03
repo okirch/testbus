@@ -83,6 +83,7 @@ CLNTSRCS = \
 
 AGNTSRCS = \
 	agent/main.c \
+	agent/command.c \
 	agent/files.c \
 	agent/monitor.c \
 	agent/syslog.c \
