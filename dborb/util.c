@@ -1673,7 +1673,7 @@ __ni_wchar_escape(wchar_t wc, const char **retval)
 	}
 
 	for (i = slen = 0; i < nbytes; ++i) {
-		snprintf(escbuf + slen, sizeof(escbuf) - slen, "\\%03o", rev & 0xFF);
+		snprintf(escbuf + slen, sizeof(escbuf) - slen, "\\%03o", (unsigned int) rev & 0xFF);
 		rev >>= 8;
 		slen += 4;
 	}
