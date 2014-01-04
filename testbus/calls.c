@@ -3,7 +3,7 @@
  *
  * Client-side functions for calling the wicked server.
  *
- * Copyright (C) 2010-2012 Olaf Kirch <okir@suse.de>
+ * Copyright (C) 2010-2014 Olaf Kirch <okir@suse.de>
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"

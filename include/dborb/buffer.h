@@ -2,7 +2,7 @@
  * Types and functions for encapsulating buffers.
  * Needed by the DHCP and ARP code.
  *
- * Copyright (C) 2010-2013, Olaf Kirch <okir@suse.de>
+ * Copyright (C) 2010-2014, Olaf Kirch <okir@suse.de>
  */
 
 

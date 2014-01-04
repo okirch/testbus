@@ -1,7 +1,7 @@
 /*
  * Simple DBus client functions
  *
- * Copyright (C) 2011-2012 Olaf Kirch <okir@suse.de>
+ * Copyright (C) 2011-2014 Olaf Kirch <okir@suse.de>
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"

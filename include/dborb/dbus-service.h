@@ -1,7 +1,7 @@
 /*
  * Common DBus types and functions used for the implementation of a service
  *
- * Copyright (C) 2011-2012 Olaf Kirch <okir@suse.de>
+ * Copyright (C) 2011-2014 Olaf Kirch <okir@suse.de>
  */
 
 

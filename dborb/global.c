@@ -1,7 +1,7 @@
 /*
  * Global variables and config data
  *
- * Copyright (C) 2009-2013 Olaf Kirch <okir@suse.de>
+ * Copyright (C) 2009-2014 Olaf Kirch <okir@suse.de>
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"

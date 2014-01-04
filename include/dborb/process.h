@@ -2,7 +2,7 @@
  * Execute the requested process (almost) as if it were a
  * setuid process
  *
- * Copyright (C) 2002-2013 Olaf Kirch <okir@suse.de>
+ * Copyright (C) 2002-2014 Olaf Kirch <okir@suse.de>
  */
 
 #ifndef __WICKED_PROCESS_H__
