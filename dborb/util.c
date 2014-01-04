@@ -1699,6 +1699,10 @@ ni_file_write_safe(FILE *fp, const ni_buffer_t *wbuf)
 	unsigned int left = ni_buffer_count(wbuf);
 	mbstate_t mbstate;
 	size_t written = 0;
+	ni_bool_t saw_newline = TRUE;
+
+	if (left == 0)
+		return 0;
 
 	memset(&mbstate, 0, sizeof(mbstate));
 	while (left != 0) {
@@ -1709,6 +1713,8 @@ ni_file_write_safe(FILE *fp, const ni_buffer_t *wbuf)
 		 * Assume the test node uses the same locale as we do */
 		for (nbytes = 0; nbytes < left; ) {
 			ssize_t n;
+
+			saw_newline = FALSE;
 
 			n = mbrtowc(&wc, (char *) string + nbytes, left - nbytes, &mbstate);
 			if (n < 0) {
@@ -1740,6 +1746,9 @@ ni_file_write_safe(FILE *fp, const ni_buffer_t *wbuf)
 				goto consumed_some;
 			}
 
+			if (wc == '\n')
+				saw_newline = TRUE;
+
 			nbytes += n;
 		}
 
@@ -1751,6 +1760,11 @@ consumed_some:
 		string += nbytes;
 		left -= nbytes;
 	}
+
+	/* Make sure we're writing a newline at the end of our output */
+	if (!saw_newline)
+		fputc('\n', fp);
+
 	fflush(fp);
 	return written;
 }
