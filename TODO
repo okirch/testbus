@@ -24,6 +24,12 @@ Proxy:
 	Remove pid file on exit
 	Complete serial line support
 
+control-kvm:
+	add a "restart" command that lets you restart an instance that has
+	previously been shut down (for diagnostic purposes)
+
+	add a "cleanup" command that clean up the instance directory
+
 General:
 	Support file monitors
 		A monitor specifies how a system file should be watched as part
