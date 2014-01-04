@@ -43,7 +43,7 @@ ni_testbus_agent_process_attach_files(ni_process_t *pi, ni_testbus_file_array_t 
 		}
 	}
 
-	pi->stdout.capture = TRUE;
+	ni_process_capture_stdout(pi);
 
 	for (i = 0; i < files->count; ++i) {
 		ni_tempstate_t *ts = ni_process_tempstate(pi);
@@ -56,7 +56,7 @@ ni_testbus_agent_process_attach_files(ni_process_t *pi, ni_testbus_file_array_t 
 			continue;
 		}
 		if (ni_string_eq(file->name, "stderr")) {
-			pi->stderr.capture = TRUE;
+			ni_process_capture_stderr(pi);
 			continue;
 		}
 

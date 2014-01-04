@@ -24,7 +24,7 @@ struct ni_shellcmd {
 
 typedef struct ni_process_buffer ni_process_buffer_t;
 struct ni_process_buffer {
-	ni_bool_t		capture;		/* misnomer, as we also use a buffer for stdin */
+	ni_bool_t		active;
 	int			master_fd, slave_fd;
 	ni_socket_t *		socket;
 	ni_buffer_t *		wbuf;
@@ -102,6 +102,8 @@ extern void			ni_process_get_exit_info(const ni_process_t *, ni_process_exit_inf
 extern int			ni_process_exit_status_okay(const ni_process_t *);
 extern void			ni_shellcmd_free(ni_shellcmd_t *);
 
+extern void			ni_process_capture_stdout(ni_process_t *);
+extern void			ni_process_capture_stderr(ni_process_t *);
 extern ni_bool_t		ni_process_attach_input_path(ni_process_t *, const char *filename);
 
 static inline ni_shellcmd_t *

@@ -154,7 +154,7 @@ ni_process_buffer_init(struct ni_process_buffer *pb, ni_process_t *pi)
 static ni_bool_t
 ni_process_buffer_open_pipe(struct ni_process_buffer *pb)
 {
-	if (pb->capture) {
+	if (pb->active) {
 		int fdpair[2];
 
 		/* Our code in socket.c is only able to deal with sockets for now; */
@@ -173,7 +173,7 @@ ni_process_buffer_open_pipe(struct ni_process_buffer *pb)
 static ni_bool_t
 ni_process_buffer_open_pty(struct ni_process_buffer *pb)
 {
-	if (pb->capture) {
+	if (pb->active) {
 		char namebuf[PATH_MAX+1];
 		int master, slave;
 
@@ -196,7 +196,7 @@ ni_process_buffer_attach_child(struct ni_process_buffer *pb, int destfd)
 	int fd = -1;
 
 	ni_assert(0 <= destfd && destfd <= 2);
-	if (pb->capture) {
+	if (pb->active) {
 		ni_assert(pb->slave_fd >= 0);
 
 		fd = pb->slave_fd;
@@ -224,12 +224,12 @@ ni_process_buffer_attach_child(struct ni_process_buffer *pb, int destfd)
 static ni_bool_t
 ni_process_buffer_attach_parent(struct ni_process_buffer *pb, ni_process_t *pi)
 {
-	if (pb->capture && pb->master_fd < 0) {
+	if (pb->active && pb->master_fd < 0) {
 		ni_warn("%s: cannot attach i/o buffer - not open", __func__);
 		return FALSE;
 	}
 
-	if (pb->capture) {
+	if (pb->active) {
 		if (pb == &pi->stdin)
 			pb->socket = __ni_process_connect_stdin(pi, pb->master_fd);
 		else if (pb == &pi->stdout)
@@ -323,6 +323,18 @@ ni_process_new_shellcmd(ni_shellcmd_t *proc)
 	return pi;
 }
 
+void
+ni_process_capture_stdout(ni_process_t *pi)
+{
+	pi->stdout.active = TRUE;
+}
+
+void
+ni_process_capture_stderr(ni_process_t *pi)
+{
+	pi->stderr.active = TRUE;
+}
+
 ni_bool_t
 ni_process_attach_input_path(ni_process_t *pi, const char *filename)
 {
@@ -336,7 +348,7 @@ ni_process_attach_input_path(ni_process_t *pi, const char *filename)
 	}
 
 	pi->stdin.slave_fd = fd;
-	pi->stdin.capture = TRUE;	/* capture is a misnomer */
+	pi->stdin.active = TRUE;
 	return TRUE;
 }
 
@@ -521,13 +533,13 @@ ni_process_run(ni_process_t *pi)
 		if (!ni_process_buffer_open_pty(&pi->stdout))
 			return -1;
 
-		if (pi->stderr.capture)
+		if (pi->stderr.active)
 			ni_warn("cannot capture separate stderr in terminal mode");
 		ni_process_buffer_destroy(&pi->stderr);
 
 		/* stdin needs a copy of the pty master. */
 		pi->stdin.master_fd = dup(pi->stdout.master_fd);
-		pi->stdin.capture = TRUE;
+		pi->stdin.active = TRUE;
 	} else {
 		if (!ni_process_buffer_open_pipe(&pi->stdout))
 			return -1;
@@ -641,7 +653,7 @@ ni_process_prepare_stdio(ni_process_t *pi)
 	ni_process_buffer_attach_child(&pi->stdin, 0);
 	ni_process_buffer_attach_child(&pi->stdout, 1);
 
-	if (pi->stdout.capture && !pi->stderr.capture) {
+	if (pi->stdout.active && !pi->stderr.active) {
 		/* If the client is capturing stdout but not
 		 * stderr, just paste these two together */
 		if (dup2(1, 2) < 0)
