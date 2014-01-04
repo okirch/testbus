@@ -636,6 +636,9 @@ __ni_process_run(ni_process_t *pi)
 	pi->pid = pid;
 
 	if (pid == 0) {
+		if (pi->use_terminal)
+			ni_process_setenv(pi, "TERM", "vt100");
+
 		if (chdir("/") < 0)
 			ni_warn("%s: unable to chdir to /: %m", __func__);
 
