@@ -582,57 +582,6 @@ ni_process_run_and_wait(ni_process_t *pi)
 	return rv;
 }
 
-#ifdef currently_broken
-int
-ni_process_run_and_capture_output(ni_process_t *pi, ni_buffer_t *out_buffer)
-{
-	int rv;
-
-	if (!ni_process_buffer_open_pipe(&pi->stdout))
-		return -1;
-
-	rv = __ni_process_run(pi);
-	if (rv < 0)
-		return rv;
-
-	close(pfd[1]);
-	while (1) {
-		int cnt;
-
-		if (ni_buffer_tailroom(out_buffer) < 256)
-			ni_buffer_ensure_tailroom(out_buffer, 4096);
-
-		cnt = read(pfd[0], ni_buffer_tail(out_buffer), ni_buffer_tailroom(out_buffer));
-		if (cnt == 0) {
-			break;
-		} else if (cnt > 0) {
-			out_buffer->tail += cnt;
-		} else if (errno != EINTR) {
-			ni_error("read error on subprocess pipe: %m");
-			return -1;
-		}
-	}
-
-	while (waitpid(pi->pid, &pi->status, 0) < 0) {
-		if (errno == EINTR)
-			continue;
-		ni_error("%s: waitpid returns error (%m)", __func__);
-		return -1;
-	}
-
-	pi->pid = 0;
-	if (pi->exit_callback)
-		pi->exit_callback(pi);
-
-	if (!ni_process_exit_status_okay(pi)) {
-		ni_error("subprocesses exited with error");
-		return -1;
-	}
-
-	return rv;
-}
-#endif
-
 static void
 ni_process_prepare_stdio(ni_process_t *pi)
 {
