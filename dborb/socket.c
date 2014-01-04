@@ -24,6 +24,7 @@
 #include <dborb/logging.h>
 #include <dborb/xml.h>
 #include <dborb/socket.h>
+#include <dborb/process.h>
 #include "netinfo_priv.h"
 #include "socket_priv.h"
 #include "appconfig.h"
@@ -206,11 +207,15 @@ ni_socket_wait(long timeout)
 	}
 
 	if (poll(pfd, socket_count, timeout) < 0) {
-		if (errno == EINTR)
+		if (errno == EINTR) {
+			ni_process_reap_children();
 			return 0;
+		}
 		ni_error("poll returns error: %m");
 		return -1;
 	}
+
+	ni_process_reap_children();
 
 	for (i = 0; i < socket_count; ++i) {
 		ni_socket_t *sock = __ni_sockets[i];
@@ -218,6 +223,11 @@ ni_socket_wait(long timeout)
 		if (sock == NULL)
 			continue;
 		sock->refcount++;
+
+		/* The socket may have been deactivated by
+		 * ni_process_reap_children() */
+		if (!sock->active)
+			continue;
 
 		if (pfd[i].revents & POLLERR) {
 			/* Deactivate socket */

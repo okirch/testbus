@@ -24,7 +24,8 @@
 #include "socket_priv.h"
 #include "util_priv.h"
 
-static int				__ni_process_run(ni_process_t *);
+static int				__ni_process_run(ni_process_t *); /* FIXME: change retval to bool */
+static void				__ni_process_add_waitq(ni_process_t *);
 static void				__ni_process_flush_buffer(ni_process_t *, struct ni_process_buffer *);
 static void				__ni_process_fill_exit_info(ni_process_t *);
 static const ni_string_array_t *	__ni_default_environment(void);
@@ -488,15 +489,6 @@ ni_process_tempstate(ni_process_t *process)
 }
 
 /*
- * Catch sigchild
- */
-static void
-ni_process_sigchild(int sig)
-{
-	/* nop for now */
-}
-
-/*
  * Given the name of a program, find it in our default path
  */
 const char *
@@ -635,7 +627,7 @@ __ni_process_run(ni_process_t *pi)
 		return -1;
 	}
 
-	signal(SIGCHLD, ni_process_sigchild);
+	__ni_process_add_waitq(pi);
 
 	if ((pid = fork()) < 0) {
 		ni_error("%s: unable to fork child process: %m", __func__);
@@ -675,24 +667,9 @@ __ni_process_run(ni_process_t *pi)
 static int
 ni_process_reap(ni_process_t *pi)
 {
-	int rv;
-
 	if (pi->pid == 0) {
 		ni_error("%s: child already reaped", __func__);
 		return 0;
-	}
-
-	rv = waitpid(pi->pid, &pi->status, WNOHANG);
-	if (rv == 0) {
-		/* This is an ugly workaround. Sometimes, we seem to get a hangup on the socket even
-		 * though the script (provably) still has its end of the socket pair open for writing. */
-		ni_error("%s: process %u has not exited yet; now doing a blocking waitpid()", __func__, pi->pid);
-		rv = waitpid(pi->pid, &pi->status, 0);
-	}
-
-	if (rv < 0) {
-		ni_error("%s: waitpid returns error (%m)", __func__);
-		return -1;
 	}
 
 	__ni_process_fill_exit_info(pi);
@@ -724,6 +701,81 @@ ni_process_reap(ni_process_t *pi)
 		pi->exit_callback(pi);
 
 	return 0;
+}
+
+/*
+ * Process monitoring and exit handling.
+ */
+static ni_bool_t	__sigchld_received = FALSE;
+static ni_process_t *	__ni_process_queue;
+
+static void
+__ni_process_sigchld(int signo)
+{
+	ni_trace("%s(%d)", __func__, signo);
+	__sigchld_received = TRUE;
+}
+
+void
+__ni_process_add_waitq(ni_process_t *pi)
+{
+	static int handler_established = FALSE;
+
+	if (!handler_established) {
+		struct sigaction act;
+
+		memset(&act, 0, sizeof(act));
+		act.sa_handler = __ni_process_sigchld;
+		sigaction(SIGCHLD, &act, NULL);
+
+		handler_established = TRUE;
+	}
+
+	if (pi->next != NULL) {
+		ni_warn("unable to add process to wait queue; next pointer is set");
+		return;
+	}
+
+	pi->next = __ni_process_queue;
+	__ni_process_queue = pi;
+}
+
+void
+ni_process_reap_children(void)
+{
+	if (!__sigchld_received)
+		return;
+	__sigchld_received = FALSE;
+
+	ni_trace("%s()", __func__);
+	while (TRUE) {
+		ni_process_t **pos, *pi;
+		int pid, status;
+
+		pid = waitpid((pid_t) -1, &status, WNOHANG);
+		if (pid == 0 || (pid < 0 && errno == ECHILD))
+			break;
+		if (pid < 0) {
+			ni_error("%s: waitpid returns error (%m)", __func__);
+			break;
+		}
+
+		for (pos = &__ni_process_queue; (pi = *pos) != NULL; pos = &pi->next) {
+			if (pi->pid == pid) {
+				*pos = pi->next;
+				pi->next = NULL;
+				break;
+			}
+		}
+
+		if (pi == NULL) {
+			ni_warn("unknown child %d exited", pid);
+			continue;
+		}
+
+		pi->status = status;
+		ni_process_reap(pi);
+	}
 }
 
 int
@@ -909,15 +961,12 @@ __ni_process_stderr_recv(ni_socket_t *sock)
 static void
 __ni_process_output_hangup(ni_socket_t *sock)
 {
-	ni_process_t *pi = sock->user_data;
 	struct ni_process_buffer *pb;
 
 	if (!(pb = __ni_process_buffer_for_socket(sock)))
 		return;
 
 	if (pb->socket == sock) {
-		if (ni_process_reap(pi) < 0)
-			ni_error("pipe closed by child process, but child did not exit");
 		if (pb->socket)
 			ni_socket_close(pb->socket);
 		pb->socket = NULL;

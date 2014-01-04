@@ -63,6 +63,7 @@ struct ni_process_exit_info {
  * Process structure controlling the running subprocess
  */
 struct ni_process {
+	ni_process_t *		next;		/* internal; for wait queue list */
 	ni_shellcmd_t *		process;
 
 	pid_t			pid;
@@ -101,6 +102,8 @@ extern void			ni_process_set_exit_info(ni_process_t *, const ni_process_exit_inf
 extern void			ni_process_get_exit_info(const ni_process_t *, ni_process_exit_info_t *);
 extern int			ni_process_exit_status_okay(const ni_process_t *);
 extern void			ni_shellcmd_free(ni_shellcmd_t *);
+
+extern void			ni_process_reap_children(void);
 
 extern void			ni_process_capture_stdout(ni_process_t *);
 extern void			ni_process_capture_stderr(ni_process_t *);

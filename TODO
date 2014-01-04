@@ -1,12 +1,8 @@
-Packaging!
 
 Agent:
 	Agent should use well-known proxy socket?
 
-	Monitor when the master goes away. Reconnect when that
-	happens.
-
-	Process handling: act on SIGCHLD rather than monitoring its I/O
+	Monitor when the master goes away. Reconnect when that happens.
 
 	Split code into individual source files: registration, process exec, etc
 
@@ -43,5 +39,4 @@ General:
 		client: wait-for-runlevel command
 
 
-	ni_process_t: rename "capture" and "wbuf" members
-		rename fdpair[] member
+	ni_process_t: rename "wbuf" member
