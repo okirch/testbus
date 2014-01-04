@@ -159,6 +159,7 @@ extern int		ni_restore_file_from(const char *, const char *);
 extern FILE *		ni_file_open(const char *, const char *, unsigned int);
 extern ni_buffer_t *	ni_file_read(FILE *);
 extern int		ni_file_write(FILE *, const ni_buffer_t *);
+extern int		ni_file_write_safe(FILE *, const ni_buffer_t *);
 extern int		ni_file_write_path(const char *pathname, const ni_buffer_t *data);
 extern ni_bool_t	ni_file_remove_recursively(const char *path);
 extern int		ni_mkdir_maybe(const char *pathname, unsigned int mode);

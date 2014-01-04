@@ -1256,7 +1256,7 @@ __do_create_command(ni_dbus_object_t *container_object, int argc, char **argv, n
  * Flush an output file of the process to stdout/stderr
  */
 static void
-flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *ofp)
+flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *ofp, ni_bool_t safe_output)
 {
 	ni_dbus_object_t *file_object;
 	ni_buffer_t *data;
@@ -1279,7 +1279,10 @@ flush_process_file(ni_dbus_object_t *proc_object, const char *filename, FILE *of
 
 	ni_debug_testbus("downloaded file %s (%s)", filename, file_object->path);
 
-	ni_file_write(ofp, data);
+	if (safe_output)
+		ni_file_write_safe(ofp, data);
+	else
+		ni_file_write(ofp, data);
 	ni_buffer_free(data);
 }
 
@@ -1351,13 +1354,14 @@ do_create_command(int argc, char **argv)
 static int
 do_run_command(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT, OPT_USE_TERMINAL };
+	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT, OPT_USE_TERMINAL, OPT_NO_OUPUT_PROCESSING };
 	static struct option local_options[] = {
 		{ "host", required_argument, NULL, OPT_HOSTPATH },
 		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ "send-stdin", no_argument, NULL, OPT_SEND_STDIN },
 		{ "send-script", no_argument, NULL, OPT_SEND_SCRIPT },
 		{ "use-terminal", no_argument, NULL, OPT_USE_TERMINAL },
+		{ "no-output-processing", no_argument, NULL, OPT_NO_OUPUT_PROCESSING },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
@@ -1367,6 +1371,7 @@ do_run_command(int argc, char **argv)
 	ni_bool_t opt_send_stdin = FALSE;
 	ni_bool_t opt_send_script = FALSE;
 	ni_bool_t opt_use_terminal = FALSE;
+	ni_bool_t opt_safe_output = TRUE;
 	ni_process_exit_info_t exit_info;
 	int c;
 
@@ -1406,6 +1411,10 @@ do_run_command(int argc, char **argv)
 
 		case OPT_USE_TERMINAL:
 			opt_use_terminal = TRUE;
+			break;
+
+		case OPT_NO_OUPUT_PROCESSING:
+			opt_safe_output = FALSE;
 			break;
 		}
 	}
@@ -1454,9 +1463,9 @@ do_run_command(int argc, char **argv)
 	}
 
 	if (exit_info.stdout_bytes)
-		flush_process_file(proc_object, "stdout", stdout);
+		flush_process_file(proc_object, "stdout", stdout, opt_safe_output);
 	if (exit_info.stderr_bytes)
-		flush_process_file(proc_object, "stderr", stderr);
+		flush_process_file(proc_object, "stderr", stderr, opt_safe_output);
 
 	ni_testbus_client_delete(proc_object);
 	ni_testbus_client_delete(cmd_object);

@@ -17,6 +17,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <limits.h>
+#include <wchar.h>
+#include <wctype.h>
 
 #include <dborb/util.h>
 #include <dborb/logging.h>
@@ -1616,28 +1618,138 @@ out:
 /*
  * Write data to a file
  */
-int
-ni_file_write(FILE *fp, const ni_buffer_t *wbuf)
+static int
+__ni_file_write_partial(FILE *fp, const unsigned char *data, size_t len)
 {
-	ni_buffer_t wbuf_copy = *wbuf;
 	size_t written = 0;
-	unsigned int left;
 
-	while ((left = ni_buffer_count(&wbuf_copy)) != 0) {
+	while (written < len) {
 		int cnt;
 
-		cnt = fwrite(ni_buffer_head(&wbuf_copy), 1, left, fp);
+		cnt = fwrite(data + written, 1, len, fp);
 		if (cnt < 0) {
-			ni_error("%s: %m", __func__);
+			ni_error("ni_file_write: %m");
 			return -1;
 		}
 		if (cnt == 0) {
-			ni_error("%s: zero len write", __func__);
+			ni_error("ni_file_write: zero len write");
 			return -1;
 		}
 
-		ni_buffer_pull_head(&wbuf_copy, cnt);
 		written += cnt;
+	}
+	return written;
+}
+
+int
+ni_file_write(FILE *fp, const ni_buffer_t *wbuf)
+{
+	return __ni_file_write_partial(fp,
+			ni_buffer_head(wbuf),
+			ni_buffer_count(wbuf));
+}
+
+static size_t
+__ni_wchar_escape(wchar_t wc, const char **retval)
+{
+	static char escbuf[4 * sizeof(wchar_t) + 1];
+	unsigned int i, nbytes, slen;
+	wchar_t tmp, rev;
+
+	if (wc == 0) {
+		*retval = "\\000";
+		return 4;
+	}
+
+	/* Revert non-null octets in wchar and count them,
+	 * so that the most significant non-nul byte of
+	 * wc ends up in the least significant byte of rev.
+	 *   00AABBCC  -> 00CCBBAA
+	 *   0000AABB  -> 0000BBAA
+	 */
+	for (nbytes = 0, rev = 0, tmp = wc; tmp; ++nbytes) {
+		rev = (rev << 8) | (tmp & 0xFF);
+		tmp >>= 8;
+	}
+
+	for (i = slen = 0; i < nbytes; ++i) {
+		snprintf(escbuf + slen, sizeof(escbuf) - slen, "\\%03o", rev & 0xFF);
+		rev >>= 8;
+		slen += 4;
+	}
+
+	*retval = escbuf;
+	return slen;
+}
+
+static int
+__ni_file_write_wchar_escaped(FILE *fp, wchar_t wc)
+{
+	const char *escaped;
+	size_t n;
+
+	n = __ni_wchar_escape(wc, &escaped);
+	return __ni_file_write_partial(fp, (unsigned char *) escaped, n);
+}
+
+int
+ni_file_write_safe(FILE *fp, const ni_buffer_t *wbuf)
+{
+	const unsigned char *string = ni_buffer_head(wbuf);
+	unsigned int left = ni_buffer_count(wbuf);
+	mbstate_t mbstate;
+	size_t written = 0;
+
+	memset(&mbstate, 0, sizeof(mbstate));
+	while (left != 0) {
+		unsigned int nbytes;
+		wchar_t wc;
+
+		/* Scan until we hit the first non-printable character.
+		 * Assume the test node uses the same locale as we do */
+		for (nbytes = 0; nbytes < left; ) {
+			ssize_t n;
+
+			n = mbrtowc(&wc, (char *) string + nbytes, left - nbytes, &mbstate);
+			if (n < 0) {
+				/* We hit a bad path of string.
+				 * If this is preceded by one or more printable
+				 * chars, write those out first, then come back here.
+				 */
+				if (nbytes != 0)
+					break;
+
+				/* write one byte, and try to re-sync */
+				wc = ((unsigned char *) string)[nbytes++];
+				if (__ni_file_write_wchar_escaped(fp, wc) < 0)
+					return -1;
+
+				memset(&mbstate, 0, sizeof(mbstate));
+				goto consumed_some;
+			}
+
+			if (!iswprint(wc) && !iswspace(wc)) {
+				/* If this is preceded by one or more printable
+				 * chars, write those out first */
+				if (nbytes != 0)
+					break;
+
+				if (__ni_file_write_wchar_escaped(fp, wc) < 0)
+					return -1;
+				nbytes += n;
+				goto consumed_some;
+			}
+
+			nbytes += n;
+		}
+
+		ni_assert(nbytes);
+		if (__ni_file_write_partial(fp, string, nbytes) < 0)
+			return -1;
+
+consumed_some:
+		string += nbytes;
+		left -= nbytes;
 	}
 	fflush(fp);
 	return written;

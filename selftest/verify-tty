@@ -47,4 +47,31 @@ if [ "$expect" != "$answer" ]; then
 	echo "Received output: <<$answer>>" >&2
 fi
 
+testbus_test_begin escape
+answer=`testbus_run_command --host $TESTBUS_HOST /bin/echo -e 'x\eHx'`
+case $answer in
+*\\033*)
+	echo "Received output: $answer"
+	testbus_test_success
+	: ;;
+*)	testbus_test_failure "failed to escape non-printable characters"
+	echo "Received output:" >&2
+	echo $answer | od -t x1c
+	: ;;
+esac
+
+testbus_test_begin escape2
+answer=`testbus_run_command --host $TESTBUS_HOST /bin/echo -e 'x\nx'`
+case $answer in
+"x
+x")
+	testbus_test_success
+	: ;;
+*)
+	testbus_test_failure "escape newline character"
+	echo "Received output:" >&2
+	echo -n "$answer" | od -t x1c
+	: ;;
+esac
+
 testbus_exit
