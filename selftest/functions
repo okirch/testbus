@@ -427,6 +427,13 @@ function testbus_run_command {
 	testbus_call run-command --context $th "$@"
 }
 
+function testbus_reboot_host {
+
+	testbus_trace "reboot host $*"
+
+	testbus_call shutdown --reboot "$@"
+}
+
 function __testbus_exit {
 
 	if [ "$TESTBUS_FAILED_COUNT" -eq 0 ]; then
