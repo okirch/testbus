@@ -1462,6 +1462,7 @@ failed:
 ni_bool_t
 ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_process_exit_info_t *exit_info)
 {
+	ni_bool_t timed_out = FALSE;
 	ni_testbus_waitq_t *wq;
 
 	if ((wq = ni_testbus_waitq_find(proc_object->path)) == NULL) {
@@ -1469,7 +1470,16 @@ ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_p
 		return FALSE;
 	}
 
+	if (timeout_ms >= 0)
+		ni_timer_create_alarm(timeout_ms, &timed_out);
+
+	memset(exit_info, 0, sizeof(*exit_info));
 	while (TRUE) {
+		if (timed_out) {
+			exit_info->how = NI_PROCESS_TIMED_OUT;
+			return TRUE;
+		}
+
 		if (wq->done) {
 			ni_debug_testbus("process %s is done", proc_object->path);
 			if (exit_info && wq->exit_info)
@@ -1483,7 +1493,7 @@ ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_p
 			}
 			return TRUE;
 		}
-		if (ni_socket_wait(timeout_ms) < 0)
+		if (ni_socket_wait(-1) < 0)
 			ni_fatal("ni_socket_wait failed");
 	}
 

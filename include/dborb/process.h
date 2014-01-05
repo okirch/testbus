@@ -40,6 +40,7 @@ typedef enum {
 	NI_PROCESS_NONSTARTER,
 	NI_PROCESS_EXITED,
 	NI_PROCESS_CRASHED,
+	NI_PROCESS_TIMED_OUT,	/* only used in libtestbus */
 	NI_PROCESS_TRANSCENDED,	/* anything else */
 } ni_process_exit_mode_t;
 
