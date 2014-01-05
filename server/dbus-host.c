@@ -387,6 +387,12 @@ __ni_Testbus_Host_run(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 	if (argc != 1 || !ni_dbus_variant_get_string(&argv[0], &command_path))
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
+	if (!host->ready) {
+		dbus_set_error(error, NI_DBUS_ERROR_AGENT_OFFLINE,
+				"requested host is not ready to execute commands");
+		return FALSE;
+	}
+
 	root_object = ni_dbus_server_get_root_object(ni_dbus_object_get_server(object));
 	if (root_object)
 		command_object = ni_dbus_object_lookup(root_object, command_path);
@@ -485,14 +491,18 @@ __ni_Testbus_Host_shutdown(ni_dbus_object_t *object, const ni_dbus_method_t *met
 		unsigned int argc, const ni_dbus_variant_t *argv,
 		ni_dbus_message_t *reply, DBusError *error)
 {
-	/* We don't need the host, we just check to make sure it *is* a host */
-	if (ni_testbus_host_unwrap(object, error) == NULL)
+	ni_testbus_host_t *host;
+
+	if ((host = ni_testbus_host_unwrap(object, error)) == NULL)
 		return FALSE;
 
 	if (argc != 0)
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
 	ni_testbus_host_signal_shutdown(object);
+
+	/* Simulate a disconnect */
+	ni_testbus_host_agent_disconnected(host);
 	return TRUE;
 }
 
@@ -506,14 +516,18 @@ __ni_Testbus_Host_reboot(ni_dbus_object_t *object, const ni_dbus_method_t *metho
 		unsigned int argc, const ni_dbus_variant_t *argv,
 		ni_dbus_message_t *reply, DBusError *error)
 {
-	/* We don't need the host, we just check to make sure it *is* a host */
-	if (ni_testbus_host_unwrap(object, error) == NULL)
+	ni_testbus_host_t *host;
+
+	if ((host = ni_testbus_host_unwrap(object, error)) == NULL)
 		return FALSE;
 
 	if (argc != 0)
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
 	ni_testbus_host_signal_reboot(object);
+
+	/* Simulate a disconnect */
+	ni_testbus_host_agent_disconnected(host);
 	return TRUE;
 }
 
