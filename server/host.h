@@ -11,6 +11,7 @@ struct ni_testbus_host {
 	char *			agent_bus_name;
 	char *			role;
 	ni_eventlog_t *		eventlog;
+	unsigned int		generation;
 
 	ni_testbus_container_t	context;
 

@@ -314,6 +314,7 @@ static ni_dbus_property_t       __ni_Testbus_Host_properties[] = {
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, agent, agent_bus_name, RO),
 	NI_DBUS_GENERIC_STRING_PROPERTY(testbus_host, role, role, RO),
 	NI_DBUS_GENERIC_STRING_ARRAY_PROPERTY(testbus_host, capabilities, capabilities, RO),
+	NI_DBUS_GENERIC_UINT_PROPERTY(testbus_host, generation, generation, RO),
 	{ NULL }
 };
 NI_TESTBUS_PROPERTIES_BINDING(Host);

@@ -125,8 +125,7 @@ ni_testbus_host_agent_ready(ni_testbus_host_t *host)
 {
 	ni_debug_testbus("host %s ready", host->context.name);
 	host->ready = TRUE;
-
-	/* FIXME: re-broadcast the signal to all clients */
+	host->generation++;
 }
 
 void
