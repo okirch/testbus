@@ -33,6 +33,7 @@ typedef struct ni_timer	ni_timer_t;
 typedef void		ni_timeout_callback_t(void *, const ni_timer_t *);
 
 extern const ni_timer_t *ni_timer_register(unsigned long, ni_timeout_callback_t *, void *);
+extern const ni_timer_t *ni_timer_create_alarm(unsigned long, ni_bool_t *);
 extern void *		ni_timer_cancel(const ni_timer_t *);
 extern const ni_timer_t *ni_timer_rearm(const ni_timer_t *, unsigned long);
 extern long		ni_timer_next_timeout(void);

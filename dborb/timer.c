@@ -53,6 +53,28 @@ ni_timer_cancel(const ni_timer_t *handle)
 	return user_data;
 }
 
+/*
+ * Alarms provide a simple mechanism to set a flag to TRUE once the
+ * requested timeout has elapsed.
+ */
+static void
+__ni_timer_alarm_handler(void *user_data, const ni_timer_t *timer)
+{
+	ni_bool_t *flag_p = user_data;
+
+	*flag_p = TRUE;
+}
+
+const ni_timer_t *
+ni_timer_create_alarm(unsigned long timeout_ms, ni_bool_t *flag_p)
+{
+	*flag_p = FALSE;
+	return ni_timer_register(timeout_ms, __ni_timer_alarm_handler, flag_p);
+}
+
+/*
+ * Timer internal functions
+ */
 const ni_timer_t *
 ni_timer_rearm(const ni_timer_t *handle, unsigned long timeout)
 {
