@@ -1354,7 +1354,7 @@ do_create_command(int argc, char **argv)
 static int
 do_run_command(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT, OPT_USE_TERMINAL, OPT_NO_OUPUT_PROCESSING };
+	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT, OPT_USE_TERMINAL, OPT_NO_OUPUT_PROCESSING, OPT_TIMEOUT };
 	static struct option local_options[] = {
 		{ "host", required_argument, NULL, OPT_HOSTPATH },
 		{ "context", required_argument, NULL, OPT_CONTEXT },
@@ -1362,6 +1362,7 @@ do_run_command(int argc, char **argv)
 		{ "send-script", no_argument, NULL, OPT_SEND_SCRIPT },
 		{ "use-terminal", no_argument, NULL, OPT_USE_TERMINAL },
 		{ "no-output-processing", no_argument, NULL, OPT_NO_OUPUT_PROCESSING },
+		{ "timeout", required_argument, NULL, OPT_TIMEOUT },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
@@ -1372,6 +1373,7 @@ do_run_command(int argc, char **argv)
 	ni_bool_t opt_send_script = FALSE;
 	ni_bool_t opt_use_terminal = FALSE;
 	ni_bool_t opt_safe_output = TRUE;
+	long opt_timeout = -1;
 	ni_process_exit_info_t exit_info;
 	int c;
 
@@ -1416,6 +1418,19 @@ do_run_command(int argc, char **argv)
 		case OPT_NO_OUPUT_PROCESSING:
 			opt_safe_output = FALSE;
 			break;
+
+		case OPT_TIMEOUT:
+			if (ni_parse_long(optarg, &opt_timeout, 10) < 0) {
+				ni_error("coult nod parse timeout value");
+				return 1;
+			}
+			if (opt_timeout < 0) {
+				ni_warn("ignoring negative timeout value");
+				opt_timeout = -1;
+			} else {
+				opt_timeout *= 1000;
+			}
+			break;
 		}
 	}
 
@@ -1457,7 +1472,7 @@ do_run_command(int argc, char **argv)
 	 *
 	 * Wait for the command to complete, and process its exit information
 	 */
-	if (!ni_testbus_wait_for_process(proc_object, -1, &exit_info)) {
+	if (!ni_testbus_wait_for_process(proc_object, opt_timeout, &exit_info)) {
 		ni_error("failed to wait for process to complete");
 		return 1;
 	}
@@ -1483,6 +1498,10 @@ do_run_command(int argc, char **argv)
 
 	case NI_PROCESS_EXITED:
 		return exit_info.exit.code;
+
+	case NI_PROCESS_TIMED_OUT:
+		ni_error("timed out waiting for process to complete");
+		return 1;
 
 	default:
 		ni_error("process disappeared into Nirvana");
