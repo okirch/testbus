@@ -952,6 +952,38 @@ ni_dbus_object_send_property_string(ni_dbus_object_t *proxy,
 }
 
 /*
+ * Use Properties.Get to update one properties of an object
+ */
+dbus_bool_t
+ni_dbus_object_recv_property(ni_dbus_object_t *proxy,
+				const char *service_name,
+				const char *property_name,
+				ni_dbus_variant_t *value,
+				DBusError *error)
+{
+	DBusError local_error = DBUS_ERROR_INIT;
+	ni_dbus_variant_t argv[2];
+	dbus_bool_t rv = FALSE;
+
+	ni_dbus_variant_vector_init(argv, 2);
+	ni_dbus_variant_set_string(&argv[0], service_name);
+	ni_dbus_variant_set_string(&argv[1], property_name);
+
+	if (!error)
+		error = &local_error;
+
+	rv = ni_dbus_object_call_variant(proxy, NI_DBUS_INTERFACE ".Properties", "Get", 2, argv, 1, value, error);
+
+	if (!rv && error == &local_error)
+		ni_dbus_print_error(&local_error, "failed to get property %s.%s",
+				service_name, property_name);
+
+	ni_dbus_variant_vector_destroy(argv, 2);
+
+	return rv;
+}
+
+/*
  * Helper function for debug purposes
  */
 static const char *

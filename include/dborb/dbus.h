@@ -423,6 +423,11 @@ extern dbus_bool_t		ni_dbus_object_send_property_string(ni_dbus_object_t *proxy,
 					const char *property_name,
 					const char *value,
 					DBusError *error);
+extern dbus_bool_t		ni_dbus_object_recv_property(ni_dbus_object_t *proxy,
+					const char *service_name,
+					const char *property_name,
+					ni_dbus_variant_t *value,
+					DBusError *error);
 
 extern int			ni_dbus_message_get_args(ni_dbus_message_t *, ...);
 extern int			ni_dbus_message_get_args_variants(ni_dbus_message_t *msg,
