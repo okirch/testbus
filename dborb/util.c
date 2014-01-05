@@ -2092,13 +2092,13 @@ ni_uuid_parse(ni_uuid_t *uuid, const char *string)
 	return 0;
 }
 
-int
+ni_bool_t
 ni_uuid_is_null(const ni_uuid_t *uuid)
 {
 	return uuid->words[0] == 0 && uuid->words[1] == 0 && uuid->words[2] == 0 && uuid->words[3] == 0;
 }
 
-int
+ni_bool_t
 ni_uuid_equal(const ni_uuid_t *uuid1, const ni_uuid_t *uuid2)
 {
 	return !memcmp(uuid1, uuid2, sizeof(*uuid1));

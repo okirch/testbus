@@ -74,6 +74,7 @@ static struct option	options[] = {
 
 typedef struct ni_testbus_agent_state {
 	char *			hostname;
+	ni_uuid_t		uuid;
 	ni_string_array_t	capabilities;
 	ni_var_array_t		environ;
 } ni_testbus_agent_state_t;
@@ -361,6 +362,9 @@ ni_testbus_agent_read_state(ni_testbus_agent_state_t *state)
 			if (ni_string_eq(c->name, "hostname"))
 				ni_string_dup(&state->hostname, c->cdata);
 			else
+			if (ni_string_eq(c->name, "uuid"))
+				ni_uuid_parse(&state->uuid, c->cdata);
+			else
 			if (ni_string_eq(c->name, "capability"))
 				ni_string_array_append(&state->capabilities, c->cdata);
 			else
@@ -385,7 +389,10 @@ ni_testbus_agent_write_state(const ni_testbus_agent_state_t *state)
 	root = xml_document_root(doc);
 
 	node = xml_node_new("state", root);
+
 	xml_node_new_element("hostname", node, state->hostname);
+	if (!ni_uuid_is_null(&state->uuid))
+		xml_node_new_element("uuid", node, ni_uuid_print(&state->uuid));
 
 	state_file = ni_testbus_agent_state_file_path();
 	if (xml_document_write(doc, state_file) < 0)
@@ -620,7 +627,9 @@ ni_testbus_agent(ni_testbus_agent_state_t *state)
 		host_object = ni_testbus_client_create_host(state->hostname);
 		/* FIXME: set the drop-on-disconnect property */
 	} else {
-		host_object = ni_testbus_client_reconnect_host(state->hostname);
+		host_object = ni_testbus_client_reconnect_host(state->hostname, &state->uuid);
+		if (host_object)
+			ni_testbus_agent_write_state(state);
 	}
 
 	if (host_object == NULL)

@@ -8,6 +8,7 @@
 struct ni_testbus_host {
 	ni_string_array_t	capabilities;
 
+	ni_uuid_t		uuid;
 	char *			agent_bus_name;
 	char *			role;
 	ni_eventlog_t *		eventlog;
