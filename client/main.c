@@ -1354,7 +1354,7 @@ do_create_command(int argc, char **argv)
 static int
 do_run_command(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT, OPT_USE_TERMINAL, OPT_NO_OUPUT_PROCESSING, OPT_TIMEOUT };
+	enum  { OPT_HELP, OPT_HOSTPATH, OPT_CONTEXT, OPT_SEND_STDIN, OPT_SEND_SCRIPT, OPT_USE_TERMINAL, OPT_NO_OUPUT_PROCESSING, OPT_TIMEOUT, OPT_NO_WAIT };
 	static struct option local_options[] = {
 		{ "host", required_argument, NULL, OPT_HOSTPATH },
 		{ "context", required_argument, NULL, OPT_CONTEXT },
@@ -1363,6 +1363,7 @@ do_run_command(int argc, char **argv)
 		{ "use-terminal", no_argument, NULL, OPT_USE_TERMINAL },
 		{ "no-output-processing", no_argument, NULL, OPT_NO_OUPUT_PROCESSING },
 		{ "timeout", required_argument, NULL, OPT_TIMEOUT },
+		{ "nowait", no_argument, NULL, OPT_NO_WAIT },
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ NULL }
 	};
@@ -1373,6 +1374,7 @@ do_run_command(int argc, char **argv)
 	ni_bool_t opt_send_script = FALSE;
 	ni_bool_t opt_use_terminal = FALSE;
 	ni_bool_t opt_safe_output = TRUE;
+	ni_bool_t opt_wait_for_process = TRUE;
 	long opt_timeout = -1;
 	ni_process_exit_info_t exit_info;
 	int c;
@@ -1431,6 +1433,10 @@ do_run_command(int argc, char **argv)
 				opt_timeout *= 1000;
 			}
 			break;
+
+		case OPT_NO_WAIT:
+			opt_wait_for_process = FALSE;
+			break;
 		}
 	}
 
@@ -1465,6 +1471,12 @@ do_run_command(int argc, char **argv)
 	proc_object = ni_testbus_client_host_run(host_object, cmd_object);
 	if (!proc_object)
 		return 1;
+
+	if (!opt_wait_for_process) {
+		/* Don't wait for the process to complete, just print the object handle */
+		printf("%s\n", proc_object->path);
+		return 0;
+	}
 
 	/* The above should return an object handle for the process, and
 	 * register a waitq entry that will catch the processExit signals
