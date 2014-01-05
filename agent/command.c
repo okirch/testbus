@@ -214,3 +214,9 @@ ni_testbus_agent_run_command(ni_process_t *pi, const char *master_object_path, n
 	return TRUE;
 }
 
+void
+ni_testbus_agent_discard_process(const char *object_path)
+{
+	/* TBD: look up the process by the object path; if it's still running,
+	 * kill it */
+}

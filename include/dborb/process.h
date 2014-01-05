@@ -95,6 +95,7 @@ extern ni_process_t *		ni_process_new_ext(const ni_string_array_t *, const ni_va
 extern int			ni_process_run(ni_process_t *);
 extern int			ni_process_run_and_wait(ni_process_t *);
 extern int			ni_process_run_and_capture_output(ni_process_t *, ni_buffer_t *);
+extern int			ni_process_kill(ni_process_t *pi);
 extern void			ni_process_setenv(ni_process_t *, const char *, const char *);
 extern const char *		ni_process_getenv(const ni_process_t *, const char *);
 extern ni_tempstate_t *		ni_process_tempstate(ni_process_t *);

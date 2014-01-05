@@ -642,6 +642,9 @@ __ni_process_run(ni_process_t *pi)
 		if (chdir("/") < 0)
 			ni_warn("%s: unable to chdir to /: %m", __func__);
 
+		/* Become our own process group */
+		setpgid(0, 0);
+
 		ni_process_prepare_stdio(pi);
 
 		/* NULL terminate argv and env lists */
@@ -660,6 +663,26 @@ __ni_process_run(ni_process_t *pi)
 	ni_process_buffer_attach_parent(&pi->stdin, pi);
 	ni_process_buffer_attach_parent(&pi->stdout, pi);
 	ni_process_buffer_attach_parent(&pi->stderr, pi);
+
+	return 0;
+}
+
+/*
+ * Kill a running process and all its children
+ */
+int
+ni_process_kill(ni_process_t *pi)
+{
+	if (pi->pid == 0) {
+		ni_error("%s: process no longer running", __func__);
+		return 0;
+	}
+
+	kill(-(pi->pid), SIGTERM);
+	usleep(500);
+	kill(-(pi->pid), SIGKILL);
+
+	/* Don't bother checking with the results. */
 
 	return 0;
 }
@@ -715,7 +738,6 @@ static ni_process_t *	__ni_process_queue;
 static void
 __ni_process_sigchld(int signo)
 {
-	ni_trace("%s(%d)", __func__, signo);
 	__sigchld_received = TRUE;
 }
 
@@ -750,7 +772,6 @@ ni_process_reap_children(void)
 		return;
 	__sigchld_received = FALSE;
 
-	ni_trace("%s()", __func__);
 	while (TRUE) {
 		ni_process_t **pos, *pi;
 		int pid, status;
