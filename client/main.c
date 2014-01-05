@@ -68,6 +68,10 @@ static void		help_client_commands(void);
 static ni_buffer_t *	ni_testbus_read_local_file(const char *);
 static long		ni_testbus_write_local_file(const char *, const ni_buffer_t *);
 
+/* XXX rename these */
+static int		__do_claim_host_busywait(void *dummy);
+static void		__do_claim_host_timedout(void *dummy);
+
 int
 main(int argc, char **argv)
 {
@@ -764,17 +768,86 @@ do_getenv(int argc, char **argv)
 }
 
 static int
+__do_shutdown_reboot(unsigned int nhosts, char **host_names, ni_bool_t opt_reboot, ni_bool_t opt_wait, long opt_timeout)
+{
+	ni_testus_client_host_state_t *host_list = NULL;
+	unsigned int i;
+
+	if (nhosts == 1 && ni_string_eq(host_names[0], "all")) {
+		ni_dbus_object_t *hostlist;
+
+		if (opt_wait) {
+			ni_error("shutdown of \"all\" hosts: option --wait currently not supported");
+			return 1;
+		}
+
+		hostlist = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
+		if (!ni_testbus_client_host_shutdown(hostlist, opt_reboot, NULL))
+			return 1;
+
+		return 0;
+	}
+
+	host_list = ni_calloc(nhosts, sizeof(host_list[0]));
+	for (i = 0; i < nhosts; ++i) {
+		const char *path = host_names[i];
+		ni_dbus_object_t *object;
+
+		object = ni_testbus_client_get_and_refresh_object(path);
+		if (object == NULL) {
+			ni_error("unknown host object %s", path);
+			return 1;
+		}
+		host_list[i].host_object = object;
+	}
+
+	for (i = 0; i < nhosts; ++i) {
+		ni_testus_client_host_state_t *state = &host_list[i];
+		ni_dbus_object_t *object = state->host_object;
+
+		if (!ni_testbus_client_host_shutdown(object, opt_reboot, state)) {
+			ni_error("Unable to reboot host %s", object->path);
+			continue;
+		}
+		if (opt_wait && state->host_gen == 0)
+			ni_warn("Unable to wait for host \"%s\" to come back - no generation number", object->path);
+	}
+
+	if (opt_wait) {
+		ni_testbus_client_timeout_t timeout, *to = NULL;
+
+		if (opt_timeout >= 0) {
+			ni_testbus_client_timeout_init(&timeout, opt_timeout);
+
+			if (!ni_debug && !opt_quiet) {
+				timeout.busy_wait = __do_claim_host_busywait;
+				timeout.timedout = __do_claim_host_timedout;
+			}
+			to = &timeout;
+		}
+
+		if (!ni_testbus_client_host_wait_for_reboot(nhosts, host_list, to)) {
+			for (i = 0; i < nhosts; ++i) {
+				if (!host_list[i].ready)
+					ni_error("Timed out waiting for %s", host_list[i].host_object->path);
+			}
+		} else {
+			fprintf(stderr, "\n");
+		}
+	}
+
+	return 0;
+}
+
+static int
 do_shutdown(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_REBOOT, };
+	enum  { OPT_HELP, };
 	static struct option local_options[] = {
 		{ "help", no_argument, NULL, OPT_HELP },
-		{ "reboot", no_argument, NULL, OPT_REBOOT },
 		{ NULL }
 	};
-	ni_dbus_object_t *host_objects[argc];
-	ni_bool_t opt_reboot = FALSE;
-	int c, nhosts = 0;
+	int c;
 
 	optind = 1;
 	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
@@ -786,8 +859,6 @@ do_shutdown(int argc, char **argv)
 				"testbus [options] shutdown object-path ...\n"
 				"testbus [options] shutdown all\n"
 				"\nSupported options:\n"
-				"  --reboot\n"
-				"      Reboot rather than shutdown.\n"
 				"  --help\n"
 				"      Show this help text.\n"
 				"The object paths can refer both to individual hosts or containers\n"
@@ -796,41 +867,80 @@ do_shutdown(int argc, char **argv)
 				);
 			return 1;
 
-		case OPT_REBOOT:
-			opt_reboot = TRUE;
-			break;
 		}
 	}
 
 	if (optind >= argc)
 		goto usage;
 
-	if (optind + 1 == argc && ni_string_eq(argv[optind], "all")) {
-		ni_dbus_object_t *hostlist;
+	return __do_shutdown_reboot(argc - optind, argv + optind, FALSE, FALSE, -1);
+}
 
-		hostlist = ni_testbus_client_get_and_refresh_object(NI_TESTBUS_HOSTLIST_PATH);
-		if (!ni_testbus_client_host_shutdown(hostlist, opt_reboot))
+static int
+do_reboot(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_WAIT, OPT_TIMEOUT, };
+	static struct option local_options[] = {
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ "wait", no_argument, NULL, OPT_WAIT },
+		{ "timeout", required_argument, NULL, OPT_TIMEOUT },
+		{ NULL }
+	};
+	ni_bool_t opt_wait = FALSE;
+	long opt_timeout = -1;
+	int c;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] reboot object-path ...\n"
+				"testbus [options] reboot all\n"
+				"\nSupported options:\n"
+				"  --wait\n"
+				"      Wait for host to come back (with reboot only)\n"
+				"  --timeout <msec>\n"
+				"      When waiting for a host to reboot, time out after <msec> milliseconds\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				"The object paths can refer both to individual hosts or containers\n"
+				"that hold hosts. Specifying \"all\" will shut down all hosts currently\n"
+				"registered with the testbus master\n"
+				);
 			return 1;
 
-		return 0;
-	}
+		case OPT_WAIT:
+			opt_wait = TRUE;
+			break;
 
-	while (optind < argc) {
-		const char *path = argv[optind++];
-		ni_dbus_object_t *object;
+		case OPT_TIMEOUT:
+			if (ni_parse_long(optarg, &opt_timeout, 10) < 0) {
+				ni_error("could not parse timeout value");
+				return 1;
+			}
+			if (opt_timeout < 0) {
+				ni_warn("ignoring negative timeout value");
+				opt_timeout = -1;
+			} else {
+				opt_timeout *= 1000;
+			}
+			break;
 
-		object = ni_testbus_client_get_and_refresh_object(path);
-		if (object == NULL) {
-			ni_error("unknown host object %s", path);
-			return 1;
 		}
-		host_objects[nhosts++] = object;
 	}
 
-	while (nhosts)
-		ni_testbus_client_host_shutdown(host_objects[--nhosts], opt_reboot);
+	if (optind >= argc)
+		goto usage;
 
-	return 0;
+	if (opt_timeout && !opt_wait) {
+		ni_error("Cannot use --timeout without --wait");
+		goto usage;
+	}
+
+	return __do_shutdown_reboot(argc - optind, argv + optind, TRUE, opt_wait, opt_timeout);
 }
 
 static int
@@ -1158,6 +1268,9 @@ do_claim_host(int argc, char **argv)
 		}
 
 		host_object = ni_testbus_client_claim_host_by_capability(opt_capability, container_object, opt_role, tmo);
+
+		if (tmo)
+			fprintf(stderr, "\n");
 	}
 
 	if (host_object == NULL) {
@@ -1423,7 +1536,7 @@ do_run_command(int argc, char **argv)
 
 		case OPT_TIMEOUT:
 			if (ni_parse_long(optarg, &opt_timeout, 10) < 0) {
-				ni_error("coult nod parse timeout value");
+				ni_error("could not parse timeout value");
 				return 1;
 			}
 			if (opt_timeout < 0) {
@@ -1699,7 +1812,8 @@ static struct client_command	client_command_table[] = {
 	{ "setenv",		do_setenv,		"Set environment variable in container"		},
 	{ "getenv",		do_getenv,		"Get container variable"			},
 	{ "get-events",		do_get_events,		"Get the event log"				},
-	{ "shutdown",		do_shutdown,		"Shutdown/reboot agent"				},
+	{ "shutdown",		do_shutdown,		"Shutdown agent"				},
+	{ "reboot",		do_reboot,		"Reboot agent"					},
 
 	{ NULL, }
 };

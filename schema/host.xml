@@ -6,6 +6,7 @@
     <role type="string" />
     <ready type="boolean" />
     <capabilities class="array" element-type="string" />
+    <generation type="uint32" />
   </define>
 
   <define name="event_t" class="dict">

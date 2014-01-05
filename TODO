@@ -6,6 +6,11 @@ Agent:
 
 	Split code into individual source files: registration, process exec, etc
 
+	reconnect protocol is still not adequate
+
+	on shutdown, call removeHost to remove ourselves (except when we were
+	the ones to trigger the reboot)
+
 Server:
 	Remove pid file on exit
 	Fix /org/openSUSE/Testbus/Host/Host* naming
@@ -19,6 +24,8 @@ Client:
 
 	how to wait for a process to exit if we're doing this
 	in separate steps?
+
+	add agent-shutdown command
 
 Proxy:
 	Remove pid file on exit

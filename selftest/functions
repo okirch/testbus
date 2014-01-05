@@ -431,7 +431,7 @@ function testbus_reboot_host {
 
 	testbus_trace "reboot host $*"
 
-	testbus_call shutdown --reboot "$@"
+	testbus_call reboot "$@"
 }
 
 function __testbus_exit {

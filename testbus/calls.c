@@ -1,7 +1,5 @@
 /*
- * No REST for the wicked!
- *
- * Client-side functions for calling the wicked server.
+ * Client-side functions for calling the testbus server.
  *
  * Copyright (C) 2010-2014 Olaf Kirch <okir@suse.de>
  */
@@ -544,6 +542,22 @@ __ni_testbus_host_get_cached_boolean_property(const ni_dbus_object_t *host_objec
 
 	if (!ni_dbus_variant_get_bool(var, value_p)) {
 		ni_error("host property %s is not of type boolean", name);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static ni_bool_t
+__ni_testbus_host_get_cached_uint_property(const ni_dbus_object_t *host_object, const char *name, unsigned int *value_p)
+{
+	const ni_dbus_variant_t *var = NULL;
+
+	if (!(var = __ni_testbus_host_get_cached_property(host_object, name)))
+		return FALSE;
+
+	if (!ni_dbus_variant_get_uint32(var, value_p)) {
+		ni_error("host property %s is not of type uint32", name);
 		return FALSE;
 	}
 
@@ -1531,11 +1545,14 @@ failed:
  * shut down a remote host
  */
 ni_bool_t
-ni_testbus_client_host_shutdown(ni_dbus_object_t *host_object, ni_bool_t reboot)
+ni_testbus_client_host_shutdown(ni_dbus_object_t *host_object, ni_bool_t reboot, ni_testus_client_host_state_t *state)
 {
 	const char *method_name = reboot? "reboot" : "shutdown";
 	DBusError error = DBUS_ERROR_INIT;
 	ni_bool_t result;
+
+	if (state && !__ni_testbus_host_get_cached_uint_property(host_object, "generation", &state->host_gen))
+		state->host_gen = 0;
 
 	result = ni_dbus_object_call_variant(host_object, NULL, method_name, 0, NULL, 0, NULL, &error);
 	if (!result) {
@@ -1544,5 +1561,67 @@ ni_testbus_client_host_shutdown(ni_dbus_object_t *host_object, ni_bool_t reboot)
 	}
 
 	return result;
+}
+
+ni_bool_t
+ni_testbus_client_host_wait_for_reboot(unsigned int nhosts, ni_testus_client_host_state_t *hosts,
+						ni_testbus_client_timeout_t *timeout)
+{
+	ni_bool_t rv = FALSE;
+
+	if (timeout)
+		__ni_testbus_wait_setup(timeout);
+
+	while (TRUE) {
+		unsigned int i, nfailed, nready;
+
+		for (i = nfailed = nready = 0; i < nhosts; ++i) {
+			ni_testus_client_host_state_t *h = &hosts[i];
+			ni_dbus_object_t *host_object = h->host_object;
+			ni_dbus_variant_t var = NI_DBUS_VARIANT_INIT;
+			uint32_t current_gen;
+
+			if (h->ready) {
+				nready++;
+				continue;
+			}
+
+			if (ni_dbus_object_recv_property(host_object, NI_TESTBUS_HOST_INTERFACE, "generation", &var, NULL)
+			 && ni_dbus_variant_get_uint32(&var, &current_gen)) {
+				if (current_gen > h->host_gen) {
+					h->host_gen = current_gen;
+					h->ready = TRUE;
+					nready++;
+				}
+			} else {
+				nfailed++;
+			}
+			ni_dbus_variant_destroy(&var);
+		}
+
+		if (nready >= nhosts) {
+			rv = TRUE;
+			break;
+		}
+
+		if (nfailed + nready >= nhosts) {
+			ni_error("Something's wrong, cannot get generation property for any of the%s hosts", nready? " remaining" : "");
+			break;
+		}
+
+		if (!timeout || !timeout->handle) {
+			break;
+		} else {
+			long waitfor = -1;
+
+			ni_debug_dbus("waiting for host(s) to reboot");
+			if (timeout->busy_wait)
+				waitfor = timeout->busy_wait(timeout->user_data);
+			ni_socket_wait(waitfor);
+		}
+	}
+
+	__ni_testbus_wait_cancel(timeout);
+	return rv;
 }
 
