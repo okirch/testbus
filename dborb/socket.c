@@ -132,6 +132,7 @@ __ni_default_error_handler(ni_socket_t *sock)
 void
 __ni_default_hangup_handler(ni_socket_t *sock)
 {
+	sock->poll_flags &= ~(POLLOUT | POLLHUP);
 }
 
 /*

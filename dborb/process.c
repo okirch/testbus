@@ -693,11 +693,6 @@ ni_process_kill(ni_process_t *pi)
 static int
 ni_process_reap(ni_process_t *pi)
 {
-	if (pi->pid == 0) {
-		ni_error("%s: child already reaped", __func__);
-		return 0;
-	}
-
 	__ni_process_fill_exit_info(pi);
 
 	__ni_process_flush_buffer(pi, &pi->stdout);
@@ -720,8 +715,6 @@ ni_process_reap(ni_process_t *pi)
 			ni_debug_extension("subprocess %d (%s) transcended into nirvana",
 					pi->pid, cmd);
 	}
-
-	pi->pid = 0;
 
 	if (pi->exit_callback)
 		pi->exit_callback(pi);
@@ -798,6 +791,7 @@ ni_process_reap_children(void)
 		}
 
 		pi->status = status;
+		pi->pid = 0;
 		ni_process_reap(pi);
 	}
 }
@@ -846,19 +840,26 @@ __ni_process_fill_exit_info(ni_process_t *pi)
  * Connect the subprocess output to our I/O handling loop
  */
 static void
-__ni_process_flush_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
+__ni_process_notify_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
 {
-	if (pb->socket && pb->socket->receive)
-		pb->socket->receive(pb->socket);
 	if (pb->wbuf) {
 		if (pi->read_callback)
 			pi->read_callback(pi, pb);
 
+		/* If the read callback doesn't eat the buffer, discard it now */
 		if (pb->wbuf) {
 			ni_buffer_free(pb->wbuf);
 			pb->wbuf = NULL;
 		}
 	}
+}
+
+static void
+__ni_process_flush_buffer(ni_process_t *pi, struct ni_process_buffer *pb)
+{
+	if (pb->socket && pb->socket->receive)
+		pb->socket->receive(pb->socket);
+	__ni_process_notify_buffer(pi, pb);
 }
 
 static ni_process_buffer_t *
@@ -897,13 +898,15 @@ repeat:
 			notify = TRUE;
 
 		if (notify)
-			__ni_process_flush_buffer(pi, pb);
+			__ni_process_notify_buffer(pi, pb);
 		if (repeat)
 			goto repeat;
 	} else if (errno != EWOULDBLOCK) {
 		ni_error("read error on subprocess pipe: %m");
 		ni_socket_deactivate(sock);
 	}
+	else if (pi->pid == 0)
+		ni_error("read error on subprocess pipe: %m");
 }
 
 static void
@@ -983,7 +986,7 @@ __ni_process_stderr_recv(ni_socket_t *sock)
 }
 
 static void
-__ni_process_output_hangup(ni_socket_t *sock)
+__ni_process_stdin_hangup(ni_socket_t *sock)
 {
 	struct ni_process_buffer *pb;
 
@@ -1007,6 +1010,7 @@ __ni_process_connect_stdin(ni_process_t *pi, int fd)
 
 	sock = ni_socket_wrap(fd, SOCK_STREAM);
 	sock->transmit = __ni_process_stdin_send;
+	sock->handle_hangup = __ni_process_stdin_hangup;
 	sock->poll_flags = POLLOUT;
 
 	sock->user_data = pi;
@@ -1023,7 +1027,7 @@ __ni_process_connect_output(ni_process_t *pi, int fd, void (*recv_fn)(ni_socket_
 
 	sock = ni_socket_wrap(fd, SOCK_STREAM);
 	sock->receive = recv_fn;
-	sock->handle_hangup = __ni_process_output_hangup;
+	sock->handle_hangup = NULL;
 
 	sock->user_data = pi;
 	return sock;
