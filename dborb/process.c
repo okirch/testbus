@@ -905,8 +905,6 @@ repeat:
 		ni_error("read error on subprocess pipe: %m");
 		ni_socket_deactivate(sock);
 	}
-	else if (pi->pid == 0)
-		ni_error("read error on subprocess pipe: %m");
 }
 
 static void
