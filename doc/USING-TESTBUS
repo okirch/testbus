@@ -1,0 +1,150 @@
+
+Here is a quick and dirty guide to running some tests with
+testbus
+
+
+WHERE TO GET IT FROM
+====================
+
+The current home project in OBS; this may change at some
+point in time:
+
+https://build.opensuse.org/project/show/home:okir:testbus
+
+
+Caveat: right now I am using a SLE11 machine as the master/control node,
+using test images based on openSUSE 13.1. If you're using a different
+OS released on the master, you will most likely run into problems.
+If you're using test images that do not come with systemd, you will
+definitely run into problems, too.
+
+Install the following RPMs from the build service:
+	testbus
+	testbus-control-kvm
+
+Start the testbus master using
+	rctestbus-master start
+
+You will also need an OS image with some testbus related
+packages installed in it. As an example, you can grab one
+from the same OBS project; I am building an openSUSE image
+there on a regular basis.
+
+
+RUNNING TEST CASES
+==================
+
+Test suites are contained separate packages, also available from
+the testbus OBS repos. Currently, the following exist:
+
+	testbus-rpc
+	testbus-nfs
+	testbus-nis
+	testbus-kdump (not working well right now)
+
+You can install one or more or all of them, they should not conflict
+with each other on disk. However, for now, you may want to avoid running
+these test suites in parallel on the same control node.
+
+Each of these drops a set of scripts into /usr/share/testbus/suites.
+All you need to do is start the "*.run" script for the specific
+test, eg
+
+	/usr/share/testbus/suites/rpc.run /path/to/os-image.qcow2
+
+This will start a KVM instance, by first creating a copy of the image
+and then bringing it up. For your convenience, this will assign static
+IP addresses to guests, and set the hostname.
+
+The test script itself will output stuff like this:
+
+### TESTBEGIN rpc                        
+::: claim host --role rpc_server         
+::: claim host --role rpc_client
+Waiting for host to come online..................................................................
+::: getenv /org/opensuse/Testbus/Host/Host3 primary_ip                                           
+::: getenv /org/opensuse/Testbus/Host/Host2 primary_ip                                           
+### TESTBEGIN rpc.rpc_init                                                                       
+### TESTBEGIN rpc.rpc_init.start                                                                 
+::: run command --host /org/opensuse/Testbus/Host/Host3 /usr/bin/systemctl enable rpcbind.socket 
+ln -s '/usr/lib/systemd/system/rpcbind.socket' '/etc/systemd/system/sockets.target.wants/rpcbind.socket'
+::: run command --host /org/opensuse/Testbus/Host/Host3 /usr/bin/systemctl start rpcbind.socket         
+### TESTRESULT rpc.rpc_init.start: SUCCESS
+...
+
+Lines starting with "###" mark the start or end of a test case
+or test group, identified by a (unique) hierarchical ID, such as
+rpc.rpc_init.start. The TESTRESULT line can be either SUCCESS or FAIL,
+or NOSTATUS (in the case of an empty test group).
+
+Lines starting with ":::" usually describe actions triggered by the test
+string. For instance,
+
+  ::: run command --host /org/opensuse/Testbus/Host/Host3 /usr/bin/systemctl start rpcbind.socket
+
+means that it invoked /usr/bin/systemctl on the host identified by the
+testbus handle "Host3".  Everything else is usually verbatim output of
+the command being executed.
+
+
+When the test script completes, it will print a summary line, and a list of failed tests
+or test cases for your convenience. After that, it will destroy the KVM instances.
+
+
+
+USEFUL TRICKS
+=============
+
+If you want to debug a test suite, you can do one of two things:
+
+ a) Start with a clean slate:
+ 	Look at the test suite's *.run script. This is usually pretty simple,
+	and may do something like this:
+
+	testbus-control start client $image
+	testbus-control start server $image
+
+	You can just do this manually, then connect to one or both of the guests,
+	and mess around.
+
+ b) Bring back the dead:
+ 	When the test suite's *.run script finishes, it will destroy the KVM
+	instances it brought up, but will not dispose of the on-disk data.
+	This data can be found below /var/run/testbus.
+
+	For each instance, there's a separate subdirectory containing the
+	copy of the OS image plus some additional stuff.
+
+	You can bring back e.g. the instance tagged "server" by running these
+	commands
+
+	id=server
+	dbus-proxy --identity testbus-$id --downstream unix-mux:/var/run/testbus/$id.d/proxy.socket
+	virsh create /var/run/testbus/$id.d/config.xml
+
+	When you're done tinkering with the guests, you can stop them again
+	using
+
+	virsh destroy server
+	killall dbus-proxy
+
+	Yes, this is asking for something like "testbus-control resurrect"
+
+KNOWN ISSUES
+============
+
+No console: I haven't been able to make virsh create a console device, so you have to make
+	do with vnc for now. I know, it's painful :-)
+
+Startup errors:
+
+	Very rarely, virsh will be unable to start a KVM guest, showing a message like this:
+
+	error: Failed to create domain from /var/run/testbus/server.d/config.xml                                                     
+	error: internal error process exited while connecting to monitor:
+	qemu-kvm: -chardev socket,id=charchannel0,path=/var/run/testbus/server.d/proxy.socket:
+		Failed to connect to socket: Connection refused
+	chardev: opening backend "socket" failed
+
+	There seems to be a race condition in the startup of dbus-proxy. I
+	haven't found it yet, but I'll keep looking.
