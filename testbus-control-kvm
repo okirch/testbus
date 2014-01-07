@@ -57,8 +57,7 @@ function testbus_kvm_start {
 	instance_config_write /etc/testbus/kvm-guest.xml
 
 	if ! virsh net-list | grep -qs testbus; then
-		virsh net-create /etc/testbus/kvm-network.xml
-		virsh net-start testbus || fatal "Cannot start testbus host network"
+		virsh net-create /etc/testbus/kvm-network.xml || fatal "Cannot start testbus host network"
 	fi
 
 	instance_proxy_start
