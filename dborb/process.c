@@ -868,7 +868,9 @@ __ni_process_buffer_for_socket(ni_socket_t *sock)
 	ni_process_t *pi = sock->user_data;
 
 	ni_assert(pi);
-	if (sock == pi->stdout.socket)
+	if (sock == pi->stdin.socket)
+		return &pi->stdin;
+	else if (sock == pi->stdout.socket)
 		return &pi->stdout;
 	else if (sock == pi->stderr.socket)
 		return &pi->stderr;
@@ -996,6 +998,8 @@ __ni_process_stdin_hangup(ni_socket_t *sock)
 			ni_socket_close(pb->socket);
 		pb->socket = NULL;
 	}
+
+	sock->poll_flags &= ~POLLOUT;
 }
 
 static ni_socket_t *
