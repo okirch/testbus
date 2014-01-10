@@ -77,6 +77,9 @@ or test group, identified by a (unique) hierarchical ID, such as
 rpc.rpc_init.start. The TESTRESULT line can be either SUCCESS or FAIL,
 or NOSTATUS (in the case of an empty test group).
 
+Either of these can be optionally followed by text in parantheses, explaining
+the test case (or the reason for its failure).
+
 Lines starting with ":::" usually describe actions triggered by the test
 string. For instance,
 
