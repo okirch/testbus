@@ -1,0 +1,91 @@
+#!/bin/bash
+#
+# Script for bringing up all required guests/instances, and
+# executing a testbus test script
+#
+# Simply invoke as
+#	testbus-run <name-of-testsuite>
+#
+
+program_name=${0##*/}
+
+TESTBUS_TS_DIR="/usr/share/testbus/suites"
+
+. /etc/sysconfig/testbus || exit 1
+
+function select_image {
+
+	local method image_url
+
+	method=$1
+	local_path=$2
+	shift 2
+
+	case $method in
+	kvm)
+		image_url=$TESTBUS_KVM_IMAGE;;
+	
+	*)
+		echo "Deployment method $method currently not supported" >&2
+		exit 1;;
+	esac
+
+	if [ -z "$image_url" ]; then
+		echo "No $method image specified (please edit /etc/sysconfig/testbus)" >&2
+		exit 1
+	fi
+
+	case "$image_url" in
+	http:*|https:*|ftp:*)
+		echo "Downloading image from $image_url" >&2
+		if ! curl -$local_path -L $image_url; then
+			echo "Error downloading OS image from $image_url" >&2
+			exit 1
+		fi
+		: ;;
+	
+	*)
+		local realpath
+
+		realpath=`readlink -f "$image_url"`
+		if [ -z "$realpath" ]; then
+			echo "$image_url: no such file or directory" >&2
+			exit 1
+		fi
+
+		if ! ln -s $realpath $local_path; then
+			echo "$image_url: does not exist or is not accesible" >&2
+			exit 1
+		fi
+		: ;;
+	esac
+}
+
+# TBD: parse options
+
+if [ $# -ne 1 ]; then
+	echo "$program_name: expected test suite argument" >&2
+	exit 1
+fi
+test_suite=$1; shift
+
+mytmp=`mktemp -d /tmp/testbus-$test_suite.XXXXXX`
+trap "rm -rf $mytmp" 0 1 2 15
+
+method=${TESTBUS_DEPLOYMENT_METHOD:-kvm}
+local_path=$mytmp/image
+select_image $method $local_path
+
+find $mytmp -ls
+
+if [ -x /usr/share/testbus/suites/$test_suite.run ]; then
+	exec /usr/share/testbus/suites/$test_suite.run $local_path
+fi
+
+if [ -f /usr/share/testbus/suites/$test_suite.conf ]; then
+	echo "Not yet implemented: creating a testbus deployment from a .conf file" >&2
+	exit 1
+fi
+
+echo "Do not know how to run $test_suite: no $test_suite.run or $test_suite.conf file in $TESTBUS_TS_DIR" >&2
+exit

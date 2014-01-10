@@ -112,7 +112,8 @@ PROXY	= dbus-proxy
 PROXOBJS= $(addprefix obj/,$(PROXSRCS:.c=.o))
 
 BINTGTS	= $(MASTER) $(CLIENT) $(AGENT) $(PROXY) \
-	  testbus-control-kvm
+	  testbus-control-kvm \
+	  testbus-run
 LIBTGTS	= $(LIBDBORB) $(LIBTESTBUS)
 ALL	= $(LIBTGTS) $(BINTGTS)
 LIBDEPS	= $(LIBDBORB) $(LIBTESTBUS)
@@ -126,6 +127,7 @@ INSTALL_DATADIRS = \
 	/etc/testbus \
 	/etc/dbus-1/system.d \
 	/etc/testbus/agent.d \
+	/etc/sysconfig \
 	/usr/share/testbus \
 	/usr/share/testbus/schema \
 	/usr/share/testbus/suites \
@@ -145,11 +147,13 @@ install-bin: $(ALL)
 	install -m555 etc/agent-kvm.init $(DESTDIR)/etc/init.d/testbus-agent-kvm
 	ln -fs ../../etc/init.d/testbus-agent-kvm $(DESTDIR)/usr/sbin/rctestbus-agent-kvm
 
-install-data: etc/config.xml etc/org.opensuse.Testbus.conf etc/kvm-network.xml etc/kvm-guest.xml
+install-data: etc/config.xml etc/org.opensuse.Testbus.conf etc/kvm-network.xml etc/kvm-guest.xml etc/testbus.sysconfig
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
 	install -m644 etc/config.xml $(DESTDIR)/etc/testbus
 	install -m644 etc/kvm-network.xml $(DESTDIR)/etc/testbus
 	install -m644 etc/kvm-guest.xml $(DESTDIR)/etc/testbus
+	test -f $(DESTDIR)/etc/sysconfig/testbus || \
+	install -m644 etc/testbus.sysconfig $(DESTDIR)/etc/sysconfig/testbus
 	install -m555 selftest/functions $(DESTDIR)/usr/share/testbus
 	install -m555 etc/*.functions $(DESTDIR)/usr/share/testbus
 	install -m644 schema/*.xml $(DESTDIR)/usr/share/testbus/schema

@@ -31,6 +31,21 @@ from the same OBS project; I am building an openSUSE image
 there on a regular basis.
 
 
+CONFIGURING IT
+==============
+
+Currently, the only thing you can (and should) do is to tell testbus
+which image to test with. To begin with, you can grab an openSUSE 13.1
+image from my OBS project (see URL at the top of this file). Store
+it somewhere, and enter the path to it in /etc/sysconfig/testbus, e.g.
+like this:
+
+TESTBUS_KVM_IMAGE=/mnt/okir/ISOs/Testbus/openSUSE-13.1-Testbus-Image.x86_64-latest.qcow2
+
+This information is being used by testbus-run. Note that testbus will
+never modify this image; it will always create a copy of it before using
+it.
+
 RUNNING TEST CASES
 ==================
 
@@ -46,15 +61,14 @@ You can install one or more or all of them, they should not conflict
 with each other on disk. However, for now, you may want to avoid running
 these test suites in parallel on the same control node.
 
-Each of these drops a set of scripts into /usr/share/testbus/suites.
-All you need to do is start the "*.run" script for the specific
-test, eg
+All you need to do is call "testbus-run" with the name of one of the
+test suites, like this:
 
-	/usr/share/testbus/suites/rpc.run /path/to/os-image.qcow2
+	testbus-run rpc
 
-This will start a KVM instance, by first creating a copy of the image
-and then bringing it up. For your convenience, this will assign static
-IP addresses to guests, and set the hostname.
+This will start instances (eg a KVM guest) as needed.  For your
+convenience, this will assign static IP addresses to guests, and set
+a boiler plate hostname.
 
 The test script itself will output stuff like this:
 
