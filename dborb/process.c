@@ -986,7 +986,7 @@ __ni_process_stderr_recv(ni_socket_t *sock)
 }
 
 static void
-__ni_process_stdin_hangup(ni_socket_t *sock)
+__ni_process_io_hangup(ni_socket_t *sock)
 {
 	struct ni_process_buffer *pb;
 
@@ -1012,7 +1012,7 @@ __ni_process_connect_stdin(ni_process_t *pi, int fd)
 
 	sock = ni_socket_wrap(fd, SOCK_STREAM);
 	sock->transmit = __ni_process_stdin_send;
-	sock->handle_hangup = __ni_process_stdin_hangup;
+	sock->handle_hangup = __ni_process_io_hangup;
 	sock->poll_flags = POLLOUT;
 
 	sock->user_data = pi;
@@ -1029,7 +1029,7 @@ __ni_process_connect_output(ni_process_t *pi, int fd, void (*recv_fn)(ni_socket_
 
 	sock = ni_socket_wrap(fd, SOCK_STREAM);
 	sock->receive = recv_fn;
-	sock->handle_hangup = NULL;
+	sock->handle_hangup = __ni_process_io_hangup;
 
 	sock->user_data = pi;
 	return sock;
