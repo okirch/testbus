@@ -86,6 +86,7 @@ __ni_config_parse(ni_config_t *conf, const char *filename, ni_init_appdata_callb
 	for (child = node->children; child; child = child->next) {
 		if (strcmp(child->name, "include") == 0) {
 			const char *attrval, *path;
+			ni_bool_t optional;
 
 			if ((attrval = xml_node_get_attr(child, "name")) == NULL) {
 				ni_error("%s: <include> element lacks filename", xml_node_location(child));
@@ -93,6 +94,13 @@ __ni_config_parse(ni_config_t *conf, const char *filename, ni_init_appdata_callb
 			}
 			if (!(path = ni_config_build_include(filename, attrval)))
 				goto failed;
+
+			if (xml_node_get_attr_boolean(child, "optional", &optional)
+			 && optional && !ni_file_exists(path)) {
+				ni_debug_testbus("Optional include file \"%s\" does not exist - skipped", filename);
+				continue;
+			}
+
 			if (!__ni_config_parse(conf, path, cb, appdata))
 				goto failed;
 		} else
