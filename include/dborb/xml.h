@@ -116,6 +116,7 @@ extern xml_node_t *	xml_node_get_child_with_attrs(const xml_node_t *, const char
 extern ni_bool_t	xml_node_replace_child(xml_node_t *, xml_node_t *);
 extern ni_bool_t	xml_node_delete_child(xml_node_t *, const char *);
 extern ni_bool_t	xml_node_delete_child_node(xml_node_t *, xml_node_t *);
+extern ni_bool_t	xml_node_splice_child_node(xml_node_t *node, xml_node_t *oldchild, xml_node_t *newlist);
 extern void		xml_node_detach(xml_node_t *);
 extern void		xml_node_reparent(xml_node_t *parent, xml_node_t *child);
 extern void		xml_node_add_child(xml_node_t *, xml_node_t *);

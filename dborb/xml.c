@@ -450,6 +450,32 @@ xml_node_replace_child(xml_node_t *node, xml_node_t *newchild)
 }
 
 ni_bool_t
+xml_node_splice_child_node(xml_node_t *node, xml_node_t *oldchild, xml_node_t *newlist)
+{
+	xml_node_t **pos, *child, *newchild;
+
+	pos = &node->children;
+	while ((child = *pos) != NULL) {
+		if (child == oldchild) {
+			/* Drop the old child */
+			__xml_node_list_drop(pos);
+
+			if (newlist != NULL) {
+				/* In its place, insert all children of newlist */
+				while ((newchild = __xml_node_list_remove(&newlist->children)) != NULL) {
+					__xml_node_list_insert(pos, newchild, node);
+					pos = &newchild->next;
+				}
+			}
+			return TRUE;
+		}
+		pos = &child->next;
+	}
+
+	return FALSE;
+}
+
+ni_bool_t
 xml_node_delete_child(xml_node_t *node, const char *name)
 {
 	xml_node_t **pos, *child;
