@@ -204,6 +204,7 @@ struct io_transport {
 
 	const char *	address;
 	int		listen_fd;
+	ni_bool_t	fork_on_accept;
 
 	io_transport_t *other;
 
@@ -523,13 +524,14 @@ io_endpoint_unlink(io_endpoint_t *ep)
 		return;
 	}
 
-	ni_assert(ep->prevp);
-	pos = ep->prevp;
-	*pos = ep->next;
-	if (ep->next)
-		ep->next->prevp = pos;
-	ep->prevp = NULL;
-	ep->next = NULL;
+	if (ep->prevp) {
+		pos = ep->prevp;
+		*pos = ep->next;
+		if (ep->next)
+			ep->next->prevp = pos;
+		ep->prevp = NULL;
+		ep->next = NULL;
+	}
 }
 
 static unsigned int
@@ -1021,8 +1023,9 @@ io_endpoint_free(io_endpoint_t *ep)
 		sink->sink = NULL;
 	}
 
-	ni_string_free(&ep->name);
+	io_endpoint_unlink(ep);
 
+	ni_string_free(&ep->name);
 	free(ep);
 }
 
@@ -1599,6 +1602,7 @@ proxy_setup_recv(proxy_t *proxy)
 	 && downstream->type == IO_ENDPOINT_TYPE_MULTIPLEX) {
 		upstream->data_available = proxy_recv_mux;
 		downstream->data_available = proxy_recv_demux;
+		downstream->fork_on_accept = TRUE;
 	} else
 	if (upstream->type == IO_ENDPOINT_TYPE_MULTIPLEX
 	 && downstream->type == IO_ENDPOINT_TYPE_SIMPLEX) {
@@ -1691,6 +1695,25 @@ proxy_downstream_accept(proxy_t *proxy, io_endpoint_t *dummy, const struct pollf
 			if (xprt->multiplex != NULL)
 				ni_fatal("Currently not supported: more than one multiplex connection");
 
+			if (xprt->fork_on_accept) {
+				pid_t pid;
+
+				if ((pid = fork()) < 0) {
+					ni_error("fork failed: %m");
+					io_endpoint_free(ep);
+					return 0;
+				}
+
+				if (pid != 0) {
+					ni_debug_socket("forked child %d to service incoming connection", pid);
+					io_endpoint_free(ep);
+					return 0;
+				}
+
+				/* Child should no longer listen on the downstream socket */
+				xprt->listen_fd = -1;
+			}
+
 			xprt->multiplex = ep;
 		} else {
 			io_transport_t *other = xprt->other;
@@ -1753,6 +1776,9 @@ do_proxy(proxy_t *proxy)
 		nfds += io_transport_poll(&proxy->upstream, pfd + nfds, info + nfds);
 		nfds += io_transport_poll(&proxy->downstream, pfd + nfds, info + nfds);
 
+		if (nfds == 0)
+			break;
+
 #if 1
 		{
 			unsigned int i;
@@ -1784,5 +1810,5 @@ do_proxy(proxy_t *proxy)
 			info[n].handler(proxy, info[n].ep, pfd + n);
 	}
 
-	ni_debug_socket("Child exited, proxy done");
+	ni_debug_socket("Exiting, proxy done");
 }
