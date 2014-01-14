@@ -62,7 +62,6 @@ typedef struct ni_config {
 
 	ni_extension_t *	dbus_extensions;
 	ni_extension_t *	ns_extensions;
-	ni_extension_t *	fw_extensions;
 
 	char *			dbus_name;
 	char *			dbus_type;
