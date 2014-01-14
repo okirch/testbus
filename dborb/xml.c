@@ -332,12 +332,12 @@ xml_node_get_attr_uint(const xml_node_t *node, const char *name, unsigned int *v
 	char *pos;
 
 	if (!(attr = __xml_node_get_attr(node, name)) || !attr->value)
-		return 0;
+		return FALSE;
 
 	*valp = strtoul(attr->value, &pos, 0);
 	if (*pos)
-		return -1;
-	return 0;
+		return FALSE;
+	return TRUE;
 }
 
 ni_bool_t
@@ -347,12 +347,12 @@ xml_node_get_attr_ulong(const xml_node_t *node, const char *name, unsigned long 
 	char *pos;
 
 	if (!(attr = __xml_node_get_attr(node, name)) || !attr->value)
-		return 0;
+		return FALSE;
 
 	*valp = strtoul(attr->value, &pos, 0);
 	if (*pos)
-		return -1;
-	return 0;
+		return FALSE;
+	return TRUE;
 }
 
 ni_bool_t
@@ -362,12 +362,12 @@ xml_node_get_attr_double(const xml_node_t *node, const char *name, double *valp)
 	char *pos;
 
 	if (!(attr = __xml_node_get_attr(node, name)) || !attr->value)
-		return 0;
+		return FALSE;
 
 	*valp = strtod(attr->value, &pos);
 	if (*pos)
-		return -1;
-	return 0;
+		return FALSE;
+	return TRUE;
 }
 
 ni_bool_t
