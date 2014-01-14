@@ -370,6 +370,31 @@ xml_node_get_attr_double(const xml_node_t *node, const char *name, double *valp)
 	return 0;
 }
 
+ni_bool_t
+xml_node_get_attr_boolean(const xml_node_t *node, const char *name, ni_bool_t *valp)
+{
+	const ni_var_t *attr;
+	char *pos;
+
+	if (!(attr = __xml_node_get_attr(node, name)) || !attr->value)
+		return FALSE;
+
+	if (!strcasecmp(attr->value, "true")) {
+		*valp = TRUE;
+		return TRUE;
+	}
+	if (!strcasecmp(attr->value, "false")) {
+		*valp = FALSE;
+		return TRUE;
+	}
+
+	*valp = !!strtoul(attr->value, &pos, 0);
+	if (*pos)
+		return TRUE;
+
+	return FALSE;
+}
+
 /*
  * Find a child element given its name
  */
