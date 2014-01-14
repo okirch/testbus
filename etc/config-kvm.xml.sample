@@ -1,0 +1,6 @@
+<!--
+     If this file is installed as /etc/testbus/kvm.xml, it will be
+     used by testbus-start to determine the default location of the OS
+     image to be used.
+  -->
+<image>/some/path/to/openSUSE-13.1-Testbus-Image.x86_64-latest.qcow2</image>

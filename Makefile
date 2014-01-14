@@ -90,6 +90,14 @@ AGNTSRCS = \
 	agent/syslog.c \
 	agent/dbus-filesystem.c
 
+CONFIG_XML = \
+	etc/config.xml \
+	etc/config-kvm.xml.sample
+
+LIBVIRT_XML = \
+	etc/kvm-guest.xml \
+	etc/kvm-network.xml
+
 PROXSRCS = \
 	proxy/main.c
 
@@ -147,11 +155,10 @@ install-bin: $(ALL)
 	install -m555 etc/agent-kvm.init $(DESTDIR)/etc/init.d/testbus-agent-kvm
 	ln -fs ../../etc/init.d/testbus-agent-kvm $(DESTDIR)/usr/sbin/rctestbus-agent-kvm
 
-install-data: etc/config.xml etc/org.opensuse.Testbus.conf etc/kvm-network.xml etc/kvm-guest.xml etc/testbus.sysconfig
+install-data: $(CONFIG_XML) $(LIBVIRT_XML) etc/org.opensuse.Testbus.conf etc/testbus.sysconfig
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
-	install -m644 etc/config.xml $(DESTDIR)/etc/testbus
-	install -m644 etc/kvm-network.xml $(DESTDIR)/etc/testbus
-	install -m644 etc/kvm-guest.xml $(DESTDIR)/etc/testbus
+	install -m644 $(CONFIG_XML) $(DESTDIR)/etc/testbus
+	install -m644 $(LIBVIRT_XML) $(DESTDIR)/etc/testbus
 	test -f $(DESTDIR)/etc/sysconfig/testbus || \
 	install -m644 etc/testbus.sysconfig $(DESTDIR)/etc/sysconfig/testbus
 	install -m555 selftest/functions $(DESTDIR)/usr/share/testbus

@@ -1,17 +1,39 @@
 <config>
   <!-- Specify debug facilities for all testbus applications.
-    -- You can still override this on the command line.
+       You can still override this on the command line.
     -->
   <debug>none</debug>
 
   <!-- When running inside a guest, you can specify a
-    -- forwarding socket through which DBus clients can
-    -- speak to the DBus daemon on the master host.
-    --
-    -- <dbus socket="...." />
+       forwarding socket through which DBus clients can
+       speak to the DBus daemon on the master host.
+      
+       <dbus socket="...." />
     -->
 
   <statedir path="/var/lib/testbus" mode="0755"/>
 
   <schema name="/usr/share/testbus/schema/testbus.xml"/>
+
+  <!-- Deploying machines or guests in preparation of testing.
+       For the most part, this will select the default method
+       of deployment and the OS image to use for each of them.
+    -->
+  <deployment>
+   <default-method>kvm</default-method>
+
+   <kvm>
+     <!-- Include the KVM configuration from a separate file.
+          This allows you to override values of the KVM config
+          without having to touch the global config.xml
+         
+          Elements supported in this context:
+            image:
+         	Specifies the qcow2 image to be used by default.
+         	This can be either a path name, or a URL (ftp
+         	or http supported).
+       -->
+     <include name="config-kvm.xml" optional="true" />
+   </kvm>
+  </deployment>
 </config>
