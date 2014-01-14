@@ -61,6 +61,77 @@ function select_image {
 	esac
 }
 
+##################################################################
+# Given an "instance" declaration from a config file, start the
+# requested instance.
+#
+# The list of arguments consists of the "tag" name of the instance,
+# optionally followed by a list of arguments that should be passed
+# to "testbus-control start".
+##################################################################
+function start_instance_from_config {
+
+	local instance_name
+
+	instance_name=$1; shift
+
+	if [ -z "$instance_name" ]; then
+		echo "Missing instance name in config file" >&2
+		exit 1
+	fi
+
+	# FIXME: use "testbus-control status" to detect whether the
+	# instance is already active.
+
+	testbus-control "$@" start $instance_name $testbus_local_image
+}
+
+##################################################################
+# Start all instances described in the configuration file
+##################################################################
+function start_from_config {
+
+	config_file=$1
+
+	echo "Creating instances from $config_file"
+
+	function instance { start_instance_from_config "$@"; }
+	. $config_file
+}
+
+##################################################################
+# Given an "instance" declaration from a config file, stop the
+# indicated instance.
+#
+# The list of arguments consists of the "tag" name of the instance,
+# optionally followed by a list of arguments that are ignored by
+# this function.
+##################################################################
+function stop_instance_from_config {
+
+	local instance_name
+
+	instance_name=$1; shift
+
+	if [ -z "$instance_name" ]; then
+		echo "Missing instance name in config file" >&2
+		exit 1
+	fi
+
+	testbus-control stop $instance_name
+}
+
+##################################################################
+# Start all instances described in the configuration file
+##################################################################
+function stop_from_config {
+
+	config_file=$1
+
+	function instance { stop_instance_from_config "$@"; }
+	. $config_file
+}
+
 # TBD: parse options
 
 if [ $# -ne 1 ]; then
@@ -73,18 +144,31 @@ mytmp=`mktemp -d /tmp/testbus-$test_suite.XXXXXX`
 trap "rm -rf $mytmp" 0 1 2 15
 
 method=${TESTBUS_DEPLOYMENT_METHOD:-kvm}
-local_path=$mytmp/image
-select_image $method $local_path
+testbus_local_image=$mytmp/image
+select_image $method $testbus_local_image
 
 find $mytmp -ls
 
-if [ -x /usr/share/testbus/suites/$test_suite.run ]; then
-	exec /usr/share/testbus/suites/$test_suite.run $local_path
+if [ -f /usr/share/testbus/suites/$test_suite.conf ]; then
+	if [ ! -x /usr/share/testbus/suites/$test_suite ]; then
+		echo "Found a config file for test suite $test_suite, but no script to run" >&2
+		exit 1
+	fi
+
+	config_file=/usr/share/testbus/suites/$test_suite.conf 
+	test_script=/usr/share/testbus/suites/$test_suite
+
+	start_from_config $config_file
+
+	$test_script
+	rv=$?
+
+	stop_from_config $config_file
+	exit $rv
 fi
 
-if [ -f /usr/share/testbus/suites/$test_suite.conf ]; then
-	echo "Not yet implemented: creating a testbus deployment from a .conf file" >&2
-	exit 1
+if [ -x /usr/share/testbus/suites/$test_suite.run ]; then
+	exec /usr/share/testbus/suites/$test_suite.run $testbus_local_image
 fi
 
 echo "Do not know how to run $test_suite: no $test_suite.run or $test_suite.conf file in $TESTBUS_TS_DIR" >&2
