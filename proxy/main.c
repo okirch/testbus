@@ -1758,6 +1758,10 @@ do_proxy(proxy_t *proxy)
 
 	//signal(SIGPIPE, SIG_IGN);
 
+	/* For now, ignore SIGCHLD. This prevents the creation of zombies which we would
+	 * then have to go and collect. */
+	signal(SIGCHLD, SIG_IGN);
+
 	if (!opt_foreground && ni_server_background(opt_identity) < 0)
 		ni_fatal("unable to background server");
 
