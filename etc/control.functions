@@ -50,6 +50,9 @@ function instance_init {
 	fi
 
 	instance_index=`instance_pick_index`
+
+	# Default to global proxy socket
+	instance_socket=/var/run/dbus-proxy.sock
 }
 
 function instance_init_for_stop {

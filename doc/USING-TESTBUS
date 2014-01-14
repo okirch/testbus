@@ -118,11 +118,15 @@ If you want to debug a test suite, you can do one of two things:
  	Look at the test suite's *.run script. This is usually pretty simple,
 	and may do something like this:
 
-	testbus-control start client $image
-	testbus-control start server $image
+	  testbus-control start client $image
+	  testbus-control start server $image
 
 	You can just do this manually, then connect to one or both of the guests,
-	and mess around.
+	and mess around. After you're done, remember to stop these guests
+	using
+
+	  testbus-control stop client
+	  testbus-control stop server
 
  b) Bring back the dead:
  	When the test suite's *.run script finishes, it will destroy the KVM
@@ -130,22 +134,22 @@ If you want to debug a test suite, you can do one of two things:
 	This data can be found below /var/run/testbus.
 
 	For each instance, there's a separate subdirectory containing the
-	copy of the OS image plus some additional stuff.
+	copy of the OS image plus some additional stuff, including a libvirt
+	XML file describing the instance configuration. The first invocation
+	of testbus-control-kvm will create this directory with all its files
+	inside, and does not remove it after the test run.
 
-	You can bring back e.g. the instance tagged "server" by running these
-	commands
+	This allows you to bring back test instance using the virsh "create"
+	and "destroy" commands.
 
-	id=server
-	dbus-proxy --identity testbus-$id --downstream unix-mux:/var/run/testbus/$id.d/proxy.socket
-	virsh create /var/run/testbus/$id.d/config.xml
+	For instance, to revive the instance tagged "server" and put it back
+	to sleep, you would do something like this:
 
-	When you're done tinkering with the guests, you can stop them again
-	using
+	  virsh create /var/run/testbus/server.d/config.xml
+	  ... tinker with the instance ...
+	  virsh destroy server
 
-	virsh destroy server
-	killall dbus-proxy
-
-	Yes, this is asking for something like "testbus-control resurrect"
+	Yes, this is asking for something like "testbus-control restart"
 
 KNOWN ISSUES
 ============
