@@ -33,6 +33,7 @@ static ni_c_binding_t *	ni_c_binding_new(ni_c_binding_t **, const char *name, co
 static void		ni_config_fslocation_init(ni_config_fslocation_t *, const char *path, unsigned int mode);
 static void		ni_config_fslocation_destroy(ni_config_fslocation_t *);
 static const char *	ni_config_build_include(const char *, const char *);
+static ni_bool_t	__ni_config_resolve_includes(const char *filename, xml_node_t *node, xml_node_t *parent);
 
 /*
  * Create an empty config object
@@ -82,27 +83,15 @@ __ni_config_parse(ni_config_t *conf, const char *filename, ni_init_appdata_callb
 		goto failed;
 	}
 
+	if (!__ni_config_resolve_includes(filename, node, doc->root))
+		goto failed;
+
+	/* xml_node_print(doc->root, stdout); */
+
 	/* Loop over all elements in the config file */
 	for (child = node->children; child; child = child->next) {
 		if (strcmp(child->name, "include") == 0) {
-			const char *attrval, *path;
-			ni_bool_t optional;
-
-			if ((attrval = xml_node_get_attr(child, "name")) == NULL) {
-				ni_error("%s: <include> element lacks filename", xml_node_location(child));
-				goto failed;
-			}
-			if (!(path = ni_config_build_include(filename, attrval)))
-				goto failed;
-
-			if (xml_node_get_attr_boolean(child, "optional", &optional)
-			 && optional && !ni_file_exists(path)) {
-				ni_debug_testbus("Optional include file \"%s\" does not exist - skipped", filename);
-				continue;
-			}
-
-			if (!__ni_config_parse(conf, path, cb, appdata))
-				goto failed;
+			ni_fatal("there should not be any <include> nodes left after resolving them");
 		} else
 		if (strcmp(child->name, "piddir") == 0) {
 			ni_config_parse_fslocation(&conf->piddir, child);
@@ -196,6 +185,70 @@ ni_config_build_include(const char *parent_filename, const char *incl_filename)
 too_long:
 	ni_error("unable to include \"%s\" - path too long", incl_filename);
 	return NULL;
+}
+
+static ni_bool_t
+__ni_config_load_include(const char *filename, const xml_node_t *incl_node, xml_node_t **node_p)
+{
+	const char *attrval, *path;
+	ni_bool_t optional;
+	xml_document_t *doc;
+
+	*node_p = NULL;
+
+	if ((attrval = xml_node_get_attr(incl_node, "name")) == NULL) {
+		ni_error("%s: <include> element lacks filename", xml_node_location(incl_node));
+		return FALSE;
+	}
+	if (!(path = ni_config_build_include(filename, attrval)))
+		return FALSE;
+
+	if (xml_node_get_attr_boolean(incl_node, "optional", &optional)
+	 && optional && !ni_file_exists(path)) {
+		ni_debug_testbus("Optional include file \"%s\" does not exist - skipped", filename);
+		return TRUE;
+	}
+
+	doc = xml_document_read(path);
+	if (!doc) {
+		ni_error("%s: error parsing configuration file \"%s\"", xml_node_location(incl_node), path);
+		return FALSE;
+	}
+
+	*node_p = xml_document_take_root(doc);
+	xml_document_free(doc);
+
+	if (*node_p && !__ni_config_resolve_includes(path, *node_p, NULL)) {
+		xml_node_free(*node_p);
+		return FALSE;
+	}
+
+	return *node_p != NULL;
+}
+
+static ni_bool_t
+__ni_config_resolve_includes(const char *filename, xml_node_t *node, xml_node_t *dummy)
+{
+	xml_node_t *child, *next;
+
+	for (next = node->children; (child = next) != NULL; ) {
+		next = child->next;
+
+		if (strcmp(child->name, "include") != 0) {
+			if (child->children && !__ni_config_resolve_includes(filename, child, node))
+				return FALSE;
+		} else {
+			xml_node_t *include_root;
+
+			if (!__ni_config_load_include(filename, child, &include_root))
+				return FALSE;
+
+			xml_node_splice_child_node(node, child, include_root);
+			xml_node_free(include_root);
+		}
+	}
+
+	return TRUE;
 }
 
 void
