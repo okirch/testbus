@@ -91,8 +91,7 @@ AGNTSRCS = \
 	agent/dbus-filesystem.c
 
 CONFIG_XML = \
-	etc/config.xml \
-	etc/config-kvm.xml.sample
+	etc/config.xml
 
 LIBVIRT_XML = \
 	etc/kvm-guest.xml \
