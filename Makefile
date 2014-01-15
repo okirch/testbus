@@ -136,7 +136,6 @@ INSTALL_DATADIRS = \
 	/etc/testbus \
 	/etc/dbus-1/system.d \
 	/etc/testbus/agent.d \
-	/etc/sysconfig \
 	/usr/share/testbus \
 	/usr/share/testbus/schema \
 	/usr/share/testbus/suites \
@@ -157,12 +156,10 @@ install-bin: $(ALL)
 	install -m555 etc/agent-kvm.init $(DESTDIR)/etc/init.d/testbus-agent-kvm
 	ln -fs ../../etc/init.d/testbus-agent-kvm $(DESTDIR)/usr/sbin/rctestbus-agent-kvm
 
-install-data: $(CONFIG_XML) $(LIBVIRT_XML) etc/org.opensuse.Testbus.conf etc/testbus.sysconfig
+install-data: $(CONFIG_XML) $(LIBVIRT_XML) etc/org.opensuse.Testbus.conf
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
 	install -m644 $(CONFIG_XML) $(DESTDIR)/etc/testbus
 	install -m644 $(LIBVIRT_XML) $(DESTDIR)/etc/testbus
-	test -f $(DESTDIR)/etc/sysconfig/testbus || \
-	install -m644 etc/testbus.sysconfig $(DESTDIR)/etc/sysconfig/testbus
 	install -m555 selftest/functions $(DESTDIR)/usr/share/testbus
 	install -m555 etc/*.functions $(DESTDIR)/usr/share/testbus
 	install -m644 schema/*.xml $(DESTDIR)/usr/share/testbus/schema
