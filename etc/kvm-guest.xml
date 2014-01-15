@@ -6,6 +6,13 @@
     <type>hvm</type>
   </os>
   <clock sync="localtime"/>
+
+  <on_poweroff>destroy</on_poweroff>
+
+  <features>
+   <acpi />
+  </features>
+
   <devices>
     <emulator>/usr/bin/qemu-kvm</emulator>
     <disk type='file' device='disk'>

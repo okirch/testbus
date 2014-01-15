@@ -17,63 +17,12 @@
 
 . /usr/share/testbus/control.functions
 
-set -- `getopt -u -l add-rpm:,mac-addr -o R:M: -- "$@"`
-while [ $# -gt 0 ]; do
-	option=$1; shift
-	case $option in
-	--add-rpm|-R)
-		instance_dir_add_rpms $1
-		shift
-		;;
-	--mac-addr|-M)
-		instance_macaddr=$1
-		shift
-		;;
-	--)
-		break
-		;;
-	*)
-		echo "Unsupported option $option" >&2
-		exit 1
-		;;
-	esac
-done
-
-
-function testbus_kvm_start {
-
-	instance_init "$@"
-
-	instance_network_init_defaults
-	instance_network_config eth0 "$instance_ipaddr/$instance_ipmask"
-
-	instance_hostname_init_defaults
-	instance_hostname_config $instance_hostname $instance_ipaddr $instance_tag
-
-	instance_onboot_finish
-
-	instance_config_report
-
-	instance_config_write /etc/testbus/kvm-guest.xml
-
-	if ! virsh net-list | grep -qs testbus; then
-		virsh net-create /etc/testbus/kvm-network.xml || fatal "Cannot start testbus host network"
-	fi
-
-	virsh create $instance_config
-}
-
-function testbus_kvm_stop {
-
-	instance_init_for_stop "$@"
-
-	virsh destroy $instance_tag
-}
-
 command=$1; shift
 case $command in
 start)
 	testbus_kvm_start "$@";;
+firstboot)
+	testbus_kvm_firstboot "$@";;
 stop)
 	testbus_kvm_stop "$@";;
 *)

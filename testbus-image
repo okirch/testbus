@@ -1,0 +1,219 @@
+#!/bin/bash
+#
+# Helper script to handle import of images and prepping them for testbus use.
+#
+# This script currently supports the following operations
+#
+# import <method> <name> <url-or-file>
+#	Copy the indicated image to /var/lib/testbus/image/<method>/.
+#	<method> could be "kvm", "xen", "lxc", etc.
+#
+#	The <name> argument specifies a nickname for the image, such as
+#	"sles12" or "openSUSE-13.1"
+#
+# clone <method> <name> <config-template> <destpath>
+#	This will select an image suitable for the deployment <method>
+#	and possibly the configuration template.
+#
+#	In the case of eg a KVM image, these images often have a firstboot
+#	stage where they generate their first initrd. This is a fairly slow
+#	process, which can easily dominate the run-time of a test suite.
+#
+#	To avoid that overhead, for each <config-template>, we create one copy
+#	of the image, and boot it once.
+#
+
+
+TESTBUS_IMAGE_DIR=/var/lib/testbus/image
+
+function print_usage_and_die {
+
+	cat >&2 <<EOF
+Usage:
+  testbus-image import <method> <name> <url-or-file>
+  testbus-image clone <method> <name> <config-template> <config-file> <destpath>
+  testbus-image help
+EOF
+	exit 1
+}
+
+function image_download {
+
+	local image_url image_destfile
+
+	image_url=$1
+	image_destfile=$2
+
+	case "$image_url" in
+	http:*|https:*|ftp:*)
+		echo "Downloading image from $image_url to $image_destfile"
+		if ! curl -o $image_destfile -L $image_url; then
+			echo "Error downloading OS image from $image_url" >&2
+			return 1
+		fi
+		: ;;
+	
+	*)
+		local realpath
+
+		realpath=`readlink -f "$image_url"`
+		if [ -z "$realpath" ]; then
+			echo "$image_url: no such file or directory" >&2
+			return 1
+		fi
+
+		echo "Copying image from $image_url to $image_destfile"
+		if ! cp --reflink=auto --sparse=always $realpath $image_destfile; then
+			echo "$image_url: does not exist or is not accesible" >&2
+			return 1
+		fi
+		: ;;
+	esac
+
+	return 0
+}
+
+function image_import {
+
+	local method image_nick image_url
+	local image_basename image_extension image_destdir image_destfile
+
+	if [ $# -lt 3 ]; then
+		echo "testbus-image: bad number of arguments"
+		print_usage_and_die
+	fi
+
+	method=$1
+	image_nick=$2
+	image_url=$3
+	shift 3
+
+	image_basename=${image_url##*/}
+	image_extension=${image_basename##*.}
+
+	image_destdir=$TESTBUS_IMAGE_DIR/$method/$image_nick
+	image_destfile=$image_destdir/$image_basename
+
+	if [ ! -f $image_destfile ]; then
+		mkdir -p $image_destdir
+		if ! image_download $image_url $image_destfile; then
+			exit 1
+		fi
+	fi
+
+
+	echo "$method/$image_nick: linking $image_basename to current"
+	ln -sf $image_basename $image_destdir/current
+}
+
+function image_clone {
+
+	local method image_nick config_tmpl image_destfile
+	local image_basedir image_gold image_silver image_hash
+
+	if [ $# -lt 4 ]; then
+		echo "testbus-image: bad number of arguments"
+		print_usage_and_die
+	fi
+
+	method=$1
+	image_nick=$2
+	config_tmpl=$3
+	image_destfile=$4
+
+	image_basedir=$TESTBUS_IMAGE_DIR/$method/$image_nick
+	image_gold=$image_basedir/current
+
+	if [ ! -e $image_gold ]; then
+		echo "Gold image $image_gold does not exist, please import it first using 'testbus-image import'" >&2
+		exit 1
+	fi
+
+	if [ ! -f "$config_tmpl" ]; then
+		echo "Config template $config_tmpl does not exist" >&2
+		exit 1
+	fi
+
+	image_hash=`sha256sum $config_tmpl | cut -d' ' -f1`
+	image_silver=$image_basedir/clones/$image_hash
+
+	if [ ! -e $image_silver ]; then
+		mkdir -p $image_basedir/clones
+		echo "Silver image $image_silver does not exist, please stand by while I generate it" >&2
+		if ! image_download $image_gold $image_silver; then
+			exit 1
+		fi
+		if ! image_boot_once $method "fb$image_hash" $image_silver $config_tmpl; then
+			exit 1
+		fi
+	fi
+
+	image_download $image_silver $image_destfile
+}
+
+function image_boot_once {
+
+	local method image_hash image_path config_path
+
+	method=$1; shift
+	guest_name=$1; shift
+	image_path=$1; shift
+	config_path=$1; shift
+
+	# Execute this in a subshell to avoid pollution of our namespace with variables
+	# from control.functions
+	(
+		. /usr/share/testbus/control.functions
+
+		case $method in
+		kvm)
+			testbus_kvm_firstboot --template $config_tmpl $guest_name $image_path
+
+			# create a test case and claim the host
+			tf=`testbus-client create-test $guest_name` || exit 1
+			hf=`testbus-client claim-host --timeout 240 --capability $guest_name $tf` || exit 1
+
+			if [ -z "$hf" ]; then
+				echo "Oops, unable claim the guest" >&2
+				testbus_kvm_stop $guest_name
+				exit 1
+			fi
+
+			# Have to delete the state.xml file, otherwise it'll always report itself with
+			# this very same identity
+			testbus-client run-command --host $hf /bin/rm -f /var/lib/testbus/state.xml
+
+			echo "Shutting down guest"
+			testbus-client shutdown $hf
+			testbus-client delete $tf
+
+			sleep 5
+			echo "Destroying guest. Note, a 'Domain not found' error is harmless and can be ignored"
+			testbus_kvm_stop $guest_name || true
+			;;
+		*)
+			echo "image_boot_once: method $method currently not supported" >&2
+			exit 1;;
+		esac
+	)
+}
+
+if [ $# -eq 0 ]; then
+	print_usage_and_die
+fi
+
+command=$1; shift
+case $command in
+import)
+	image_import "$@";;
+
+clone)
+	image_clone "$@";;
+
+help)
+	print_usage_and_die;;
+
+*)
+	echo "Unsupported command $command" >&2
+	print_usage_and_die;;
+esac

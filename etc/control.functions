@@ -11,6 +11,8 @@
 
 INSTANCE_BASE_DIR=/var/run/testbus
 
+INSTANCE_KVM_DEFAULT_TEMPLATE=/etc/testbus/kvm-guest.xml
+
 function fatal {
 
 	echo "Fatal error: $@" >&2
@@ -18,75 +20,270 @@ function fatal {
 }
 
 ##################################################################
-# Initialize a test node instance
-# This takes two arguments, an instance tag and the image to use
-# with this instance.
+# Start a KVM guest
 #
-# Creates the instance directory and copies the image to it.
-#
-# Also sets the following shell variables:
-#  instance_tag
-#  instance_image
-#  instance_index
+# This expects that all arguments and options have been parsed
+# instance_start_options_parse
 ##################################################################
-function instance_init {
+function testbus_kvm_start {
+
+	testbus_kvm_reset_variables
+	instance_start_options_parse "$@"
+
+	instance_init
+	instance_dir_init
+
+	instance_network_init_defaults
+	instance_network_write_static eth0 "$instance_ipaddr/$instance_ipmask"
+	instance_hostname_init_defaults
+	instance_hostname_config $instance_hostname $instance_ipaddr $instance_tag
+	instance_onboot_finish
+
+	# instance_image_copy
+	instance_image_clone
+
+	instance_config_report
+	instance_config_write $instance_template
+
+	if ! virsh net-list | grep -qs testbus; then
+		virsh net-create /etc/testbus/kvm-network.xml || fatal "Cannot start testbus host network"
+	fi
+
+	virsh create $instance_config
+}
+
+function testbus_kvm_firstboot {
+
+	testbus_kvm_reset_variables
+	instance_start_options_parse "$@"
+
+	instance_init
+	instance_dir_init
+
+	# Special firstboot configuration - no network config, just use linux.testbus as hostname
+	instance_network_init_defaults
+	instance_hostname_config linux.testbus
+	instance_onboot_finish
+
+	# For firstboot, we do not copy the image but use the base image directly.
+	# The point here is that we want the base image to be modified.
+	instance_image=$instance_base_image
+
+	instance_config_report
+	instance_config_write $instance_template
+
+	if ! virsh net-list | grep -qs testbus; then
+		virsh net-create /etc/testbus/kvm-network.xml || fatal "Cannot start testbus host network"
+	fi
+
+	virsh create $instance_config
+}
+
+##################################################################
+# Stop a KVM guest
+#
+# Usage:
+#  testbus_kvm_stop tag
+#
+##################################################################
+function testbus_kvm_stop {
+
+	testbus_kvm_reset_variables
+	instance_stop_options_parse "$@"
+	virsh destroy $instance_tag
+}
+
+##################################################################
+# Reset all internally used variables, and set some KVM specific
+# defaults
+##################################################################
+function testbus_kvm_reset_variables {
+
+	instance_reset_variables kvm
+
+	# Set kvm specific defaults.
+	# These may be overridden by command line options
+	instance_template=$INSTANCE_KVM_DEFAULT_TEMPLATE
+}
+
+##################################################################
+# Reset all internally used variables
+#
+# Usage:
+#  instance_reset_variables <method>
+#
+# Call this before instance_*_options_parse.
+# As a side effect, sets instance_method to <method>.
+##################################################################
+function instance_reset_variables {
+
+	instance_method=$1
+	test -n "$instance_method" || fatal "bug: no deployment method given to instance_reset_variables"
+
+	# common variables
+	instance_tag=
+	instance_base_image=
+
+	# start options
+	instance_rpm_list=
+	instance_macaddr=
+	instance_template=
+	instance_net_template=
+	instance_no_clone=false
+
+	# stop options
+	instance_delete=false
+
+	# other global variables
+	instance_hostname=
+}
+
+##################################################################
+# Parse the common options of the start command
+##################################################################
+function instance_start_options_parse {
+
+	# Note: when you add new options here, make sure you set proper defaults
+	# in instance_reset_variables
+	set -- `getopt -u -l add-rpm:,mac-addr:,template:,net-template:,no-clone -o R:M:N:T: -- "$@"`
+	while [ $# -gt 0 ]; do
+		option=$1; shift
+		case $option in
+		--add-rpm|-R)
+			instance_rpm_list="$instance_rpm_list $1"
+			shift
+			;;
+		--mac-addr|-M)
+			instance_macaddr=$1
+			shift
+			;;
+		--template|-T)
+			instance_template=$1
+			shift
+			;;
+		--net-template|-T)
+			# Not supported yet
+			instance_net_template=$1
+			shift
+			;;
+		--no-clone)
+			instance_no_clone=true
+			;;
+		--)
+			break
+			;;
+		*)
+			echo "Unsupported option $option" >&2
+			exit 1
+			;;
+		esac
+	done
 
 	if [ $# -ne 2 ]; then
 		fatal "Bad number of non-option arguments. Expected <tag> <image-path>"
 	fi
 
 	instance_tag=$1
-	instance_image=$2
-
-	instance_dir_init $instance_tag
-	instance_dir_add_image $instance_image
-
-	# The controller script may call instance_dir_add_rpms before
-	# initializing the instance. Make sure those RPMs get copied
-	# to the instance dir now.
-	if [ -n "$instance_rpm_list" ]; then
-		instance_dir_install_rpms $instance_rpm_list
-		unset instance_rpm_list
-	fi
-
-	instance_index=`instance_pick_index`
-
-	# Default to global proxy socket
-	instance_socket=/var/run/dbus-proxy.sock
+	instance_base_image=$2
 }
 
-function instance_init_for_stop {
+##################################################################
+# Parse the common options of the stop command
+##################################################################
+function instance_stop_options_parse {
+
+	# Note: when you add new options here, make sure you set proper defaults
+	# in instance_reset_variables
+	set -- `getopt -u -l delete -o d -- "$@"`
+	while [ $# -gt 0 ]; do
+		option=$1; shift
+		case $option in
+		--delete|-d)
+			instance_delete=true
+			;;
+		--)
+			break
+			;;
+		*)
+			echo "Unsupported option $option" >&2
+			exit 1
+			;;
+		esac
+	done
 
 	if [ $# -ne 1 ]; then
 		fatal "Bad number of non-option arguments. Expected <tag>"
 	fi
 
 	instance_tag=$1
-	instance_dir="$INSTANCE_BASE_DIR/$tag.d"
 }
 
+
+##################################################################
+# Set up some initial variables for handling an instance
+#
+# Sets the following shell variables:
+#  instance_dir
+#  instance_socket
+##################################################################
+function instance_init {
+
+	test -n "$instance_tag" || fatal "instance tag not set"
+	test -n "$instance_method" || fatal "instance method not set"
+#	test -n "$instance_base_image" || fatal "instance image not set"
+
+	instance_dir="$INSTANCE_BASE_DIR/$instance_tag.d"
+
+	# Default to global proxy socket
+	instance_socket=/var/run/dbus-proxy.sock
+}
+
+##################################################################
+# Prepare the instance directory of a test node
+#
+# Creates the instance directory and copies the image to it.
+#
+# Also sets the following shell variables:
+#  instance_index
+##################################################################
 function instance_dir_init {
 
-	local tag
-
-	tag=$1
-
-	test -n "$tag" || fatal "cannot build instance_dir_path: empty tag name"
-	instance_dir="$INSTANCE_BASE_DIR/$tag.d"
+	test -n "$instance_dir" || fatal "instance dir not set"
+	test -n "$instance_base_image" || fatal "instance image not set"
 
 	rm -rf $instance_dir
 	mkdir -p $instance_dir
 	mkdir -p $instance_dir/guestfs
 
-	# cannot use instance_onboot here; instance_dir is not set yet
-	cat >$instance_dir/guestfs/onboot.sh <<"EOF"
-#!/bin/bash
-dirname=${0%/*}
-if test -f $dirname/ifcfg-eth0; then
-	cp $dirname/ifcfg-eth0 /etc/sysconfig/network
-fi
-EOF
-	chmod 555 $instance_dir/guestfs/onboot.sh
+	instance_onboot_init
+
+	# If we've been asked to install additional RPMs in the guest,
+	# make sure those get copied to the instance dir now.
+	if [ -n "$instance_rpm_list" ]; then
+		instance_dir_install_rpms $instance_rpm_list
+		unset instance_rpm_list
+	fi
+
+	instance_index=`instance_pick_index`
+}
+
+##################################################################
+# Copy or clone a (file) image to the instance directory
+##################################################################
+function instance_image_clone {
+
+	instance_image=$instance_dir/image
+	testbus-image clone $instance_method $instance_base_image $instance_template $instance_image ||
+		fatal "Error cloning image"
+}
+
+function instance_image_copy {
+
+	instance_image=$instance_dir/image
+
+	echo "Copying $instance_base_image to $instance_image"
+	cp --reflink=auto --sparse=always $instance_base_image $instance_image ||
+		fatal "Error cloning image"
 }
 
 ##################################################################
@@ -111,28 +308,6 @@ function instance_dir_install_rpms {
 			cp -v "$src" $instance_dir/guestfs
 		fi
 	done
-}
-
-function instance_dir_add_image {
-
-	local img
-
-	img=$1; shift
-
-	test -d "$instance_dir" || fatal "$0: instance dir not set"
-
-	case $img in
-	/*)
-		cp --sparse=always --reflink=auto -v $img $instance_dir/image || exit 1
-		: ;;
-	http:*|ftp:*)
-		curl -o $instance_dir/image $img || exit 1
-		: ;;
-	*)
-		# FIXME: should support zypp:/* urls here
-		echo "Don't know how to copy image from $img" >&2
-		exit 1;;
-	esac
 }
 
 ##################################################################
@@ -163,22 +338,53 @@ function instance_proxy_stop {
 
 
 ##################################################################
+# Initialize the onboot.sh file in the guestfs.
+# This script is executed inside the guest by boot.testbus.
+#
+# With KVM, we use a 9p virtfs to map guestfs into the guest.
+##################################################################
+function instance_onboot_init {
+
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
+	cat >$instance_dir/guestfs/onboot.sh <<"EOF"
+#!/bin/bash
+dirname=${0%/*}
+if test -f $dirname/ifcfg-eth0; then
+	cp $dirname/ifcfg-eth0 /etc/sysconfig/network
+fi
+EOF
+	chmod 555 $instance_dir/guestfs/onboot.sh
+
+	# This one is without quoting, so that $instance_tag gets expanded
+	instance_onboot_append  <<EOF
+echo "echo capability $instance_tag" > /etc/testbus/agent.d/id
+chmod 555 /etc/testbus/agent.d/id
+EOF
+}
+
+##################################################################
+# Append a script snippet to onboot.sh
+#
 # This is just a convenience function for use with here scripts.
 # Use as
-#  instance_onboot<<-EOF
+#  instance_onboot_append <<-EOF
 # ... stuff that should get added to the onboot script
 # EOF
 ##################################################################
-function instance_onboot {
+function instance_onboot_append  {
 
+	test -d "$instance_dir" || fatal "$0: instance dir not set"
 	cat >>$instance_dir/guestfs/onboot.sh
 }
 
+##################################################################
+# Finalize onboot.sh
+##################################################################
 function instance_onboot_finish {
 
 	test -d "$instance_dir" || fatal "$0: instance dir not set"
 	if ls $instance_dir/guestfs | grep -qs '\.rpm$'; then
-		instance_onboot <<"EOF"
+		instance_onboot_append  <<"EOF"
 
 echo "Installing/updating packages"
 rpm -Uvh $dirname/*.rpm
@@ -212,8 +418,9 @@ function instance_pick_index {
 
 ##################################################################
 # Hostname
-# The hostname is being configured by writing it to a file in
-# the instance directory, from where it's picked up by the guest.
+#
+# The hostname is being configured through the onboot.sh script
+# that is executed via boot.testbus in the guest.
 ##################################################################
 function instance_hostname_init_defaults {
 
@@ -230,11 +437,13 @@ function instance_hostname_config {
 		alias_list="$alias_list $tag.testbus"
 	done
 
-	instance_onboot <<EOF
+	instance_onboot_append  <<EOF
 echo $hostname >/etc/HOSTNAME
 hostname ${hostname%%.*}
 
-echo "$ipaddr $hostname $alias_list" >> /etc/hosts
+if [ -n "$ipaddr" ]; then
+	echo "$ipaddr $hostname $alias_list" >> /etc/hosts
+fi
 EOF
 }
 
@@ -253,7 +462,7 @@ function instance_network_init_defaults {
 	fi
 }
 
-function instance_network_config {
+function instance_network_write_static {
 
 	local ifname ipaddr
 
@@ -275,7 +484,7 @@ function instance_config_report {
 	cat <<-EOF
 	------------------
 	Starting KVM instance $instance_tag
-	Base image:      $instance_image
+	Base image:      $instance_base_image
 	RPMs to install: ${rpm_list:-none}
 	MAC Address:     $instance_macaddr
 	IP Address:      $instance_ipaddr/$instance_ipmask
@@ -303,7 +512,7 @@ function instance_config_write {
 	cat $template | sed \
 		-e "s|@instance_name@|$instance_tag|g" \
 		-e "s|@instance_dir@|$instance_dir|g" \
-		-e "s|@instance_image@|$instance_dir/image|g" \
+		-e "s|@instance_image@|$instance_image|g" \
 		-e "s|@instance_macaddr@|$instance_macaddr|g" \
 		-e "s|@instance_hostname@|$instance_hostname|g" \
 		-e "s|@instance_ipaddr@|$instance_ipaddr|g" \

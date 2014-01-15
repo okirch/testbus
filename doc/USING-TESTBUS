@@ -35,16 +35,20 @@ CONFIGURING IT
 ==============
 
 Currently, the only thing you can (and should) do is to tell testbus
-which image to test with. To begin with, you can grab an openSUSE 13.1
-image from my OBS project (see URL at the top of this file). Store
-it somewhere, and enter the path to it in /etc/sysconfig/testbus, e.g.
-like this:
+which image to test with.
 
-TESTBUS_KVM_IMAGE=/mnt/okir/ISOs/Testbus/openSUSE-13.1-Testbus-Image.x86_64-latest.qcow2
+The easiest approach is to import images with 'testbus-image', for
+instance like this:
+
+	testbus-image import kvm openSUSE-13.1 <url-of-qcow2-image>
+
+This will download the image available from the specified url
+and save it to /var/lib/testbus/image/kvm/openSUSE-13.1.
 
 This information is being used by testbus-run. Note that testbus will
-never modify this image; it will always create a copy of it before using
-it.
+never modify this image; it will always create a copy of it before
+using it.
+
 
 RUNNING TEST CASES
 ==================
@@ -64,11 +68,18 @@ these test suites in parallel on the same control node.
 All you need to do is call "testbus-run" with the name of one of the
 test suites, like this:
 
-	testbus-run rpc
+	testbus-run rpc openSUSE-13.1
 
-This will start instances (eg a KVM guest) as needed.  For your
-convenience, this will assign static IP addresses to guests, and set
-a boiler plate hostname.
+This will start instances (eg a KVM guest) as needed, using the image
+your imported previously. If you omit the image name, testbus-run will
+try to figure out automatically which image to use. If it doesn't find
+any, or more than one, it will complain and exit with an error.
+
+For your convenience, testbus will assign static IP addresses to guests,
+and set a boiler plate hostname when bringing up test nodes. To some
+degree, this can be overridden in the test suite's specification of the
+node to use.
+
 
 The test script itself will output stuff like this:
 
@@ -115,13 +126,22 @@ USEFUL TRICKS
 If you want to debug a test suite, you can do one of two things:
 
  a) Start with a clean slate:
- 	Look at the test suite's *.run script. This is usually pretty simple,
-	and may do something like this:
+ 	Look at the test suite's *.conf file. This is usually pretty simple,
+	specifying a few instances to start. Often without any options at all.
+
+	For instance, if the *.conf file looks like this:
+
+	  instance client
+	  instance server
+
+	you can bring these up manually from the command line:
 
 	  testbus-control start client $image
 	  testbus-control start server $image
 
-	You can just do this manually, then connect to one or both of the guests,
+	where image is the name you gave it when you imported the image.
+
+	Once the instances are up, you can connect to one or both of the guests,
 	and mess around. After you're done, remember to stop these guests
 	using
 
@@ -129,7 +149,7 @@ If you want to debug a test suite, you can do one of two things:
 	  testbus-control stop server
 
  b) Bring back the dead:
- 	When the test suite's *.run script finishes, it will destroy the KVM
+ 	When the testbus-run script finishes, it will destroy the KVM
 	instances it brought up, but will not dispose of the on-disk data.
 	This data can be found below /var/run/testbus.
 

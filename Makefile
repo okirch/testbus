@@ -121,7 +121,8 @@ PROXOBJS= $(addprefix obj/,$(PROXSRCS:.c=.o))
 
 BINTGTS	= $(MASTER) $(CLIENT) $(AGENT) $(PROXY) \
 	  testbus-control-kvm \
-	  testbus-run
+	  testbus-run \
+	  testbus-image
 LIBTGTS	= $(LIBDBORB) $(LIBTESTBUS)
 ALL	= $(LIBTGTS) $(BINTGTS)
 LIBDEPS	= $(LIBDBORB) $(LIBTESTBUS)
@@ -140,7 +141,8 @@ INSTALL_DATADIRS = \
 	/usr/share/testbus/schema \
 	/usr/share/testbus/suites \
 	/var/run/testbus \
-	/var/lib/testbus
+	/var/lib/testbus \
+	/var/lib/testbus/images
 
 all:	$(ALL)
 

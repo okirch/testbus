@@ -83,7 +83,7 @@ function start_instance_from_config {
 	# FIXME: use "testbus-control status" to detect whether the
 	# instance is already active.
 
-	testbus-control "$@" start $instance_name $testbus_local_image
+	testbus-control "$@" start $instance_name $testbus_base_image
 }
 
 ##################################################################
@@ -134,20 +134,48 @@ function stop_from_config {
 
 # TBD: parse options
 
-if [ $# -ne 1 ]; then
-	echo "$program_name: expected test suite argument" >&2
+if [ $# -ne 1 -a $# -ne 2 ]; then
+	cat >&2 <<EOF
+$program_name: bad number of arguments
+Usage:
+  $program_name <testsuite> [<image-name>]
+
+EOF
 	exit 1
 fi
-test_suite=$1; shift
 
-mytmp=`mktemp -d /tmp/testbus-$test_suite.XXXXXX`
-trap "rm -rf $mytmp" 0 1 2 15
+test_suite=$1
+testbus_base_image=$2
+shift 2
 
 method=${TESTBUS_DEPLOYMENT_METHOD:-kvm}
-testbus_local_image=$mytmp/image
-select_image $method $testbus_local_image
 
-find $mytmp -ls
+if [ -z "$testbus_base_image" ]; then
+	for f in /var/lib/testbus/image/$method/*; do
+		if [ -e "$f/current" ]; then
+			if [ -n "$testbus_base_image" ]; then
+				echo "Found more than OS base image for method $method" >&2
+				echo "Please specify the image name explicitly on the command line" >&2
+				exit 1
+			fi
+			testbus_base_image=${f##*/}
+		fi
+	done
+
+	if [ -z "$testbus_base_image" ]; then
+		echo "No OS base image found for method $method" >&2
+		echo "Please import an image using 'testbus-image import'" >&2
+	fi
+fi
+
+case $method in
+kvm)
+	: ;;
+
+*)
+	echo "Deployment method $method currently not supported" >&2
+	exit 1;;
+esac
 
 if [ -f /usr/share/testbus/suites/$test_suite.conf ]; then
 	if [ ! -x /usr/share/testbus/suites/$test_suite ]; then
@@ -168,7 +196,7 @@ if [ -f /usr/share/testbus/suites/$test_suite.conf ]; then
 fi
 
 if [ -x /usr/share/testbus/suites/$test_suite.run ]; then
-	exec /usr/share/testbus/suites/$test_suite.run $testbus_local_image
+	exec /usr/share/testbus/suites/$test_suite.run $testbus_base_image
 fi
 
 echo "Do not know how to run $test_suite: no $test_suite.run or $test_suite.conf file in $TESTBUS_TS_DIR" >&2
