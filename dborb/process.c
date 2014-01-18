@@ -642,8 +642,8 @@ __ni_process_run(ni_process_t *pi)
 		if (chdir("/") < 0)
 			ni_warn("%s: unable to chdir to /: %m", __func__);
 
-		/* Become our own process group */
-		setpgid(0, 0);
+		/* Become leader of our own process group */
+		setsid();
 
 		ni_process_prepare_stdio(pi);
 
