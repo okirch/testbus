@@ -63,8 +63,12 @@ static void
 __ni_testbus_container_unregister(ni_dbus_object_t *object, ni_testbus_container_t *container)
 {
 	if (object && ni_string_eq(object->path, container->dbus_object_path)) {
+		const char *signal_interface = NI_TESTBUS_CONTAINER_INTERFACE;
+
+		if (ni_dbus_object_isa(object, ni_testbus_process_class()))
+			signal_interface = NI_TESTBUS_PROCESS_INTERFACE;
 		ni_dbus_server_send_signal(ni_dbus_object_get_server(object), object,
-				NI_TESTBUS_CONTAINER_INTERFACE,
+				signal_interface,
 				"deleted",
 				0, NULL);
 	}

@@ -10,5 +10,6 @@ extern void		ni_testbus_agent_discard_cached_file(const char *);
 extern void		ni_testbus_agent_process_frob_environ(ni_process_t *);
 
 extern ni_bool_t	ni_testbus_agent_run_command(ni_process_t *pi, const char *master_object_path, ni_testbus_file_array_t *files);
+extern void		ni_testbus_agent_discard_process(const char *);
 
 #endif /* __AGENT_FILES_H__ */

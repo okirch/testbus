@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# Verify that if we delete a process object, the associated process will be
+# killed
+#
+
+. ${0%/*}/functions
+
+testbus_test_begin $0
+
+TESTBUS_HOST=`testbus_claim_host`
+
+testbus_run_command --host $TESTBUS_HOST /bin/true
+
+function run_script_background {
+
+	testbus_run_command --host $TESTBUS_HOST --nowait --send-script - <<-EOF
+	#!/bin/bash
+	sleep 60 | cat - slappadagong
+	EOF
+}
+
+cmdh=`run_script_background`
+if [ -z "$cmdh" ]; then
+	testbus_test_failure "testbus_run_command --nowait did not return a command handle"
+	exit 1
+fi
+
+sleep 1
+if ! ps ax|grep -q slappadagong; then
+	testbus_test_failure "It seems we failed to start the shell script"
+	exit 1
+fi
+
+testbus_call delete $cmdh
+if ps ax|grep slappadagong | grep -v grep; then
+	testbus_test_failure "Deleting the command failed to kill the script"
+	exit 1
+fi
+
+testbus_exit
+

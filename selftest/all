@@ -6,3 +6,7 @@ tty
 nested
 runstress
 scripts
+procdelete
+all
+functions
+syslog

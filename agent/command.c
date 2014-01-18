@@ -66,11 +66,20 @@ failed:
 }
 
 /*
- * Callback function for processes
+ * Handle running processes.
+ *
+ * The ni_process_t object points back at the __ni_testbus_process_context through its
+ * user_data pointer.
  */
 struct __ni_testbus_process_context {
+	struct __ni_testbus_process_context *next;
+	struct __ni_testbus_process_context **prev;
+
 	ni_dbus_server_t *	server;
 	char *			object_path;
+	ni_bool_t		deleted_on_master;
+
+	ni_process_t *		process;
 	ni_testbus_file_array_t *files;
 
 	struct {
@@ -79,14 +88,55 @@ struct __ni_testbus_process_context {
 	} stdout, stderr;
 };
 
+static struct __ni_testbus_process_context *ni_testbus_active_processes;
+
+static void
+__ni_testbus_process_context_link(struct __ni_testbus_process_context **pos, struct __ni_testbus_process_context *ctx)
+{
+	ctx->next = *pos;
+
+	if (ctx->next)
+		ctx->next->prev = &ctx->next;
+
+	ctx->prev = pos;
+	*pos = ctx;
+}
+
+static void
+__ni_testbus_process_context_unlink(struct __ni_testbus_process_context *ctx)
+{
+	if (ctx->prev)
+		*(ctx->prev) = ctx->next;
+	if (ctx->next)
+		ctx->next->prev = ctx->prev;
+	ctx->next = NULL;
+	ctx->prev = NULL;
+}
+
 static struct __ni_testbus_process_context *
-__ni_testbus_process_context_new(const char *master_object_path)
+__ni_testbus_process_context_by_path(const char *object_path)
+{
+	struct __ni_testbus_process_context *ctx;
+
+	for (ctx = ni_testbus_active_processes; ctx; ctx = ctx->next) {
+		if (ni_string_eq(ctx->object_path, object_path))
+			return ctx;
+	}
+
+	return NULL;
+}
+
+static struct __ni_testbus_process_context *
+__ni_testbus_process_context_new(const char *master_object_path, ni_process_t *pi)
 {
 	struct __ni_testbus_process_context *ctx;
 
 	ctx = ni_calloc(1, sizeof(*ctx));
 //	ctx->server = ni_dbus_object_get_server(object);
 	ctx->object_path = ni_strdup(master_object_path);
+	ctx->process = pi;
+
+	__ni_testbus_process_context_link(&ni_testbus_active_processes, ctx);
 	return ctx;
 }
 
@@ -103,6 +153,7 @@ __ni_testbus_process_context_free(struct __ni_testbus_process_context *ctx)
 
 	if (ctx->files)
 		ni_testbus_file_array_free(ctx->files);
+	__ni_testbus_process_context_unlink(ctx);
 	free(ctx);
 }
 
@@ -112,7 +163,8 @@ __ni_testbus_process_notify(const char *master_object_path, ni_process_exit_info
 {
 	ni_dbus_object_t *proc_object;
 
-	proc_object = ni_testbus_client_get_and_refresh_object(master_object_path);
+	if (!(proc_object = ni_testbus_client_get_and_refresh_object(master_object_path)))
+		return;
 
 	if (ctx) {
 		ni_testbus_agent_upload_output(proc_object, "stdout", &ctx->stdout.buffers, ctx->stdout.file);
@@ -136,7 +188,8 @@ __ni_testbus_process_exit_notify(ni_process_t *pi)
 	ni_testbus_agent_monitors_poll();
 	ni_testbus_agent_eventlog_flush();
 
-	__ni_testbus_process_notify(ctx->object_path, &exit_info, ctx);
+	if (!ctx->deleted_on_master)
+		__ni_testbus_process_notify(ctx->object_path, &exit_info, ctx);
 
 	__ni_testbus_process_context_free(ctx);
 	pi->user_data = NULL;
@@ -185,7 +238,7 @@ __ni_testbus_process_run(ni_process_t *pi, const char *master_object_path, ni_te
 	if (ni_process_run(pi) < 0)
 		return FALSE;
 
-	ctx = __ni_testbus_process_context_new(master_object_path);
+	ctx = __ni_testbus_process_context_new(master_object_path, pi);
 
 	if ((f = ni_testbus_file_array_find_by_name(files, "stdout")) != NULL)
 		ctx->stdout.file = ni_testbus_file_get(f);
@@ -217,6 +270,16 @@ ni_testbus_agent_run_command(ni_process_t *pi, const char *master_object_path, n
 void
 ni_testbus_agent_discard_process(const char *object_path)
 {
-	/* TBD: look up the process by the object path; if it's still running,
+	struct __ni_testbus_process_context *ctx;
+
+	/* look up the process by the object path; if it's still running,
 	 * kill it */
+	if (!(ctx = __ni_testbus_process_context_by_path(object_path)))
+		return;
+
+	ctx->deleted_on_master = TRUE;
+	if (ctx->process && ctx->process->pid) {
+		ni_debug_testbus("Process %s was deleted, killing local process (pid=%u)", object_path, ctx->process->pid);
+		ni_process_kill(ctx->process);
+	}
 }

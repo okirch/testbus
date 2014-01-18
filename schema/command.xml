@@ -16,8 +16,10 @@
 <service name="process" interface="org.opensuse.Testbus.Process" object-class="process">
   <define name="properties" class="dict">
     <argv class="array" element-type="string" />
-    <!-- All other properties, such as environment, files, etc,
-      -- are retrieved via the respective Container interfaces -->
+    <!--
+         All other properties, such as environment, files, etc,
+         are retrieved via the respective Container interfaces
+      -->
   </define>
 
   <method name="setExitInfo">
@@ -44,4 +46,6 @@
       </status>
     </arguments>
   </signal>
+
+  <signal name="deleted" />
 </service>

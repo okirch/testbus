@@ -423,7 +423,7 @@ ni_testbus_agent_init_monitors(ni_dbus_object_t *host_object)
  * Process signals from master
  */
 static void
-__ni_testbus_agent_process_host_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+__ni_testbus_agent_handle_host_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
 {
 	const char *signal_name = dbus_message_get_member(msg);
 	ni_dbus_variant_t argv[2];
@@ -487,7 +487,7 @@ out:
 }
 
 static void
-__ni_testbus_agent_process_container_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+__ni_testbus_agent_handle_container_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
 {
 	const char *signal_name = dbus_message_get_member(msg);
 	const char *object_path = dbus_message_get_path(msg);
@@ -501,7 +501,7 @@ __ni_testbus_agent_process_container_signal(ni_dbus_connection_t *connection, ni
 }
 
 static void
-__ni_testbus_agent_process_file_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+__ni_testbus_agent_handle_file_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
 {
 	const char *signal_name = dbus_message_get_member(msg);
 	const char *object_path = dbus_message_get_path(msg);
@@ -516,27 +516,49 @@ __ni_testbus_agent_process_file_signal(ni_dbus_connection_t *connection, ni_dbus
 }
 
 static void
+__ni_testbus_agent_handle_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t *msg, void *user_data)
+{
+	const char *signal_name = dbus_message_get_member(msg);
+	const char *object_path = dbus_message_get_path(msg);
+
+	if (!signal_name)
+		return;
+
+	if (ni_string_eq(signal_name, "deleted")) {
+		ni_debug_testbus("received signal %s from %s", signal_name, object_path);
+		ni_testbus_agent_discard_process(object_path);
+	}
+}
+
+static void
 ni_testbus_agent_setup_signals(ni_dbus_client_t *client, ni_dbus_object_t *host_object)
 {
 	ni_dbus_client_add_signal_handler(client,
 			NI_TESTBUS_DBUS_BUS_NAME,		/* sender */
 			host_object->path,			/* path */
 			NI_TESTBUS_HOST_INTERFACE,		/* interface */
-			__ni_testbus_agent_process_host_signal,
+			__ni_testbus_agent_handle_host_signal,
 			NULL);
 
 	ni_dbus_client_add_signal_handler(client,
 			NI_TESTBUS_DBUS_BUS_NAME,		/* sender */
 			NULL,					/* path */
 			NI_TESTBUS_CONTAINER_INTERFACE,		/* interface */
-			__ni_testbus_agent_process_container_signal,
+			__ni_testbus_agent_handle_container_signal,
 			NULL);
 
 	ni_dbus_client_add_signal_handler(client,
 			NI_TESTBUS_DBUS_BUS_NAME,		/* sender */
 			NULL,					/* path */
 			NI_TESTBUS_TMPFILE_INTERFACE,		/* interface */
-			__ni_testbus_agent_process_file_signal,
+			__ni_testbus_agent_handle_file_signal,
+			NULL);
+
+	ni_dbus_client_add_signal_handler(client,
+			NI_TESTBUS_DBUS_BUS_NAME,		/* sender */
+			NULL,					/* path */
+			NI_TESTBUS_PROCESS_INTERFACE,		/* interface */
+			__ni_testbus_agent_handle_process_signal,
 			NULL);
 }
 
