@@ -2587,7 +2587,10 @@ ni_print_suspect(const char *str, size_t len)
 		case '+': case '/':
 		case '~': case '=':
 		case '%': case '@':
-		case ' ':
+		case '(': case ')':
+		case '[': case ']':
+		case '{': case '}':
+		case ' ': case '*':
 			cnt = 1;
 			break;
 		default:
