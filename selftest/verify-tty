@@ -23,7 +23,7 @@ case $result in
 /dev/*)
 	echo "Unsuspected tty name $result, but still okay";;
 *)
-	testbus_test_failure "Bad response from tty(1)";;
+	testbus_test_failure "Bad response from tty(1): $result";;
 esac
 
 # Currently, we do not handle stdin attachment in the terminal case. However,
