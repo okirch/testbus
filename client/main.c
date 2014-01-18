@@ -1672,11 +1672,33 @@ show_events(const ni_dbus_object_t *host_object, unsigned int *seq_seen)
 				event.class,
 				event.source,
 				event.type);
-		if (event.data)
-			printf(" %s\n", ni_print_suspect(ni_buffer_head(event.data), ni_buffer_count(event.data)));
-		else
-			printf(" (no data)");
-		printf("\n");
+
+		if (event.data == NULL) {
+			printf(" (no data)\n");
+		} else {
+			ni_bool_t first_line = TRUE;
+			unsigned int len;
+
+			while ((len = ni_buffer_count(event.data)) != 0) {
+				char *head, *eol;
+
+				head = ni_buffer_head(event.data);
+				eol = memchr(head, '\n', len);
+				if (eol) {
+					len = eol - head;
+					ni_buffer_pull_head(event.data, len + 1);
+				}
+				if (len) {
+					if (first_line)
+						printf("%s\n", ni_print_suspect(head, len));
+					else
+						printf("%*.*s%s\n",
+								60, 60, "",
+								ni_print_suspect(head, len));
+					first_line = FALSE;
+				}
+			}
+		}
 
 		if (seq_seen && *seq_seen < event.sequence)
 			*seq_seen = event.sequence;
