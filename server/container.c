@@ -104,9 +104,17 @@ ni_testbus_container_put(ni_testbus_container_t *container)
 	}
 
 	if (container->owner != NULL) {
+		/*
+		 * This will actually happen a lot, and is perfectly normal
+		 * given that the client will often destroy the container object,
+		 * rather than doint a depth first deletion, recursing through
+		 * the tree.
+		 */
+#if 0
 		ni_warn("destroying container object %s%u still owned by other container %s%u",
 				container->ops->dbus_name_prefix, container->id,
 				container->owner->ops->dbus_name_prefix, container->owner->id);
+#endif
 		container->owner = NULL;
 	}
 
