@@ -2519,6 +2519,37 @@ ni_check_domain_name(const char *ptr, size_t len, int dots)
 	return dots ? FALSE : TRUE;
 }
 
+static const ni_bool_t *
+__ni_printable_table(int how)
+{
+	static ni_bool_t initialized = FALSE;
+	static ni_bool_t printable_all[256];
+	static ni_bool_t printable_nocontrol[256];
+	static ni_bool_t printable_shell[256];
+	static ni_bool_t *printable[__NI_PRINTABLE_MAX];
+
+	if (!initialized) {
+		unsigned int c;
+
+		for (c = 0; c < 256; ++c) {
+			printable_all[c] = TRUE;
+			printable_nocontrol[c] = !iscntrl(c);
+
+			if (isalnum(c) || strchr(".:-_+/~=%@ \t", c) != NULL)
+				printable_shell[c] = TRUE;
+		}
+
+		printable[NI_PRINTABLE_ALL] = printable_all;
+		printable[NI_PRINTABLE_NOCONTROL] = printable_nocontrol;
+		printable[NI_PRINTABLE_SHELL] = printable_shell;
+		initialized = TRUE;
+	}
+
+	if (how < __NI_PRINTABLE_MAX)
+		return printable[how];
+	return NULL;
+}
+
 ni_bool_t
 ni_check_pathname(const char *path, size_t len)
 {
@@ -2537,7 +2568,7 @@ ni_check_pathname(const char *path, size_t len)
 			case '[': case ']':
 			case '=': case ' ':
 			case '/': case '\\':
-			break;
+				break;
 			default:
 				if(!isalnum(*ptr))
 					return FALSE;
@@ -2559,11 +2590,11 @@ ni_check_printable(const char *str, size_t len)
 	/* printable character including simple space and \t tab */
 	for ( ; *ptr && len-- > 0; ++ptr) {
 		switch (*ptr) {
-			case ' ': case '\t':
+		case ' ': case '\t':
 			break;
-			default:
-				if(!isgraph(*ptr))
-					return FALSE;
+		default:
+			if(!isgraph(*ptr))
+				return FALSE;
 			break;
 		}
 	}
@@ -2572,34 +2603,26 @@ ni_check_printable(const char *str, size_t len)
 }
 
 const char *
-ni_print_suspect(const char *str, size_t len)
+ni_print_suspect(const char *str, size_t len, int how)
 {
 	static char buf[256] = {'\0'};
+	const ni_bool_t *printable;
 	unsigned char *ptr;
 	size_t pos, end, cnt;
 
+	if (!(printable = __ni_printable_table(how)))
+		return str;
+
 	end = sizeof(buf) - 1;
 	ptr = (unsigned char *)str;
-	for ( pos = 0; len > 0; --len, ++ptr) {
-		switch (*ptr) {
-		case '.': case ':':
-		case '-': case '_':
-		case '+': case '/':
-		case '~': case '=':
-		case '%': case '@':
-		case '(': case ')':
-		case '[': case ']':
-		case '{': case '}':
-		case ' ': case '*':
+	for (pos = 0; len > 0; --len, ++ptr) {
+		unsigned char c = *ptr;
+
+		if (printable[c])
 			cnt = 1;
-			break;
-		default:
-			if (isalnum(*ptr))
-				cnt = 1;
-			else
-				cnt = 4;
-			break;
-		}
+		else
+			cnt = 4;
+
 		if (pos + cnt > end)
 			break;
 

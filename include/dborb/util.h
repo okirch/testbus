@@ -295,10 +295,17 @@ extern void		ni_hashctx_puts(ni_hashctx_t *, const char *);
 /*
  * Sanity check functions
  */
+enum {
+	NI_PRINTABLE_ALL = 0,
+	NI_PRINTABLE_NOCONTROL,
+	NI_PRINTABLE_SHELL,
+
+	__NI_PRINTABLE_MAX
+};
 extern ni_bool_t	ni_check_domain_name(const char *, size_t, int);
 extern ni_bool_t	ni_check_pathname(const char *, size_t);
 extern ni_bool_t	ni_check_printable(const char *, size_t);
-extern const char *	ni_print_suspect(const char *, size_t);
+extern const char *	ni_print_suspect(const char *, size_t, int how);
 
 /*
  * alloc helpers
