@@ -11,12 +11,18 @@ Agent:
 	on shutdown, call removeHost to remove ourselves (except when we were
 	the ones to trigger the reboot)
 
+	tap into ni_error and make sure we forward these to the master's error log
+
 Server:
+	Implement Process.getExitInfo()
+
 	Remove pid file on exit
 	Fix /org/openSUSE/Testbus/Host/Host* naming
 
 	When a host capability is added, send a signal
 	When a host comes back, send a signal
+
+	Purge syslog events after some time
 
 Client:
 	make sure we can do the same as run-command using individual
