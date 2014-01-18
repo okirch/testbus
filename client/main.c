@@ -1640,7 +1640,7 @@ do_run_command(int argc, char **argv)
  * Retrieve eventlog
  */
 static void
-show_events(const ni_dbus_object_t *host_object, unsigned int *seq_seen)
+show_events(const ni_dbus_object_t *host_object, unsigned int *seq_seen, int output_mode)
 {
 	const ni_dbus_variant_t *var;
 	unsigned int i;
@@ -1687,14 +1687,14 @@ show_events(const ni_dbus_object_t *host_object, unsigned int *seq_seen)
 				if (eol) {
 					len = eol - head;
 					ni_buffer_pull_head(event.data, len + 1);
+				} else {
+					ni_buffer_pull_head(event.data, len);
 				}
 				if (len) {
-					if (first_line)
-						printf("%s\n", ni_print_suspect(head, len));
-					else
-						printf("%*.*s%s\n",
-								60, 60, "",
-								ni_print_suspect(head, len));
+					if (!first_line)
+						printf("%*.*s", 60, 60, "");
+
+					printf("%s\n", ni_print_suspect(head, len, output_mode));
 					first_line = FALSE;
 				}
 			}
@@ -1710,14 +1710,16 @@ show_events(const ni_dbus_object_t *host_object, unsigned int *seq_seen)
 static int
 do_get_events(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_PURGE, };
+	enum  { OPT_HELP, OPT_PURGE, OPT_SAFE_OUTPUT };
 	static struct option local_options[] = {
 		{ "help", no_argument, NULL, OPT_HELP },
 		{ "purge", no_argument, NULL, OPT_PURGE },
+		{ "safe-output", no_argument, NULL, OPT_SAFE_OUTPUT },
 		{ NULL }
 	};
 	ni_dbus_object_t *host_objects[argc];
 	ni_bool_t opt_purge = FALSE;
+	int opt_output_mode = NI_PRINTABLE_NOCONTROL;
 	int c, i, nhosts = 0;
 
 	optind = 1;
@@ -1739,6 +1741,10 @@ do_get_events(int argc, char **argv)
 		case OPT_PURGE:
 			opt_purge = TRUE;
 			break;
+
+		case OPT_SAFE_OUTPUT:
+			opt_output_mode = NI_PRINTABLE_SHELL;
+			break;
 		}
 	}
 
@@ -1757,7 +1763,7 @@ do_get_events(int argc, char **argv)
 		for (object = hostlist->children; object; object = object->next) {
 			unsigned int seq_seen;
 
-			show_events(object, &seq_seen);
+			show_events(object, &seq_seen, opt_output_mode);
 			if (opt_purge && seq_seen)
 				ni_testbus_client_eventlog_purge(object, seq_seen);
 		}
@@ -1780,7 +1786,7 @@ do_get_events(int argc, char **argv)
 	for (i = 0; i < nhosts; ++i) {
 		unsigned int seq_seen;
 
-		show_events(host_objects[i], &seq_seen);
+		show_events(host_objects[i], &seq_seen, opt_output_mode);
 		if (opt_purge && seq_seen)
 			ni_testbus_client_eventlog_purge(host_objects[i], seq_seen);
 	}
