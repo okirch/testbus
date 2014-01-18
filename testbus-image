@@ -137,6 +137,11 @@ function image_clone {
 	image_hash=`sha256sum $config_tmpl | cut -d' ' -f1`
 	image_silver=$image_basedir/clones/$image_hash
 
+	if [ -e $image_silver -a $image_gold -nt $image_silver ]; then
+		echo "Silver image $image_silver seems to be outdated" >&2
+		rm -f $image_silver
+	fi
+
 	if [ ! -e $image_silver ]; then
 		mkdir -p $image_basedir/clones
 		echo "Silver image $image_silver does not exist, please stand by while I generate it" >&2
