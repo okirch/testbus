@@ -1249,7 +1249,7 @@ ni_dbus_dict_add(ni_dbus_variant_t *dict, const char *key)
 
 	__ni_dbus_array_grow(dict, sizeof(ni_dbus_dict_entry_t), 1);
 	dst = &dict->dict_array_value[dict->array.len++];
-	dst->key = key;
+	dst->key = xstrdup(key);
 
 	return &dst->datum;
 }

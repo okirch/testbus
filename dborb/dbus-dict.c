@@ -78,7 +78,8 @@ ni_dbus_message_get_next_dict_entry(DBusMessageIter *iter_dict, struct ni_dbus_d
 	if (dbus_message_iter_get_arg_type(&iter_dict_entry) != DBUS_TYPE_STRING)
 		goto error;
 	dbus_message_iter_get_basic(&iter_dict_entry, &key);
-	entry->key = key;
+
+	entry->key = xstrdup(key);
 
 	if (!dbus_message_iter_next(&iter_dict_entry))
 		goto error;
