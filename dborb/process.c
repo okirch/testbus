@@ -226,12 +226,12 @@ ni_process_buffer_attach_child(struct ni_process_buffer *pb, int destfd)
 static ni_bool_t
 ni_process_buffer_attach_parent(struct ni_process_buffer *pb, ni_process_t *pi)
 {
-	if (pb->active && pb->master_fd < 0) {
-		ni_warn("%s: cannot attach i/o buffer - not open", __func__);
-		return FALSE;
-	}
-
-	if (pb->active) {
+	/* When stdin is fed from a file, the process buffer will be marked "active",
+	 * but it will not have a master_fd - the input is read directly from a file
+	 * attached to the child's fd0.
+	 * The open file descriptor can be found in pb->slave_fd.
+	 */
+	if (pb->active && pb->master_fd >= 0) {
 		if (pb == &pi->stdin)
 			pb->socket = __ni_process_connect_stdin(pi, pb->master_fd);
 		else if (pb == &pi->stdout)
