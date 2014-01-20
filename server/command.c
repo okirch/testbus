@@ -217,8 +217,10 @@ ni_testbus_process_destroy(ni_testbus_container_t *container)
 		proc->command = NULL;
 	}
 
-	if (proc->process)
+	if (proc->process) {
 		ni_process_free(proc->process);
+		proc->process = NULL;
+	}
 }
 
 void
