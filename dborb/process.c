@@ -143,9 +143,10 @@ ni_shellcmd_add_arg(ni_shellcmd_t *proc, const char *arg)
  * Process handling code
  */
 void
-ni_process_buffer_init(struct ni_process_buffer *pb, ni_process_t *pi)
+ni_process_buffer_init(struct ni_process_buffer *pb, const char *nick, ni_process_t *pi)
 {
 	memset(pb, 0, sizeof(*pb));
+	pb->nick = nick;
 	pb->low_water_mark = 4096;
 	pb->master_fd = -1;
 	pb->slave_fd = -1;
@@ -270,7 +271,7 @@ ni_process_buffer_destroy(struct ni_process_buffer *pb)
 		pb->slave_fd = -1;
 	}
 
-	ni_process_buffer_init(pb, NULL);
+	ni_process_buffer_init(pb, NULL, NULL);
 }
 
 ni_process_t *
@@ -280,9 +281,9 @@ ni_process_new(ni_bool_t use_default_env)
 
 	pi = xcalloc(1, sizeof(*pi));
 
-	ni_process_buffer_init(&pi->stdin, pi);
-	ni_process_buffer_init(&pi->stdout, pi);
-	ni_process_buffer_init(&pi->stderr, pi);
+	ni_process_buffer_init(&pi->stdin,  "stdin",  pi);
+	ni_process_buffer_init(&pi->stdout, "stdout", pi);
+	ni_process_buffer_init(&pi->stderr, "stderr", pi);
 
 	if (use_default_env)
 		ni_string_array_copy(&pi->environ, __ni_default_environment());

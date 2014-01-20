@@ -24,6 +24,8 @@ struct ni_shellcmd {
 
 typedef struct ni_process_buffer ni_process_buffer_t;
 struct ni_process_buffer {
+	const char *		nick;
+
 	ni_bool_t		active;
 	int			master_fd, slave_fd;
 	ni_socket_t *		socket;
