@@ -12,10 +12,13 @@ testbus_test_begin $0
 
 TESTBUS_HOST=`testbus_claim_host`
 
-testbus_run_command --host $TESTBUS_HOST /bin/true
+if ! testbus_run_command --host $TESTBUS_HOST /bin/true; then
+	testbus_test_failure "client does not propagate remote command's exit status" >&2
+	exit 1
+fi
 
 if testbus_run_command --host $TESTBUS_HOST /bin/false; then
-	echo "client does not propagate remote command's exit status" >&2
+	testbus_test_failure "client does not propagate remote command's exit status" >&2
 	exit 1
 fi
 
