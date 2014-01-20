@@ -347,7 +347,11 @@ ni_process_attach_input_path(ni_process_t *pi, const char *filename)
 {
 	int fd;
 
-	ni_process_buffer_destroy(&pi->stdin);
+	if (pi->stdin.slave_fd >= 0) {
+		close(pi->stdin.slave_fd);
+		pi->stdin.slave_fd = -1;
+	}
+
 	fd = open(filename, O_RDONLY);
 	if (fd < 0) {
 		ni_error("cannot open \"%s\": %m", filename);
