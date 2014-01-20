@@ -1462,6 +1462,52 @@ do_create_command(int argc, char **argv)
 }
 
 /*
+ * Common code for waiting for a command and displaying its output
+ */
+static int
+__do_wait_command(ni_dbus_object_t *proc_object, unsigned int timeout_ms, ni_bool_t safe_output)
+{
+	ni_process_exit_info_t exit_info;
+
+	if (!ni_testbus_wait_for_process(proc_object, timeout_ms, &exit_info)) {
+		ni_error("failed to wait for process to complete");
+		return 1;
+	}
+
+	if (exit_info.stdout_bytes)
+		flush_process_file(proc_object, "stdout", stdout, safe_output);
+	if (exit_info.stderr_bytes)
+		flush_process_file(proc_object, "stderr", stderr, safe_output);
+
+	ni_testbus_client_delete(proc_object);
+
+	switch (exit_info.how) {
+	case NI_PROCESS_NONSTARTER:
+		ni_error("failed to start process");
+		return 1;
+
+	case NI_PROCESS_CRASHED:
+		ni_error("process crashed with signal %u%s",
+				exit_info.crash.signal,
+				exit_info.crash.core_dumped? " (core dumped)" : "");
+		return 1;
+
+	case NI_PROCESS_EXITED:
+		return exit_info.exit.code;
+
+	case NI_PROCESS_TIMED_OUT:
+		ni_error("timed out waiting for process to complete");
+		return 1;
+
+	default:
+		ni_error("process disappeared into Nirvana");
+		return 1;
+	}
+
+	return 0;
+}
+
+/*
  * Run a command on a given host, block and wait for the result
  */
 static int
@@ -1489,8 +1535,7 @@ do_run_command(int argc, char **argv)
 	ni_bool_t opt_safe_output = TRUE;
 	ni_bool_t opt_wait_for_process = TRUE;
 	long opt_timeout = -1;
-	ni_process_exit_info_t exit_info;
-	int c;
+	int c, rv;
 
 	optind = 1;
 	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
@@ -1591,49 +1636,10 @@ do_run_command(int argc, char **argv)
 		return 0;
 	}
 
-	/* The above should return an object handle for the process, and
-	 * register a waitq entry that will catch the processExit signals
-	 * emitted by the master.
-	 *
-	 * Wait for the command to complete, and process its exit information
-	 */
-	if (!ni_testbus_wait_for_process(proc_object, opt_timeout, &exit_info)) {
-		ni_error("failed to wait for process to complete");
-		return 1;
-	}
-
-	if (exit_info.stdout_bytes)
-		flush_process_file(proc_object, "stdout", stdout, opt_safe_output);
-	if (exit_info.stderr_bytes)
-		flush_process_file(proc_object, "stderr", stderr, opt_safe_output);
-
-	ni_testbus_client_delete(proc_object);
+	rv = __do_wait_command(proc_object, opt_timeout, opt_safe_output);
 	ni_testbus_client_delete(cmd_object);
 
-	switch (exit_info.how) {
-	case NI_PROCESS_NONSTARTER:
-		ni_error("failed to start process");
-		return 1;
-
-	case NI_PROCESS_CRASHED:
-		ni_error("process crashed with signal %u%s",
-				exit_info.crash.signal,
-				exit_info.crash.core_dumped? " (core dumped)" : "");
-		return 1;
-
-	case NI_PROCESS_EXITED:
-		return exit_info.exit.code;
-
-	case NI_PROCESS_TIMED_OUT:
-		ni_error("timed out waiting for process to complete");
-		return 1;
-
-	default:
-		ni_error("process disappeared into Nirvana");
-		return 1;
-	}
-
-	return 0;
+	return rv;
 }
 
 /*
@@ -1651,7 +1657,6 @@ do_wait_command(int argc, char **argv)
 	ni_dbus_object_t *proc_object;
 	ni_bool_t opt_safe_output = TRUE;
 	long opt_timeout = -1;
-	ni_process_exit_info_t exit_info;
 	int c;
 
 	optind = 1;
@@ -1692,42 +1697,7 @@ do_wait_command(int argc, char **argv)
 	if (!proc_object)
 		return 1;
 
-	if (!ni_testbus_wait_for_process(proc_object, opt_timeout, &exit_info)) {
-		ni_error("failed to wait for process to complete");
-		return 1;
-	}
-
-	if (exit_info.stdout_bytes)
-		flush_process_file(proc_object, "stdout", stdout, opt_safe_output);
-	if (exit_info.stderr_bytes)
-		flush_process_file(proc_object, "stderr", stderr, opt_safe_output);
-
-	ni_testbus_client_delete(proc_object);
-
-	switch (exit_info.how) {
-	case NI_PROCESS_NONSTARTER:
-		ni_error("failed to start process");
-		return 1;
-
-	case NI_PROCESS_CRASHED:
-		ni_error("process crashed with signal %u%s",
-				exit_info.crash.signal,
-				exit_info.crash.core_dumped? " (core dumped)" : "");
-		return 1;
-
-	case NI_PROCESS_EXITED:
-		return exit_info.exit.code;
-
-	case NI_PROCESS_TIMED_OUT:
-		ni_error("timed out waiting for process to complete");
-		return 1;
-
-	default:
-		ni_error("process disappeared into Nirvana");
-		return 1;
-	}
-
-	return 0;
+	return __do_wait_command(proc_object, opt_timeout, opt_safe_output);
 }
 
 /*
