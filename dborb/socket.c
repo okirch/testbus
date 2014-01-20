@@ -237,13 +237,6 @@ ni_socket_wait(long timeout)
 			goto done_with_this_socket;
 		}
 
-		if (pfd[i].revents & POLLHUP) {
-			if (sock->handle_hangup)
-				sock->handle_hangup(sock);
-			if (sock->__fd < 0)
-				goto done_with_this_socket;
-		}
-
 		if (pfd[i].revents & POLLIN) {
 			if (sock->receive == NULL) {
 				ni_error("socket %d has no receive callback", sock->__fd);
@@ -260,6 +253,13 @@ ni_socket_wait(long timeout)
 			} else {
 				sock->transmit(sock);
 			}
+		}
+
+		if (pfd[i].revents & POLLHUP) {
+			if (sock->handle_hangup)
+				sock->handle_hangup(sock);
+			if (sock->__fd < 0)
+				goto done_with_this_socket;
 		}
 
 done_with_this_socket:
