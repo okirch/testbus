@@ -1362,7 +1362,7 @@ __ni_testbus_process_signal(ni_dbus_connection_t *connection, ni_dbus_message_t 
 				wq = ni_testbus_waitq_new(object_path);
 				ni_testbus_waitq_insert(ni_testbus_spurious_waitq, wq);
 			} else {
-				ni_warn("spurious signal %s.%s()", object_path, signal_name);
+				ni_debug_testbus("received spurious signal %s.%s()", object_path, signal_name);
 			}
 		} else if (wq->done) {
 			ni_warn("duplicate signal %s.%s()", object_path, signal_name);
