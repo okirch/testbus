@@ -343,7 +343,7 @@ ni_process_capture_stderr(ni_process_t *pi)
 }
 
 ni_bool_t
-ni_process_attach_input_path(ni_process_t *pi, const char *filename)
+ni_process_attach_input_regular_file(ni_process_t *pi, const char *filename)
 {
 	int fd;
 

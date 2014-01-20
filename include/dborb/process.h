@@ -111,7 +111,7 @@ extern void			ni_process_reap_children(void);
 
 extern void			ni_process_capture_stdout(ni_process_t *);
 extern void			ni_process_capture_stderr(ni_process_t *);
-extern ni_bool_t		ni_process_attach_input_path(ni_process_t *, const char *filename);
+extern ni_bool_t		ni_process_attach_input_regular_file(ni_process_t *, const char *filename);
 
 static inline ni_shellcmd_t *
 ni_shellcmd_hold(ni_shellcmd_t *proc)
