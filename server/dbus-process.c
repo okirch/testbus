@@ -74,13 +74,13 @@ __ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_
 	if ((file = ni_testbus_container_get_file_by_name(&proc->context, "stderr")) != NULL)
 		exit_info->stderr_bytes = file->size;
 
-#ifdef notyet
-	ni_process_set_exit_info(proc->process, exit_info);
-#endif
-
-	ni_testbus_process_exit_info_serialize(exit_info, &dict);
+	/* Save the exit info */
+	if (proc->process)
+		ni_process_set_exit_info(proc->process, exit_info);
+	else ni_warn("%s: proc %s has no process object", __func__, object->path);
 
 	/* Now just re-broadcast the exit_info to everyone who is interested */
+	ni_testbus_process_exit_info_serialize(exit_info, &dict);
 	ni_dbus_server_send_signal(ni_dbus_object_get_server(object), object,
 			NI_TESTBUS_PROCESS_INTERFACE,
 			"processExited",
@@ -102,9 +102,42 @@ __ni_Testbus_Process_setExitInfo_ex(ni_dbus_object_t *object, const ni_dbus_meth
 
 NI_TESTBUS_EXT_METHOD_BINDING(Process, setExitInfo);
 
+/*
+ * Helper function to get/set the exit-info property
+ */
+static dbus_bool_t
+__ni_testbus_process_get_exit_info(const ni_dbus_object_t *object, const ni_dbus_property_t *property, ni_dbus_variant_t *result, DBusError *error)
+{
+	ni_testbus_process_t *proc;
+
+	if (!(proc = ni_testbus_process_unwrap(object, error)))
+		return FALSE;
+
+	if (!proc->process || proc->process->exit_info.how == -1)
+		return ni_dbus_error_property_not_present(error, object->path, property->name);
+
+	return ni_testbus_process_exit_info_serialize(&proc->process->exit_info, result);
+}
+
+static dbus_bool_t
+__ni_testbus_process_set_exit_info(ni_dbus_object_t *object, const ni_dbus_property_t *property, const ni_dbus_variant_t *value, DBusError *error)
+{
+	ni_testbus_process_t *proc;
+
+	if (!(proc = ni_testbus_process_unwrap(object, error)))
+		return FALSE;
+
+	dbus_set_error(error, DBUS_ERROR_FAILED, "cannot set property %s - not supported", property->name);
+	return FALSE;
+}
 
 static ni_dbus_property_t       __ni_Testbus_Process_properties[] = {
 	//NI_DBUS_GENERIC_STRING_PROPERTY(testbus_command, name, name, RO),
+	{
+		.name = "exit-info",
+		.signature = NI_DBUS_DICT_SIGNATURE,
+		__NI_DBUS_PROPERTY_RO(__ni_testbus_process, exit_info),
+	},
 	{ NULL }
 };
 

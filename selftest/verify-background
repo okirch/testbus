@@ -1,0 +1,72 @@
+#!/bin/bash
+#
+# Very simple test to verify that the basic functionality works
+#
+# For this to work, you need to run both master and agent on your local
+# host.
+#
+
+. ${0%/*}/functions
+
+testbus_group_begin $0
+
+TESTBUS_HOST=`testbus_claim_host`
+
+testbus_test_begin just-run
+testbus_run_command --host $TESTBUS_HOST /bin/true
+
+##################################################################
+testbus_test_begin async-signaling
+
+testbus_trace "Test background execution and waiting"
+testbus_trace "In this test case, the client calls wait-command while the command is still running"
+testbus_trace "The processExited signal will arrive while we're in wait-command"
+testbus_trace "::::"
+
+cmdh=`testbus_run_command_background --host $TESTBUS_HOST /bin/sleep 5`
+echo "Command handle is $cmdh"
+
+if testbus_wait_command --timeout 10 $cmdh; then
+	testbus_test_success
+else
+	testbus_test_failure "wait-command returned error"
+fi
+
+##################################################################
+testbus_test_begin comeback-later
+
+testbus_trace "Test background execution and waiting"
+testbus_trace "In this test case, the client calls wait-command after the command has exited"
+testbus_trace "We won't receive a processExited signal, but we should still be able to retrieve the exit-info"
+testbus_trace "::::"
+
+cmdh=`testbus_run_command_background --host $TESTBUS_HOST /bin/sleep 2`
+echo "Command handle is $cmdh"
+
+echo "Idling until the command has exited"
+sleep 3
+
+echo "Now collecting the exit info"
+if testbus_wait_command --timeout 10 $cmdh; then
+	testbus_test_success
+else
+	testbus_test_failure "wait-command returned error"
+fi
+
+##################################################################
+testbus_test_begin status-propagation
+
+testbus_trace "Make sure we properly propagate exit status for backgrounded functions"
+testbus_trace "::::"
+
+cmdh=`testbus_run_command_background --host $TESTBUS_HOST /bin/false`
+
+if ! testbus_wait_command --timeout 10 $cmdh; then
+	testbus_test_success
+else
+	testbus_test_failure "wait-command should have returned FALSE"
+fi
+
+testbus_group_finish
+
+testbus_exit

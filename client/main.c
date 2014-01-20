@@ -1637,6 +1637,100 @@ do_run_command(int argc, char **argv)
 }
 
 /*
+ * Wait for a given command to complete
+ */
+static int
+do_wait_command(int argc, char **argv)
+{
+	enum  { OPT_HELP, OPT_TIMEOUT };
+	static struct option local_options[] = {
+		{ "timeout", required_argument, NULL, OPT_TIMEOUT },
+		{ "help", no_argument, NULL, OPT_HELP },
+		{ NULL }
+	};
+	ni_dbus_object_t *proc_object;
+	ni_bool_t opt_safe_output = TRUE;
+	long opt_timeout = -1;
+	ni_process_exit_info_t exit_info;
+	int c;
+
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
+		switch (c) {
+		default:
+		case OPT_HELP:
+		usage:
+			fprintf(stderr,
+				"testbus [options] wait-command [options] <command-path>\n"
+				"\nSupported options:\n"
+				"  --timeout <count>\n"
+				"      If the command is not done yet, wait for up to <count>\n"
+				"  --help\n"
+				"      Show this help text.\n"
+				);
+			return 1;
+
+		case OPT_TIMEOUT:
+			if (ni_parse_long(optarg, &opt_timeout, 10) < 0) {
+				ni_error("could not parse timeout value");
+				return 1;
+			}
+			if (opt_timeout < 0) {
+				ni_warn("ignoring negative timeout value");
+				opt_timeout = -1;
+			} else {
+				opt_timeout *= 1000;
+			}
+			break;
+		}
+	}
+
+	if (optind != argc - 1)
+		goto usage;
+
+	proc_object = ni_testbus_client_get_object(argv[optind]);
+	if (!proc_object)
+		return 1;
+
+	if (!ni_testbus_wait_for_process(proc_object, opt_timeout, &exit_info)) {
+		ni_error("failed to wait for process to complete");
+		return 1;
+	}
+
+	if (exit_info.stdout_bytes)
+		flush_process_file(proc_object, "stdout", stdout, opt_safe_output);
+	if (exit_info.stderr_bytes)
+		flush_process_file(proc_object, "stderr", stderr, opt_safe_output);
+
+	ni_testbus_client_delete(proc_object);
+
+	switch (exit_info.how) {
+	case NI_PROCESS_NONSTARTER:
+		ni_error("failed to start process");
+		return 1;
+
+	case NI_PROCESS_CRASHED:
+		ni_error("process crashed with signal %u%s",
+				exit_info.crash.signal,
+				exit_info.crash.core_dumped? " (core dumped)" : "");
+		return 1;
+
+	case NI_PROCESS_EXITED:
+		return exit_info.exit.code;
+
+	case NI_PROCESS_TIMED_OUT:
+		ni_error("timed out waiting for process to complete");
+		return 1;
+
+	default:
+		ni_error("process disappeared into Nirvana");
+		return 1;
+	}
+
+	return 0;
+}
+
+/*
  * Retrieve eventlog
  */
 static void
@@ -1837,6 +1931,7 @@ static struct client_command	client_command_table[] = {
 	{ "claim-host",		do_claim_host,		"Claim a host for a test/container"		},
 	{ "create-command",	do_create_command,	"Create command container"			},
 	{ "run-command",	do_run_command,		"Run command/script on one or more hosts"	},
+	{ "wait-command",	do_wait_command,	"Wait for backgrounded command to complete"	},
 	{ "setenv",		do_setenv,		"Set environment variable in container"		},
 	{ "getenv",		do_getenv,		"Get container variable"			},
 	{ "get-events",		do_get_events,		"Get the event log"				},

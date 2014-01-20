@@ -427,6 +427,23 @@ function testbus_run_command {
 	testbus_call run-command --context $th "$@"
 }
 
+function testbus_run_command_background {
+
+	local th
+
+	testbus_trace "run background command $*"
+
+	__testbus_set_handle $FUNCNAME th
+	testbus_call run-command --context $th --nowait "$@"
+}
+
+function testbus_wait_command {
+
+	testbus_trace "wait for command $*"
+
+	testbus_call wait-command "$@"
+}
+
 function testbus_reboot_host {
 
 	testbus_trace "reboot host $*"

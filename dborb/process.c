@@ -286,6 +286,7 @@ ni_process_new(ni_bool_t use_default_env)
 
 	pi = xcalloc(1, sizeof(*pi));
 
+	pi->exit_info.how = -1;
 	ni_process_buffer_init(&pi->stdin,  "stdin",  pi);
 	ni_process_buffer_init(&pi->stdout, "stdout", pi);
 	ni_process_buffer_init(&pi->stderr, "stderr", pi);

@@ -14,8 +14,19 @@
 </service>
 
 <service name="process" interface="org.opensuse.Testbus.Process" object-class="process">
+  <define name="exit_info_t" class="dict">
+    <exit-code type="uint32" />
+    <exit-signal type="uint32" />
+    <core-dumped type="boolean" />
+
+    <stdout-total-bytes type="uint32" />
+    <stderr-total-bytes type="uint32" />
+  </define>
+
   <define name="properties" class="dict">
     <argv class="array" element-type="string" />
+    <exit-info type="exit_info_t" />
+
     <!--
          All other properties, such as environment, files, etc,
          are retrieved via the respective Container interfaces
@@ -24,26 +35,13 @@
 
   <method name="setExitInfo">
     <arguments>
-      <exit-info class="dict">
-        <exit-code type="uint32" />
-        <exit-signal type="uint32" />
-        <core-dumped type="boolean" />
-
-	<stdout-total-bytes type="uint32" />
-	<stderr-total-bytes type="uint32" />
-      </exit-info>
+      <exit-info type="exit_info_t" />
     </arguments>
   </method>
 
   <signal name="processExited">
     <arguments>
-      <status class="dict">
-        <exit-code type="uint32"/>
-	<exit-signal type="uint32" />
-	<core-dumped type="boolean" />
-	<stdout-pending-bytes type="uint32" />
-	<stderr-pending-bytes type="uint32" />
-      </status>
+      <status type="exit_info_t" />
     </arguments>
   </signal>
 

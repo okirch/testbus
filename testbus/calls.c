@@ -1416,6 +1416,18 @@ __ni_testbus_process_wait(const char *object_path)
 	return wq;
 }
 
+static ni_process_exit_info_t *
+__ni_testbus_process_get_exit_info(const ni_dbus_object_t *object)
+{
+	const ni_dbus_variant_t *var;
+
+	var = ni_dbus_object_get_cached_property(object, "exit-info", ni_testbus_process_interface());
+	if (var == NULL)
+		return NULL;
+	return ni_testbus_process_exit_info_deserialize(var);
+}
+
+
 static void
 __ni_testbus_setup_process_handling(void)
 {
@@ -1490,8 +1502,24 @@ ni_testbus_wait_for_process(ni_dbus_object_t *proc_object, long timeout_ms, ni_p
 	ni_testbus_waitq_t *wq;
 
 	if ((wq = ni_testbus_waitq_find(proc_object->path)) == NULL) {
-		ni_error("cannot wait for process %s - not recorded", proc_object->path);
-		return FALSE;
+		/* We come here when we are asked to wait for a previously backgrounded
+		 * process to complete.
+		 */
+		ni_process_exit_info_t *cached_exit_info;
+
+		__ni_testbus_setup_process_handling();
+		wq = __ni_testbus_process_wait(proc_object->path);
+		ni_assert(wq != NULL);
+
+		/* Here, we should really refresh the proc_object */
+		ni_dbus_object_refresh_children(proc_object);
+		ni_dbus_object_refresh_properties(proc_object, ni_testbus_process_interface(), NULL);
+
+		cached_exit_info = __ni_testbus_process_get_exit_info(proc_object);
+		if (cached_exit_info != NULL) {
+			*exit_info = *cached_exit_info;
+			return TRUE;
+		}
 	}
 
 	if (timeout_ms >= 0)

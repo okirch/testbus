@@ -347,7 +347,7 @@ ni_testbus_host_signal_process_scheduled(ni_dbus_object_t *host_object, ni_dbus_
 	/* Create a process object */
 	pi = ni_process_new_ext(&proc->argv, &proc->context.env.vars);
 	if (pi == NULL) {
-		ni_error("unable to create process object");
+		ni_error("unable to create process handle");
 		return FALSE;
 	}
 
@@ -371,10 +371,15 @@ ni_testbus_host_signal_process_scheduled(ni_dbus_object_t *host_object, ni_dbus_
 			NI_TESTBUS_HOST_INTERFACE,
 			"processScheduled",
 			2, argv);
+
+	proc->process = pi;
+	pi = NULL;
+
 	rv = TRUE;
 
 out:
-	ni_process_free(pi);
+	if (pi)
+		ni_process_free(pi);
 	ni_dbus_variant_vector_destroy(argv, 2);
 	return rv;
 }
