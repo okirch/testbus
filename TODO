@@ -6,18 +6,17 @@ Agent:
 
 	Split code into individual source files: registration, process exec, etc
 
-	reconnect protocol is still not adequate
-
 	on shutdown, call removeHost to remove ourselves (except when we were
 	the ones to trigger the reboot)
 
 	tap into ni_error and make sure we forward these to the master's error log
 
 Server:
-	Implement Process.getExitInfo()
-
 	Remove pid file on exit
 	Fix /org/openSUSE/Testbus/Host/Host* naming
+
+	When an agent goes away, terminate all outstanding commands on that
+	host with an error
 
 	When a host capability is added, send a signal
 	When a host comes back, send a signal
@@ -25,12 +24,6 @@ Server:
 	Purge syslog events after some time
 
 Client:
-	make sure we can do the same as run-command using individual
-	steps?
-
-	how to wait for a process to exit if we're doing this
-	in separate steps?
-
 	add agent-shutdown command
 
 Proxy:
