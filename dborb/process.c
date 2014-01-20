@@ -253,7 +253,7 @@ ni_process_buffer_attach_parent(struct ni_process_buffer *pb, ni_process_t *pi)
 }
 
 void
-ni_process_buffer_destroy(struct ni_process_buffer *pb)
+ni_process_buffer_reset(struct ni_process_buffer *pb)
 {
 	if (pb->socket != NULL) {
 		ni_socket_close(pb->socket);
@@ -270,7 +270,12 @@ ni_process_buffer_destroy(struct ni_process_buffer *pb)
 		close(pb->slave_fd);
 		pb->slave_fd = -1;
 	}
+}
 
+void
+ni_process_buffer_destroy(struct ni_process_buffer *pb)
+{
+	ni_process_buffer_reset(pb);
 	ni_process_buffer_init(pb, NULL, NULL);
 }
 
@@ -587,9 +592,9 @@ ni_process_prepare_stdio(ni_process_t *pi)
 		ni_warn("Failed to set up pty slave as controlling tty: %m");
 
 		/* Fall through and connect all stdio to /dev/null */
-		ni_process_buffer_destroy(&pi->stdin);
-		ni_process_buffer_destroy(&pi->stdout);
-		ni_process_buffer_destroy(&pi->stderr);
+		ni_process_buffer_reset(&pi->stdin);
+		ni_process_buffer_reset(&pi->stdout);
+		ni_process_buffer_reset(&pi->stderr);
 	}
 
 	ni_process_buffer_attach_child(&pi->stdin, 0);
