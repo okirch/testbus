@@ -74,10 +74,32 @@ __ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_
 	if ((file = ni_testbus_container_get_file_by_name(&proc->context, "stderr")) != NULL)
 		exit_info->stderr_bytes = file->size;
 
+	if (ni_debug & NI_TRACE_TESTBUS) {
+		switch (exit_info->how) {
+		case NI_PROCESS_NONSTARTER:
+			ni_trace("%s.setExitInfo(NonStarter)", object->path);
+			break;
+		case NI_PROCESS_EXITED:
+			ni_trace("%s.setExitInfo(Exited, status=%d)", object->path, exit_info->exit.code);
+			break;
+		case NI_PROCESS_CRASHED:
+			ni_trace("%s.setExitInfo(Crashed, signal=%d)", object->path, exit_info->crash.signal);
+			break;
+		case NI_PROCESS_TIMED_OUT:
+			ni_trace("%s.setExitInfo(TimedOut)", object->path);
+			break;
+		case NI_PROCESS_TRANSCENDED:
+			ni_trace("%s.setExitInfo(Transcended)", object->path);
+			break;
+		default:
+			ni_trace("%s.setExitInfo(Unknown=%d)", object->path, exit_info->how);
+			break;
+		}
+	}
+
 	/* Save the exit info */
 	if (proc->process)
 		ni_process_set_exit_info(proc->process, exit_info);
-	else ni_warn("%s: proc %s has no process object", __func__, object->path);
 
 	/* Now just re-broadcast the exit_info to everyone who is interested */
 	ni_testbus_process_exit_info_serialize(exit_info, &dict);
