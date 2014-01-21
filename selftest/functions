@@ -7,7 +7,7 @@
 
 # The following variable(s) are considered tunables that can be overridden from
 # the test script after sourcing this file.
-TESTBUS_CLAIM_TIMEOUT=60
+: ${TESTBUS_CLAIM_TIMEOUT:=240}
 
 # By setting TESTBUS_SELFTEST_LOCALFILES=yes, you can tell the testbus self tests
 # to use the uninstalled programs and files.
