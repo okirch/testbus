@@ -52,8 +52,9 @@ function start_instance_from_config {
 ##################################################################
 function start_from_config {
 
-	config_file=$1
+	local config_file
 
+	config_file=$1
 	echo "Creating instances from $config_file"
 
 	function instance { start_instance_from_config "$@"; }
@@ -135,27 +136,48 @@ kvm)
 	exit 1;;
 esac
 
-if [ -f /usr/share/testbus/suites/$test_suite.conf ]; then
-	if [ ! -x /usr/share/testbus/suites/$test_suite ]; then
-		echo "Found a config file for test suite $test_suite, but no script to run" >&2
+case $test_suite in
+/*)	: ;;
+*)	test_suite=/usr/share/testbus/suites/$test_suite;;
+esac
+
+##################################################################
+# Try to find a .conf file
+##################################################################
+if [ -f $test_suite.conf ]; then
+	test_config=$test_suite.conf 
+else
+	test_name=${test_suite##*/}
+	test_dir=${test_suite%/*}
+
+	case $test_name in
+	*.*)	short_name=${test_name%.*}
+		if [ -f "$test_dir/$short_name.conf" ]; then
+			test_config="$test_dir/$short_name.conf"
+		fi;;
+	esac
+fi
+
+if [ -n "$test_config" ]; then
+	if [ ! -x $test_suite ]; then
+		echo "Found config file $test_config for test suite $test_suite, but no script to run" >&2
 		exit 1
 	fi
 
-	config_file=/usr/share/testbus/suites/$test_suite.conf 
-	test_script=/usr/share/testbus/suites/$test_suite
+	test_script=$test_suite
 
-	start_from_config $config_file
+	start_from_config $test_config
 
 	$test_script
 	rv=$?
 
-	stop_from_config $config_file
+	stop_from_config $test_config
 	exit $rv
 fi
 
 # Old style approach
-if [ -x /usr/share/testbus/suites/$test_suite.run ]; then
-	exec /usr/share/testbus/suites/$test_suite.run $testbus_base_image
+if [ -x $test_suite.run ]; then
+	exec $test_suite.run $testbus_base_image
 fi
 
 echo "Do not know how to run $test_suite: no $test_suite.run or $test_suite.conf file in $TESTBUS_TS_DIR" >&2
