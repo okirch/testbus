@@ -63,7 +63,7 @@ enum {
 	NI_TRACE_AUTOIP		= 0x000200,
 //	unused			= 0x000400,
 	NI_TRACE_DBUS		= 0x000800,
-	NI_TRACE_WIRELESS	= 0x001000,
+	NI_TRACE_PROCESS	= 0x001000,
 	NI_TRACE_XML		= 0x002000,
 	NI_TRACE_OBJECTMODEL	= 0x004000,
 	NI_TRACE_APPLICATION	= 0x008000,
@@ -93,7 +93,7 @@ extern unsigned int	ni_log_level;
 #define ni_debug_socket(fmt, args...)		__ni_debug(NI_LOG_DEBUG, NI_TRACE_SOCKET, fmt, ##args)
 #define ni_debug_autoip(fmt, args...)		__ni_debug(NI_LOG_DEBUG, NI_TRACE_AUTOIP, fmt, ##args)
 #define ni_debug_dbus(fmt, args...)		__ni_debug(NI_LOG_DEBUG, NI_TRACE_DBUS, fmt, ##args)
-#define ni_debug_wireless(fmt, args...)		__ni_debug(NI_LOG_DEBUG, NI_TRACE_WIRELESS, fmt, ##args)
+#define ni_debug_process(fmt, args...)		__ni_debug(NI_LOG_DEBUG, NI_TRACE_PROCESS, fmt, ##args)
 #define ni_debug_xml(fmt, args...)		__ni_debug(NI_LOG_DEBUG, NI_TRACE_XML, fmt, ##args)
 #define ni_debug_objectmodel(fmt, args...)	__ni_debug(NI_LOG_DEBUG, NI_TRACE_OBJECTMODEL, fmt, ##args)
 #define ni_debug_application(fmt, args...)	__ni_debug(NI_LOG_DEBUG, NI_TRACE_APPLICATION, fmt, ##args)
