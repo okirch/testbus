@@ -387,7 +387,7 @@ ni_testbus_container_remove_file(ni_testbus_container_t *container, ni_testbus_f
 }
 
 ni_testbus_file_t *
-ni_testbus_container_get_file_by_name(ni_testbus_container_t *container, const char *name)
+ni_testbus_container_get_file_by_name(ni_testbus_container_t *container, const char *name, ni_bool_t globally)
 {
 	for (; container; container = container->parent) {
 		ni_testbus_file_t *file;
@@ -397,6 +397,9 @@ ni_testbus_container_get_file_by_name(ni_testbus_container_t *container, const c
 			if (file)
 				return file;
 		}
+
+		if (!globally)
+			break;
 	}
 	return NULL;
 }

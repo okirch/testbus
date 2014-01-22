@@ -115,7 +115,7 @@ extern void		ni_testbus_container_add_command(ni_testbus_container_t *, ni_testb
 
 extern void		ni_testbus_container_add_file(ni_testbus_container_t *, ni_testbus_file_t *);
 extern void		ni_testbus_container_remove_file(ni_testbus_container_t *, ni_testbus_file_t *);
-extern ni_testbus_file_t *ni_testbus_container_get_file_by_name(ni_testbus_container_t *, const char *);
+extern ni_testbus_file_t *ni_testbus_container_get_file_by_name(ni_testbus_container_t *, const char *, ni_bool_t globally);
 ni_testbus_file_t *	__ni_testbus_container_get_file_by_name(ni_testbus_container_t *, const char *);
 
 extern void		ni_testbus_container_add_test(ni_testbus_container_t *, ni_testbus_testcase_t *);

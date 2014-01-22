@@ -163,6 +163,8 @@ ni_testbus_bind_container_interfaces(ni_dbus_object_t *object, ni_testbus_contai
 /*
  * Container.getChildByName(class, name)
  */
+static const char *__ni_Testbus_Container_find_child(ni_dbus_object_t *object, ni_testbus_container_t *, const ni_dbus_class_t *, const char *);
+
 static dbus_bool_t
 __ni_Testbus_Container_getChildByName(ni_dbus_object_t *object, const ni_dbus_method_t *method,
 		unsigned int argc, const ni_dbus_variant_t *argv,
@@ -170,7 +172,7 @@ __ni_Testbus_Container_getChildByName(ni_dbus_object_t *object, const ni_dbus_me
 {
 	ni_testbus_container_t *container;
 	const char *class_name, *child_name, *child_path = NULL;
-	const ni_dbus_class_t *class;
+	const ni_dbus_class_t *class = NULL;
 
 	if (!(container = ni_testbus_container_unwrap(object, error)))
 		return FALSE;
@@ -180,18 +182,13 @@ __ni_Testbus_Container_getChildByName(ni_dbus_object_t *object, const ni_dbus_me
 	 || !ni_dbus_variant_get_string(&argv[1], &child_name))
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
-	if (!(class = ni_objectmodel_get_class(class_name))) {
+	if (class_name && *class_name
+	 && !(class = ni_objectmodel_get_class(class_name))) {
 		dbus_set_error(error, NI_DBUS_ERROR_NAME_UNKNOWN, "unknown class name %s", class_name);
 		return FALSE;
 	}
 
-	if (class == ni_testbus_file_class()) {
-		ni_testbus_file_t *file;
-
-		if ((file = ni_testbus_container_get_file_by_name(container, child_name)) != NULL)
-			child_path = ni_testbus_file_full_path(object, file);
-	}
-
+	child_path = __ni_Testbus_Container_find_child(object, container, class, child_name);
 	if (child_path == NULL) {
 		dbus_set_error(error, NI_DBUS_ERROR_NAME_UNKNOWN, "no %s child named %s", class_name, child_name);
 		return FALSE;
@@ -200,6 +197,25 @@ __ni_Testbus_Container_getChildByName(ni_dbus_object_t *object, const ni_dbus_me
 	ni_debug_testbus("%s.%s(%s, %s) returns %s", object->path, method->name, class_name, child_name, child_path);
 	ni_dbus_message_append_string(reply, child_path);
 	return TRUE;
+}
+
+static const char *
+__ni_Testbus_Container_find_child(ni_dbus_object_t *object, ni_testbus_container_t *container, const ni_dbus_class_t *class, const char *child_name)
+{
+	if (class == NULL || class == ni_testbus_file_class()) {
+		ni_testbus_file_t *file;
+
+		if ((file = ni_testbus_container_get_file_by_name(container, child_name, FALSE)) != NULL)
+			return ni_testbus_file_full_path(object, file);
+	}
+	if (class == NULL || class == ni_testbus_testcase_class()) {
+		ni_testbus_testcase_t *test;
+
+		if ((test = ni_testbus_container_get_test_by_name(container, child_name, FALSE)) != NULL)
+			return ni_testbus_container_build_path(object, &test->context);
+	}
+
+	return NULL;
 }
 
 NI_TESTBUS_METHOD_BINDING(Container, getChildByName);

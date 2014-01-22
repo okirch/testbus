@@ -69,9 +69,9 @@ __ni_Testbus_Process_setExitInfo(ni_dbus_object_t *object, const ni_dbus_method_
 	 || !(exit_info = ni_testbus_process_exit_info_deserialize(&argv[0])))
 		return ni_dbus_error_invalid_args(error, object->path, method->name);
 
-	if ((file = ni_testbus_container_get_file_by_name(&proc->context, "stdout")) != NULL)
+	if ((file = ni_testbus_container_get_file_by_name(&proc->context, "stdout", FALSE)) != NULL)
 		exit_info->stdout_bytes = file->size;
-	if ((file = ni_testbus_container_get_file_by_name(&proc->context, "stderr")) != NULL)
+	if ((file = ni_testbus_container_get_file_by_name(&proc->context, "stderr", FALSE)) != NULL)
 		exit_info->stderr_bytes = file->size;
 
 	if (ni_debug & NI_TRACE_TESTBUS) {
