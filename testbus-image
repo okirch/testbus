@@ -30,11 +30,58 @@ function print_usage_and_die {
 
 	cat >&2 <<EOF
 Usage:
+  testbus-image default <method>
+  testbus-image default <method> <name>
   testbus-image import <method> <name> <url-or-file>
   testbus-image clone <method> <name> <config-template> <config-file> <destpath>
   testbus-image help
 EOF
 	exit 1
+}
+
+function image_default {
+
+	local method
+	local linkname osname
+
+	if [ $# -ne 1 -a $# -ne 2 ]; then
+		echo "testbus-image: bad number of arguments"
+		print_usage_and_die
+	fi
+
+	method=$1; shift
+
+	linkname=$TESTBUS_IMAGE_DIR/$method/default
+	if [ $# -eq 0 ]; then
+		if [ ! -h "$linkname" ]; then
+			return
+		fi
+
+		osname=`readlink $linkname`
+		case $osname in
+		*/*)
+			osname=${osname##*/};;
+		esac
+
+		if [ -z "$osname" ]; then
+			echo "Invalid symlink $linkname" >&2
+			exit 1
+		fi
+
+		echo $osname
+	else
+		local dirname
+
+		osname=$1; shift
+
+		dirname="$TESTBUS_IMAGE_DIR/$method/$osname"
+		if [ ! -d "$dirname" ]; then
+			echo "No image for $osname: $dirname does not exist" >&2
+			exit 1
+		fi
+		rm -f $linkname
+		ln -s $osname $linkname
+	fi
 }
 
 function image_download {
@@ -214,6 +261,9 @@ import)
 
 clone)
 	image_clone "$@";;
+
+default)
+	image_default "$@";;
 
 help)
 	print_usage_and_die;;
