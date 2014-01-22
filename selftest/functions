@@ -126,6 +126,10 @@ function __testbus_group_new {
 
 	if [ -z "$TESTGROUP_NAME" ]; then
 		TESTGROUP_NAME=$newname
+
+		# If we have left over a test with the same name from a previous run, delete it
+		testbus_call delete --name --class testcase $newname 2>/dev/null
+
 		TESTGROUP_HANDLE=`testbus_call create-test $newname`
 		if [ $? -ne 0 ]; then
 			testbus_exit_fail "Unable to create test handle for test $TESTGROUP_NAME"
