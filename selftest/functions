@@ -516,6 +516,29 @@ function testbus_new_script {
 	testbus_new_tempfile ${1:-script} 755
 }
 
+##################################################################
+# Simple interface for timing operations
+##################################################################
+function testbus_timing_begin {
+
+	date +%s
+}
+
+function testbus_timing_elapsed {
+
+	local t0 t1 elapsed
+
+	t0=$1; shift
+
+	t1=`date +%s`
+	let elapsed=$t1-$t0
+
+	echo $((t1-t0))
+}
+
+##################################################################
+# This is obsolete
+##################################################################
 function testbus_start_kvm {
 
 	tag=$1; shift
