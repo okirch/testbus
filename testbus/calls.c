@@ -295,11 +295,13 @@ ni_testbus_client_container_child_by_name(ni_dbus_object_t *container_object, co
 
 	ni_dbus_variant_vector_init(args, 2);
 
-	ni_dbus_variant_set_string(&args[0], class->name);
+	ni_dbus_variant_set_string(&args[0], class? class->name : "");
 	ni_dbus_variant_set_string(&args[1], name);
 	if (!ni_dbus_object_call_variant(container_object, NULL, "getChildByName", 2, args, 1, &res, &error)) {
-		ni_dbus_print_error(&error, "%s.getChildByName(%s, %s): failed",
-				container_object->path, class->name, name);
+		if (!ni_string_eq(error.name, NI_DBUS_ERROR_NAME_UNKNOWN)) {
+			ni_dbus_print_error(&error, "%s.getChildByName(%s, %s): failed",
+					container_object->path, class? class->name : "any", name);
+		}
 		dbus_error_free(&error);
 	} else {
 		result = __ni_testbus_handle_path_result(&res, "getChildByName");
