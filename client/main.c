@@ -531,14 +531,18 @@ do_remove_host(int argc, char **argv)
 static int
 do_delete_object(int argc, char **argv)
 {
-	enum  { OPT_HELP, OPT_CONTEXT };
+	enum  { OPT_HELP, OPT_CONTEXT, OPT_NAME, OPT_CLASS };
 	static struct option local_options[] = {
 		{ "help", no_argument, NULL, OPT_HELP },
+		{ "name", no_argument, NULL, OPT_NAME },
+		{ "class", required_argument, NULL, OPT_CLASS },
 		{ "context", required_argument, NULL, OPT_CONTEXT },
 		{ NULL }
 	};
 	ni_dbus_object_t *container_object = NULL;
 	const char *opt_container = NULL;
+	const char *opt_class = NULL;
+	ni_bool_t opt_name = FALSE;
 	int c, rv = 1;
 
 	optind = 1;
@@ -549,15 +553,27 @@ do_delete_object(int argc, char **argv)
 		usage:
 			fprintf(stderr,
 				"wicked [options] delete <object-handle> ...\n"
-				"wicked [options] delete --context <object-handle> nickname ...\n"
+				"wicked [options] delete --name [--context <object-handle>] [--class <class>] nickname ...\n"
 				"\nSupported options:\n"
+				"  --name\n"
+				"      Rather than specifying the object(s) by path, search by name within a given context object.\n"
+				"      The search context is specified using the --context option. If not given, the global\n"
+				"      context is searched.\n"
 				"  --help\n"
 				"      Show this help text.\n"
 				);
 			return 1;
 
+		case OPT_CLASS:
+			opt_class = optarg;
+			break;
+
 		case OPT_CONTEXT:
 			opt_container = optarg;
+			break;
+
+		case OPT_NAME:
+			opt_name = TRUE;
 			break;
 		}
 	}
@@ -565,10 +581,54 @@ do_delete_object(int argc, char **argv)
 	if (optind >= argc)
 		goto usage;
 
-	if (opt_container) {
+	if (opt_name) {
+		const ni_dbus_class_t *class = NULL;
+		int failed = 0;
+
+		if (opt_container == NULL)
+			opt_container = NI_TESTBUS_GLOBAL_CONTEXT_PATH;
+
 		container_object = ni_testbus_client_get_and_refresh_object(opt_container);
-		(void) container_object;
-		ni_fatal("not implemented yet");
+		if (container_object == NULL) {
+			ni_error("Cannot look up context \"%s\"", opt_container);
+			return 1;
+		}
+
+		if (opt_class) {
+			class = ni_objectmodel_get_class(opt_class);
+			if (class == NULL) {
+				ni_error("Unknown object class \"%s\"", opt_class);
+				return 1;
+			}
+		}
+
+		while (optind < argc) {
+			const char *name = argv[optind++];
+			ni_dbus_object_t *object;
+			int nfound = 0;
+
+			do {
+				object = ni_testbus_client_container_child_by_name(container_object, class, name);
+				if (!object)
+					break;
+				nfound++;
+
+				printf("Deleting %s\n", object->name);
+				if (!ni_testbus_client_delete(object)) {
+					ni_error("could not delete object %s", name);
+					failed++;
+				}
+			} while (class == NULL);
+
+			if (nfound == 0) {
+				if (opt_class)
+					ni_error("no %s object named \"%s\" in context %s", opt_class, name, opt_container);
+				else
+					ni_error("no object named \"%s\" in context %s", name, opt_container);
+			}
+		}
+
+		rv = failed? 1 : 0;
 	} else {
 		int failed = 0;
 
@@ -583,6 +643,7 @@ do_delete_object(int argc, char **argv)
 				continue;
 			}
 
+			ni_trace("delete %s", object->path);
 			if (!ni_testbus_client_delete(object)) {
 				ni_error("could not delete object %s", path);
 				failed++;
