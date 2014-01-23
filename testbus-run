@@ -108,6 +108,10 @@ shift 2
 method=${TESTBUS_DEPLOYMENT_METHOD:-kvm}
 
 if [ -z "$testbus_base_image" ]; then
+	testbus_base_image=`testbus-image default $method`
+fi
+
+if [ -z "$testbus_base_image" ]; then
 	for f in /var/lib/testbus/image/$method/*; do
 		if [ -e "$f/current" ]; then
 			if [ -n "$testbus_base_image" ]; then
@@ -124,8 +128,9 @@ if [ -z "$testbus_base_image" ]; then
 		echo "Please import an image using 'testbus-image import'" >&2
 	fi
 
-	echo "Using base image $method/$testbus_base_image"
 fi
+
+echo "Using base image $method/$testbus_base_image"
 
 case $method in
 kvm)
