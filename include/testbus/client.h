@@ -5,14 +5,17 @@
 #include <testbus/types.h>
 #include <dborb/dbus.h>
 
-typedef struct ni_testbus_client_timeout {
+typedef struct ni_testbus_client_timeout ni_testbus_client_timeout_t;
+struct ni_testbus_client_timeout {
 	unsigned int		timeout_msec;
-	int			(*busy_wait)(void *);
-	void			(*timedout)(void *);
+	int			(*busy_wait)(const ni_testbus_client_timeout_t *);
+	void			(*timedout)(const ni_testbus_client_timeout_t *);
 	void *			user_data;
 
 	const void *		handle;
-} ni_testbus_client_timeout_t;
+
+	unsigned int		num_busywaits;
+};
 
 typedef struct ni_testus_client_host_state {
 	ni_dbus_object_t *	host_object;

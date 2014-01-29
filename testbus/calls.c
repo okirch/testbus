@@ -740,7 +740,7 @@ __ni_testbus_wait_timeout(void *user_data, const ni_timer_t *timer)
 	timeout->handle = NULL;
 
 	if (timeout->timedout)
-		timeout->timedout(timeout->user_data);
+		timeout->timedout(timeout);
 }
 
 static void
@@ -766,6 +766,24 @@ ni_testbus_client_timeout_init(ni_testbus_client_timeout_t *timeout, unsigned in
 {
 	memset(timeout, 0, sizeof(*timeout));
 	timeout->timeout_msec = msec;
+}
+
+ni_bool_t
+ni_testbus_client_timeout_busywait(ni_testbus_client_timeout_t *timeout)
+{
+	long waitfor = -1;
+
+	if (!timeout || !timeout->handle)
+		return FALSE;
+
+	if (timeout->num_busywaits == 0)
+		ni_debug_dbus("busy-waiting for event(s)");
+	if (timeout->busy_wait) {
+		waitfor = timeout->busy_wait(timeout);
+		timeout->num_busywaits++;
+	}
+	ni_socket_wait(waitfor);
+	return TRUE;
 }
 
 void
@@ -809,16 +827,8 @@ ni_testbus_client_claim_host_by_capability(const char *capability, ni_dbus_objec
 			}
 		}
 
-		if (!timeout || !timeout->handle) {
+		if (!ni_testbus_client_timeout_busywait(timeout))
 			break;
-		} else {
-			long waitfor = -1;
-
-			ni_debug_dbus("waiting for host(s) to come online");
-			if (timeout->busy_wait)
-				waitfor = timeout->busy_wait(timeout->user_data);
-			ni_socket_wait(waitfor);
-		}
 	}
 
 	if (match_count == 0) {
@@ -1649,16 +1659,8 @@ ni_testbus_client_host_wait_for_reboot(unsigned int nhosts, ni_testus_client_hos
 			break;
 		}
 
-		if (!timeout || !timeout->handle) {
+		if (!ni_testbus_client_timeout_busywait(timeout))
 			break;
-		} else {
-			long waitfor = -1;
-
-			ni_debug_dbus("waiting for host(s) to reboot");
-			if (timeout->busy_wait)
-				waitfor = timeout->busy_wait(timeout->user_data);
-			ni_socket_wait(waitfor);
-		}
 	}
 
 	__ni_testbus_wait_cancel(timeout);

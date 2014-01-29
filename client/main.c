@@ -69,8 +69,8 @@ static ni_buffer_t *	ni_testbus_read_local_file(const char *);
 static long		ni_testbus_write_local_file(const char *, const ni_buffer_t *);
 
 /* XXX rename these */
-static int		__do_claim_host_busywait(void *dummy);
-static void		__do_claim_host_timedout(void *dummy);
+static int		__do_claim_host_busywait(const ni_testbus_client_timeout_t *);
+static void		__do_claim_host_timedout(const ni_testbus_client_timeout_t *);
 
 int
 main(int argc, char **argv)
@@ -893,7 +893,8 @@ __do_shutdown_reboot(unsigned int nhosts, char **host_names, ni_bool_t opt_reboo
 					ni_error("Timed out waiting for %s", host_list[i].host_object->path);
 			}
 		} else {
-			fprintf(stderr, "\n");
+			if (to && to->num_busywaits)
+				fprintf(stderr, "\n");
 		}
 	}
 
@@ -1202,12 +1203,10 @@ do_upload_file(int argc, char **argv)
 }
 
 static int
-__do_claim_host_busywait(void *dummy)
+__do_claim_host_busywait(const ni_testbus_client_timeout_t *client_timeout)
 {
-	static unsigned int count = 0;
-
-	if (count++ == 0)
-		fprintf(stderr, "Waiting for host to come online");
+	if (client_timeout->num_busywaits == 0)
+		fprintf(stderr, "Waiting for host to become ready");
 	fputc('.', stderr);
 	fflush(stderr);
 
@@ -1215,7 +1214,7 @@ __do_claim_host_busywait(void *dummy)
 }
 
 static void
-__do_claim_host_timedout(void *dummy)
+__do_claim_host_timedout(const ni_testbus_client_timeout_t *client_timeout)
 {
 	fprintf(stderr, " timed out.\n");
 }
@@ -1330,7 +1329,7 @@ do_claim_host(int argc, char **argv)
 
 		host_object = ni_testbus_client_claim_host_by_capability(opt_capability, container_object, opt_role, tmo);
 
-		if (tmo)
+		if (tmo && tmo->num_busywaits)
 			fprintf(stderr, "\n");
 	}
 
