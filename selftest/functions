@@ -674,6 +674,9 @@ function testbus_claim_node {
 	fi
 }
 
+##################################################################
+# Environment handling functions
+##################################################################
 function testbus_setenv {
 
 	testbus_trace "setenv $*"
@@ -709,6 +712,9 @@ function testbus_getenv_nonempty {
 	return 0;
 }
 
+##################################################################
+# File upload/download functions
+##################################################################
 function __testbus_upload_file {
 
 	testbus_trace "upload file $*"
@@ -739,6 +745,31 @@ function testbus_download_eventlog {
 	testbus_call get-events "$@" $host
 }
 
+function testbus_node_upload_file {
+
+	local nickname host_handle
+
+	testbus_trace "upload file $*"
+	nickname=$1; shift
+
+	testbus_node_get_handle $nickname host_handle || return 1
+	testbus_call upload-file --host $host_handle "$@"
+}
+
+function testbus_node_download_file {
+
+	local nickname host_handle
+
+	testbus_trace "download file $*"
+	nickname=$1; shift
+
+	testbus_node_get_handle $nickname host_handle || return 1
+	testbus_call download-file --host $host_handle "$@"
+}
+
+##################################################################
+# Command execution
+##################################################################
 function testbus_run_command {
 
 	local th
@@ -766,6 +797,42 @@ function testbus_wait_command {
 	testbus_call wait-command "$@"
 }
 
+##################################################################
+# variants of the functions above, taking a node's nickname rather
+# than the testbus object path
+##################################################################
+function __testbus_node_run {
+
+	local nickname host_handle test_handle
+
+	nickname=$1; shift
+
+	testbus_node_get_handle $nickname host_handle || return 1
+	__testbus_set_handle $FUNCNAME test_handle
+	testbus_call run-command --context $test_handle --host $host_handle "$@"
+}
+
+function testbus_node_run {
+
+	testbus_trace "run command $*"
+	__testbus_node_run "$@"
+}
+
+function testbus_node_run_script {
+
+	testbus_trace "run script $*"
+	__testbus_node_run --send-script "$@"
+}
+
+function testbus_node_run_background {
+
+	testbus_trace "run background command $*"
+	__testbus_node_run --nowait "$@"
+}
+
+##################################################################
+# Reboot the indicated host
+##################################################################
 function testbus_reboot_host {
 
 	testbus_trace "reboot host $*"
@@ -773,6 +840,9 @@ function testbus_reboot_host {
 	testbus_call reboot "$@"
 }
 
+##################################################################
+# Exiting from a testbus script
+##################################################################
 function __testbus_exit {
 
 	if [ "$TESTBUS_FAILED_COUNT" -eq 0 ]; then

@@ -27,6 +27,15 @@ testbus_test_success
 
 testbus_test_begin verify_agent2
 testbus_claim_node sut
+
+testbus_node_upload_file sut /etc/SuSE-release /etc/upload-test
+testbus_node_download_file sut /etc/upload-test /tmp/download-test
+if ! cmp /etc/SuSE-release /tmp/download-test; then
+	echo "File uploaded to agent and downloaded again morphed in transit" >&2
+	diff -u /etc/SuSE-release /tmp/download-test >&2
+	testbus_test_failure
+fi
+rm -f /tmp/download-test
 testbus_test_success
 
 testbus_exit

@@ -8,7 +8,7 @@
 
 . ${0%/*}/functions
 
-testbus_test_begin $0
+testbus_test_begin verify_runnable1
 
 TESTBUS_HOST=`testbus_claim_host`
 
@@ -44,5 +44,16 @@ if cmp -s $TESTCASE_TEMPDIR/xml-tree-before $TESTCASE_TEMPDIR/xml-tree-after; th
 	diff -u $TESTCASE_TEMPDIR/xml-tree-before $TESTCASE_TEMPDIR/xml-tree-after
 	exit 1
 fi >&2
+
+testbus_test_success
+
+testbus_test_begin verify_runnable2
+if ! testbus_claim_node sut; then
+	testbus_test_failure "cannot claim node"
+elif ! testbus_node_run sut /bin/true; then
+	testbus_test_failure "cannot run command on node <sut>"
+	exit 1
+fi
+testbus_test_success
 
 testbus_exit
