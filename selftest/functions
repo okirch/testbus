@@ -341,18 +341,336 @@ function __testbus_assert_handle {
 	fi
 }
 
-function testbus_claim_host {
+##################################################################
+# Testbus node registry
+# Rather than having to use clumsy shell variables to pass around
+# the object handle of the SUT nodes, we register them using a
+# nickname (like server, client1, client2, ...). This nickname
+# can be used by the test script to retrieve the host handle as
+# well as several of its environment variables.
+##################################################################
+declare -a TESTBUS_NODES
+declare -a __TESTBUS_NODE_HANDLE
+declare -a __TESTBUS_NODE_HOSTNAME
+declare -a __TESTBUS_NODE_IPV4ADDR
+declare -a __TESTBUS_NODE_IPV6ADDR
 
-	local th
+function testbus_node_register {
 
-	testbus_trace "claim host $*"
+	local nick handle hostname ipv4addr ipv6addr
+	local index
 
-	__testbus_set_handle $FUNCNAME th
+	nick=$1; shift
+	handle=$1; shift
+	hostname=$1; shift
+	ipv4addr=$1; shift
+	ipv6addr=$1; shift
+
+	index=${#TESTBUS_NODES[*]}
+	TESTBUS_NODES[$index]="$nick"
+	__TESTBUS_NODE_HANDLE[$index]=$handle
+	__TESTBUS_NODE_HOSTNAME[$index]=$hostname
+	__TESTBUS_NODE_IPV4ADDR[$index]=$ipv4addr
+	__TESTBUS_NODE_IPV6ADDR[$index]=$ipv6addr
+}
+
+function __testbus_node_get_index {
+
+	local __gni_nick __gni_destvar
+	local __gni_ndex
+
+	__gni_nick=$1; shift
+	__gni_destvar=$1; shift
+
+	for __gni_ndex in ${!TESTBUS_NODES[*]}; do
+		if [ "${TESTBUS_NODES[$__gni_ndex]}" = "$__gni_nick" ]; then
+			eval $__gni_destvar=$__gni_ndex
+			return 0
+		fi
+	done
+
+	echo "No host handle \"$__gni_nick\""
+	return 1
+}
+
+function testbus_node_list {
+
+	echo "${TESTBUS_NODES[*]}"
+}
+
+##################################################################
+# Several of the testbus_node_get_* functions will return a value
+# by assigning it to a variable in the caller's context. Since this
+# variable is passed by name, we need to make sure the caller isn't
+# using a name that we also use for one of our local variables.
+# This is what __testbus_variable_check validates.
+#
+# Call this function using
+#  __testbus_variable_check $FUNCNAME $destvar_name `local`
+##################################################################
+function __testbus_variable_check {
+
+	local __tvc_caller __tvc_destvar __tvc_locvar
+
+	__tvc_caller="$1"; shift
+	__tvc_destvar="$1"; shift
+
+	for __tvc_locvar; do
+		case $__tvc_locvar in
+		"$name="*)
+			echo "$__tvc_caller: destvar $__tvc_destvar has the name of a local variable of $__tvc_caller. This will not do" >&2
+			echo "Aborting." >&2
+			exit 1;;
+		esac
+	done
+}
+
+function testbus_node_get_handle {
+
+	local nick destvar
+	local index
+
+	nick=$1; shift
+	destvar=$1; shift
+
+	__testbus_variable_check $FUNCNAME $destvar nick destvar index
+	if ! __testbus_node_get_index $nick index; then
+		return 1
+	fi
+
+	eval $destvar=\"${__TESTBUS_NODE_HANDLE[$index]}\"
+	return 0
+}
+
+function testbus_node_handle {
+
+	local nick destvar
+	local index
+
+	nick=$1; shift
+
+	if ! __testbus_node_get_index $nick index; then
+		return 1
+	fi
+
+	echo "${__TESTBUS_NODE_HANDLE[$index]}"
+	return 0
+}
+
+function testbus_node_get_name {
+
+	local nick destvar
+	local index
+
+	nick=$1; shift
+	destvar=$1; shift
+
+	__testbus_variable_check $FUNCNAME $destvar nick destvar index
+	if ! __testbus_node_get_index $nick index; then
+		return 1
+	fi
+
+	eval $destvar=\"${__TESTBUS_NODE_HOSTNAME[$index]}\"
+	return 0
+}
+
+function testbus_node_name {
+
+	local nick destvar
+	local index
+
+	nick=$1; shift
+
+	if ! __testbus_node_get_index $nick index; then
+		return 1
+	fi
+
+	echo "${__TESTBUS_NODE_HOSTNAME[$index]}"
+	return 0
+}
+
+function testbus_node_get_ipv4addr {
+
+	local nick destvar
+	local index
+
+	nick=$1; shift
+	destvar=$1; shift
+
+	__testbus_variable_check $FUNCNAME $destvar nick destvar index
+	if ! __testbus_node_get_index $nick index; then
+		return 1
+	fi
+
+	eval $destvar=\"${__TESTBUS_NODE_IPV4ADDR[$index]}\"
+	return 0
+}
+
+function testbus_node_ipv4addr {
+
+	local nick destvar
+	local index
+
+	nick=$1; shift
+
+	if ! __testbus_node_get_index $nick index; then
+		return 1
+	fi
+
+	echo "${__TESTBUS_NODE_IPV4ADDR[$index]}"
+	return 0
+}
+
+function testbus_node_get_ipv6addr {
+
+	local nick destvar
+	local index
+
+	nick=$1; shift
+	destvar=$1; shift
+
+	__testbus_variable_check $FUNCNAME $destvar nick destvar index
+	if ! __testbus_node_get_index $nick index; then
+		return 1
+	fi
+
+	eval $destvar=\"${__TESTBUS_NODE_IPV6ADDR[$index]}\"
+	return 0
+}
+
+function testbus_node_ipv6addr {
+
+	local nick destvar
+	local index
+
+	nick=$1; shift
+
+	if ! __testbus_node_get_index $nick index; then
+		return 1
+	fi
+
+	echo "${__TESTBUS_NODE_IPV6ADDR[$index]}"
+	return 0
+}
+
+function testbus_nodes_display {
+
+	local handle hostname ipv4addr ipv6addr
+	local sep end
+
+	for node in `testbus_node_list`; do
+		unset handle hostname ipv4addr ipv6addr
+
+		testbus_node_get_handle $node handle
+		testbus_node_get_name $node hostname
+		testbus_node_get_ipv4addr $node ipv4addr
+		testbus_node_get_ipv6addr $node ipv6addr
+
+		sep=" ("
+		end=""
+
+		printf "%-12s %s" $node $hostname
+		if [ -n "$ipv4addr" ]; then
+			echo -n "$sep$ipv4addr"
+			sep=", "; end=")"
+		fi
+		if [ -n "$ipv6addr" ]; then
+			echo -n "$sep$ipv6addr"
+			sep=", "; end=")"
+		fi
+		echo "$end: handle=$handle"
+
+	done
+}
+
+##################################################################
+# Claim a node and assign its handle to the given destvar
+##################################################################
+function __testbus_claim_host {
+
+	local destvar __tch_test_handle __tch_host_handle
+
+	if [ $# -eq 0 ]; then
+		echo "usage: __testbus_claim_host <destvar> args ..." >&2
+		return 1
+	fi
+	destvar=$1; shift
+
+	__testbus_set_handle $FUNCNAME __tch_test_handle
 
 	if test -n "$TESTBUS_CLAIM_TIMEOUT"; then
-		testbus_call claim-host --timeout $TESTBUS_CLAIM_TIMEOUT "$@" $th
+		__tch_host_handle=`testbus_call claim-host --timeout $TESTBUS_CLAIM_TIMEOUT "$@" $__tch_test_handle`
 	else
-		testbus_call claim-host "$@" $th
+		__tch_host_handle=`testbus_call claim-host "$@" $__tch_test_handle`
+	fi
+
+	if [ $? -ne 0 ]; then
+		return 1
+	fi
+
+	if [ -z "$__tch_host_handle" ]; then
+		echo "claim-host returned no host handle" >&2
+		exit 1
+	fi
+
+	eval $destvar=\"$__tch_host_handle\"
+	return 0
+}
+
+
+##################################################################
+# Claim a node and returns its handle
+##################################################################
+function testbus_claim_host {
+
+	local host_handle
+
+	testbus_trace "claim host $*"
+	if ! __testbus_claim_host host_handle "$@"; then
+		return 1
+	fi
+
+	echo $host_handle
+	return 0;
+}
+
+##################################################################
+# Claim a node and register it using the given nickname
+# Usage:
+#	testbus_claim_node nickname [client-options]
+#
+# This will try to claim a node by passing the @client-options to
+# "testbus-client claim-host".
+#
+# If a nickname is given, this will also pass "--role @nickname"
+# to testbus-client.
+#
+# If a host could be claimed, the node's handle is registered,
+# and some of its environment settings are cached.
+##################################################################
+function testbus_claim_node {
+
+	local nickname host_handle
+
+	if [ $# -eq 0 ]; then
+		echo "usage: __testbus_claim_host <nickname> args ..." >&2
+		return 1
+	fi
+	nickname=$1; shift
+
+	testbus_trace "claim host <$nickname> $*"
+	if ! __testbus_claim_host host_handle "$@" $extra_args --role "$nickname"; then
+		return 1
+	fi
+
+	if [ -n "$nickname" ]; then
+		local hostname ipv4addr ipv6addr
+
+		hostname=`testbus_call getenv $host_handle hostname`
+		ipv4addr=`testbus_call getenv $host_handle primary_ip`
+		ipv6addr=`testbus_call getenv $host_handle primary_ip6`
+
+		testbus_node_register $nickname $host_handle "$hostname" "$ipv4addr" "$ipv6addr"
 	fi
 }
 
