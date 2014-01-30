@@ -167,8 +167,10 @@ install-data: $(CONFIG_XML) $(LIBVIRT_XML) etc/org.opensuse.Testbus.conf
 	install -m644 etc/org.opensuse.Testbus.conf $(DESTDIR)/etc/dbus-1/system.d/org.opensuse.Testbus.conf.new
 	mv $(DESTDIR)/etc/dbus-1/system.d/org.opensuse.Testbus.conf{.new,}
 
-install-suites:
-	install -m555 suites/* $(DESTDIR)/usr/share/testbus/suites
+install-test:
+	install -m755 -d $(DESTDIR)/usr/share/testbus/selftest
+	install -m 555 selftest/verify* $(DESTDIR)/usr/share/testbus/selftest
+	install -m 444 selftest/all $(DESTDIR)/usr/share/testbus/selftest
 
 distclean clean::
 	rm -rf obj core vgcore.*
