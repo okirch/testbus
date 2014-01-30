@@ -8,6 +8,7 @@
 
 . ${0%/*}/../functions
 
+testbus_group_begin runnable
 testbus_test_begin verify_runnable1
 
 TESTBUS_HOST=`testbus_claim_host`
@@ -56,4 +57,5 @@ elif ! testbus_node_run sut /bin/true; then
 fi
 testbus_test_success
 
+testbus_group_finish
 testbus_exit

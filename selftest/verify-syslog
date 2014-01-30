@@ -13,6 +13,8 @@
 # through a firstboot stage first.
 TESTBUS_CLAIM_TIMEOUT=240
 
+testbus_group_begin syslog
+
 testbus_test_begin $0
 TESTBUS_HOST=`testbus_claim_host`
 
@@ -23,4 +25,5 @@ if ! grep -qs testbus-log-message-foobar $TESTCASE_TEMPDIR/eventlog; then
 	testbus_test_failure "expected our signature log message in eventlog; nothing found"
 fi
 
+testbus_group_finish
 testbus_exit

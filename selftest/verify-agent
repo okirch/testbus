@@ -13,7 +13,7 @@
 # through a firstboot stage first.
 TESTBUS_CLAIM_TIMEOUT=240
 
-testbus_group_begin ${0%/*}
+testbus_group_begin agent
 
 testbus_test_begin verify_agent1
 TESTBUS_HOST=`testbus_claim_host`

@@ -8,7 +8,7 @@
 
 . ${0%/*}/../functions
 
-testbus_test_begin $0
+testbus_group_begin tty
 
 TESTBUS_HOST=`testbus_claim_host`
 
@@ -74,4 +74,5 @@ x")
 	: ;;
 esac
 
+testbus_group_finish
 testbus_exit

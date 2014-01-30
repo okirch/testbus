@@ -8,7 +8,7 @@
 
 . ${0%/*}/../functions
 
-testbus_group_begin $0
+testbus_group_begin nested
 
 TESTBUS_HOST=`testbus_claim_host`
 

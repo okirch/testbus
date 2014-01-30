@@ -23,7 +23,7 @@ function do_run {
 	fi >&2
 }
 
-testbus_group_begin $0
+testbus_group_begin scripts
 
 TESTBUS_HOST=`testbus_claim_host`
 

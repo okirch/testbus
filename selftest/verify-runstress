@@ -8,6 +8,7 @@
 
 . ${0%/*}/../functions
 
+testbus_group_begin runstress
 testbus_test_begin $0
 
 TESTBUS_HOST=`testbus_claim_host`
@@ -24,4 +25,5 @@ for n in `seq 1 $loop_count`; do
 done
 echo
 
+testbus_group_finish
 testbus_exit
