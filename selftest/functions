@@ -767,6 +767,22 @@ function testbus_node_download_file {
 	testbus_call download-file --host $host_handle "$@"
 }
 
+function testbus_node_download_eventlog {
+
+	local opt nickname host_handle
+	local -a args
+
+	testbus_trace "download eventlog $*"
+	while [ $# -gt 1 ]; do
+		args+=("$1")
+		shift
+	done
+	nickname=$1; shift
+
+	testbus_node_get_handle $nickname host_handle || return 1
+	testbus_call get-events "${args[@]}" $host_handle
+}
+
 ##################################################################
 # Command execution
 ##################################################################
