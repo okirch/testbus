@@ -6,7 +6,7 @@
 # host.
 #
 
-. ${0%/*}/functions
+. ${0%/*}/../functions
 
 testbus_test_begin verify_runnable1
 

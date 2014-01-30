@@ -6,7 +6,7 @@
 
 # TESTBUS_SELFTEST_DEBUG=all
 
-. ${0%/*}/functions
+. ${0%/*}/../functions
 
 # Override the timeout for claiming the host.
 # Bringing up a VM guest can take some time, especially if it goes

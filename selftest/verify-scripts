@@ -5,7 +5,7 @@
 # See README.selftest for more information
 #
 
-. ${0%/*}/functions
+. ${0%/*}/../functions
 
 ##################################################################
 # Helper function to run a script - expected output is 42

@@ -6,12 +6,14 @@
 
 # TESTBUS_SELFTEST_DEBUG=all
 
-. ${0%/*}/functions
+. ${0%/*}/../functions
 
 # Override the timeout for claiming the host.
 # Bringing up a VM guest can take some time, especially if it goes
 # through a firstboot stage first.
 TESTBUS_CLAIM_TIMEOUT=240
+
+testbus_group_begin ${0%/*}
 
 testbus_test_begin verify_agent1
 TESTBUS_HOST=`testbus_claim_host`
@@ -38,4 +40,5 @@ fi
 rm -f /tmp/download-test
 testbus_test_success
 
+testbus_group_finish
 testbus_exit

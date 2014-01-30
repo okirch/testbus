@@ -159,8 +159,8 @@ install-data: $(CONFIG_XML) $(LIBVIRT_XML) etc/org.opensuse.Testbus.conf
 	install -m755 -d $(addprefix $(DESTDIR),$(INSTALL_DATADIRS))
 	install -m644 $(CONFIG_XML) $(DESTDIR)/etc/testbus
 	install -m644 $(LIBVIRT_XML) $(DESTDIR)/etc/testbus
-	install -m555 selftest/functions $(DESTDIR)/usr/share/testbus
-	install -m555 etc/*.functions $(DESTDIR)/usr/share/testbus
+	install -m755 suites/functions $(DESTDIR)/usr/share/testbus
+	install -m755 etc/*.functions $(DESTDIR)/usr/share/testbus
 	install -m644 schema/*.xml $(DESTDIR)/usr/share/testbus/schema
 	install -m755 etc/agent.d/* $(DESTDIR)/etc/testbus/agent.d
 	# This is special - dbus-daemon does weird things if we install the file directly.
@@ -175,6 +175,11 @@ distclean clean::
 
 distclean::
 	rm -f $(ALL) .depend
+
+test::
+	ln -sf ../suites/functions selftest/functions
+	selftest/verify-all $(SELFTEST)
+	rm -f selftest/functions
 
 # dborb == dbus object request broker
 libdborb.a: $(LIBOBJS)

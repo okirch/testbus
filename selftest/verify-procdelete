@@ -4,7 +4,7 @@
 # killed
 #
 
-. ${0%/*}/functions
+. ${0%/*}/../functions
 
 testbus_test_begin $0
 

@@ -6,17 +6,21 @@
 # host.
 #
 
-. ${0%/*}/functions
+. ${0%/*}/../functions
 
 testbus_test_begin $0
 
 TESTBUS_HOST=`testbus_claim_host`
 
-loop_count=2048
+loop_count=128
 
 for n in `seq 1 $loop_count`; do
 	echo -n .
-	testbus_run_command --host $TESTBUS_HOST /bin/true 2>client.log
+	if ! testbus_run_command --host $TESTBUS_HOST /bin/true 2>client.log; then
+		testbus_test_failure "Error, aborting."
+		cat client.log
+		break
+	fi
 done
 echo
 

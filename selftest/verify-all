@@ -1,20 +1,34 @@
 #!/bin/bash
 
-dir=${0%/*}
+verify_dir=${0%/*}
+verify_result=0
 
 function run {
 
+	local name file
+
 	for name; do
 		case $name in
-		@*)	file=$dir/${name#@}
+		@*)	file=$verify_dir/${name#@}
 			run `cat $file|sed 's:#.*::'`
 			: ;;
 		*)
-			$dir/verify-$name
+			if ! $verify_dir/verify-$name; then
+				verify_result=1
+			fi
 			: ;;
 		esac
 	done
+
+	return $verify_result
 }
+
+# Stop any running services
+rctestbus-master stop
+
+# Start master and agent without any intervening proxies and the like
+./testbus-master
+./testbus-agent
 
 if [ $# -eq 0 ]; then
 	run @all
@@ -22,3 +36,7 @@ else
 	run "$@"
 fi
 
+killproc -TERM $PWD/testbus-master
+killproc -TERM $PWD/testbus-agent
+
+exit $verify_result

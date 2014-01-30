@@ -6,7 +6,7 @@
 # host.
 #
 
-. ${0%/*}/functions
+. ${0%/*}/../functions
 
 testbus_group_begin $0
 

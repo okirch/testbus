@@ -6,7 +6,7 @@
 # See README.selftest for more information
 #
 
-. ${0%/*}/functions
+. ${0%/*}/../functions
 
 testbus_group_begin $0
 
