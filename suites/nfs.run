@@ -1,9 +1,0 @@
-#!/bin/bash
-
-image=$1
-
-testbus-control-kvm start server $image
-testbus-control-kvm start client $image
-/usr/share/testbus/suites/nfs
-testbus-control-kvm stop server
-testbus-control-kvm stop client
