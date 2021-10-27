@@ -161,7 +161,7 @@ ni_config_parse(const char *filename, ni_init_appdata_callback_t *cb, void *appd
 const char *
 ni_config_build_include(const char *parent_filename, const char *incl_filename)
 {
-	char fullname[PATH_MAX + 1];
+	static char fullname[PATH_MAX + 1];
 
 	if (incl_filename[0] != '/') {
 		unsigned int i;
